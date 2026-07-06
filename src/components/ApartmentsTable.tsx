@@ -1,0 +1,187 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import type { ApartmentWithComputed } from "@/lib/types";
+import { formatApartmentTitle, formatEuros, formatPercent, formatSurface } from "@/lib/format";
+import { rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import { formatNote, noteHex } from "@/components/AnalyseIA";
+
+const RENDEMENT_TEXT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
+  neutral: "text-slate-700",
+  positif: "text-emerald-700",
+  attention: "text-amber-700",
+  alerte: "text-red-600",
+};
+
+export type SortKey =
+  | "rendement_net"
+  | "rendement_brut"
+  | "prix"
+  | "prix_m2"
+  | "surface_m2";
+
+const STATUT_STYLES: Record<string, string> = {
+  "à visiter": "bg-blue-50 text-blue-700",
+  visité: "bg-violet-50 text-violet-700",
+  abandonné: "bg-slate-100 text-slate-500",
+  acheté: "bg-emerald-50 text-emerald-700",
+};
+
+export default function ApartmentsTable({
+  apartments,
+  sortKey,
+  seuilsRendement,
+}: {
+  apartments: ApartmentWithComputed[];
+  sortKey: SortKey;
+  seuilsRendement: RendementSeuils;
+}) {
+  const router = useRouter();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const sorted = [...apartments].sort((a, b) => {
+    const av = a[sortKey];
+    const bv = b[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return bv - av;
+  });
+
+  async function handleDelete(e: React.MouseEvent, apt: ApartmentWithComputed) {
+    e.preventDefault();
+    e.stopPropagation();
+    const label = formatApartmentTitle(apt);
+    if (!window.confirm(`Supprimer définitivement "${label}" ? Cette action est irréversible.`)) {
+      return;
+    }
+    setDeletingId(apt.id);
+    try {
+      const res = await fetch(`/api/apartments/${apt.id}`, { method: "DELETE" });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        setDeletingId(null);
+      }
+    } catch {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table className="w-full min-w-[900px] text-sm">
+        <thead>
+          <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+            <th className="px-4 py-3">Bien</th>
+            <th className="px-4 py-3">Secteur</th>
+            <th className="px-4 py-3 text-right">Prix</th>
+            <th className="px-4 py-3 text-right">Surface</th>
+            <th className="px-4 py-3 text-right">Loyer estimé</th>
+            <th className="px-4 py-3 text-right">Rendement net</th>
+            <th className="px-4 py-3 text-center">Score IA</th>
+            <th className="px-4 py-3">Statut</th>
+            <th className="px-2 py-3" aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((apt) => (
+            <tr
+              key={apt.id}
+              onClick={() => router.push(`/appartements/${apt.id}`)}
+              className={`group cursor-pointer border-b border-slate-100 transition last:border-0 hover:bg-slate-50 ${
+                deletingId === apt.id ? "opacity-40" : ""
+              }`}
+            >
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md bg-slate-100">
+                    {apt.photo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={apt.photo_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                        —
+                      </div>
+                    )}
+                  </div>
+                  <div className="max-w-[220px]">
+                    <p className="truncate font-medium text-slate-900">
+                      {formatApartmentTitle(apt)}
+                    </p>
+                    {apt.adresse ? (
+                      <p className="truncate text-xs text-slate-500">{apt.adresse}</p>
+                    ) : (
+                      <p className="truncate text-xs text-slate-400">{apt.plateforme}</p>
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td className="px-4 py-3 text-slate-600">
+                {[apt.quartier, apt.ville].filter(Boolean).join(", ") || "—"}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <p className="font-medium text-slate-900">{formatEuros(apt.prix)}</p>
+                {apt.prix_m2 != null && (
+                  <p className="text-xs text-slate-400">{formatEuros(apt.prix_m2)}/m²</p>
+                )}
+              </td>
+              <td className="px-4 py-3 text-right">{formatSurface(apt.surface_m2)}</td>
+              <td className="px-4 py-3 text-right">{formatEuros(apt.loyer_retenu)}</td>
+              <td
+                className={`px-4 py-3 text-right font-semibold ${RENDEMENT_TEXT_CLASS[rendementNetTone(apt.rendement_net, seuilsRendement)]}`}
+              >
+                {formatPercent(apt.rendement_net)}
+              </td>
+              <td className="px-4 py-3 text-center">
+                <ScoreBadge score={apt.analyse_ia?.score_global ?? null} />
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
+                    STATUT_STYLES[apt.statut] ?? "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {apt.statut}
+                </span>
+              </td>
+              <td className="px-2 py-3 text-right">
+                <button
+                  onClick={(e) => handleDelete(e, apt)}
+                  disabled={deletingId === apt.id}
+                  title="Supprimer ce bien"
+                  aria-label="Supprimer ce bien"
+                  className="rounded-md p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 focus:opacity-100 disabled:opacity-50 group-hover:opacity-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ScoreBadge({ score }: { score: number | null }) {
+  if (score == null) {
+    return <span className="text-xs text-slate-400" title="Analyse IA non générée">—</span>;
+  }
+  const color = noteHex(score);
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
+      style={{ backgroundColor: `${color}1a`, color }}
+      title="Score global — Analyse IA"
+    >
+      {formatNote(score)}/5
+    </span>
+  );
+}

@@ -24,3 +24,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Popup carte "carte de bien" : image plein cadre, coins arrondis, sans le
+   padding par défaut de Leaflet qui empêcherait l'image de toucher les bords. */
+.apartment-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+}
+.apartment-popup .leaflet-popup-content {
+  margin: 0;
+  width: 220px !important;
+}
+.apartment-popup a.leaflet-popup-close-button {
+  top: 6px;
+  right: 6px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
