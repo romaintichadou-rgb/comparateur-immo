@@ -45,7 +45,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Paramètres</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Profil investisseur</h1>
         <p className="mt-1 text-sm text-slate-500">
           Seuils personnels utilisés pour colorer le rendement net et le cash-flow mensuel,
           partout dans l&apos;app (tableau, carte, Analyse IA, Simulation financière).

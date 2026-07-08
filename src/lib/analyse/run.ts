@@ -84,7 +84,7 @@ export async function runAnalyse(
   const scored = withScoreGlobal(analyse, rendementNet, seuils);
   scored.verdicts = buildVerdicts(scored.blocs, rendementNet, seuils);
 
-  const narr = await narrateAll(scored);
+  const narr = await narrateAll(scored, { quartier: apt.quartier, ville: apt.ville });
   prix.narration = narr.blocs.prix ?? "";
   location.narration = narr.blocs.location ?? "";
   risque.narration = narr.blocs.risque ?? "";

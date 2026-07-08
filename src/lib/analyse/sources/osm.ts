@@ -4,8 +4,9 @@
  * rayon donné — indicateur d'attractivité locative et de profil de locataire
  * (proximité facs/transports = étudiants/jeunes actifs). Fournit aussi, pour
  * le bloc "Quartier" : la gare ferroviaire la plus proche (accessibilité
- * grandes lignes) et l'occupation du sol (caractère résidentiel vs zone
- * d'activité), toujours à partir de tags OSM réels — jamais estimé.
+ * grandes lignes), l'occupation du sol (caractère résidentiel vs zone
+ * d'activité), et la vie de quartier (sorties, espaces verts, écoles,
+ * santé) — toujours à partir de tags OSM réels, jamais estimé.
  *
  * Overpass est une API publique gratuite souvent lente ou saturée : on essaie
  * plusieurs serveurs miroirs à la suite jusqu'à en trouver un qui répond, et
@@ -159,6 +160,82 @@ export async function fetchLanduse(lat: number, lon: number): Promise<LanduseInf
       else autre++;
     }
     return { residentiel, activite, autre, total: residentiel + activite + autre };
+  }
+  return null;
+}
+
+/**
+ * Vie de quartier, espaces verts et équipements de proximité — une seule
+ * requête Overpass consolidée (plusieurs sélecteurs unionnés) plutôt que
+ * plusieurs appels séparés, pour limiter le nombre de requêtes réseau vers
+ * un service public déjà solicité par les autres fonctions de ce fichier.
+ */
+export interface VieQuartierInfo {
+  restaurants: number;
+  barsEtCafes: number;
+  parcs: number;
+  parcLePlusProcheKm: number | null;
+  ecoles: string[];
+  sante: number;
+  rayonSortiesM: number;
+  rayonParcsM: number;
+}
+
+const RAYON_SORTIES_M = 600;
+const RAYON_PARCS_M = 1000;
+
+export async function fetchVieQuartier(lat: number, lon: number): Promise<VieQuartierInfo | null> {
+  const query =
+    `[out:json][timeout:25];(` +
+    `node(around:${RAYON_SORTIES_M},${lat},${lon})[amenity~"restaurant|fast_food"];` +
+    `node(around:${RAYON_SORTIES_M},${lat},${lon})[amenity~"bar|pub|cafe"];` +
+    `node(around:${RAYON_PARCS_M},${lat},${lon})[leisure~"park|garden"];` +
+    `way(around:${RAYON_PARCS_M},${lat},${lon})[leisure~"park|garden"];` +
+    `node(around:${RAYON_M},${lat},${lon})[amenity=school];` +
+    `node(around:${RAYON_M},${lat},${lon})[amenity~"pharmacy|doctors|clinic|hospital"];` +
+    `);out tags center;`;
+
+  for (const endpoint of ENDPOINTS) {
+    const els = await queryOverpass(endpoint, query);
+    if (!els) continue;
+
+    let restaurants = 0;
+    let barsEtCafes = 0;
+    let parcs = 0;
+    let sante = 0;
+    let parcLePlusProcheKm: number | null = null;
+    const ecolesSet = new Set<string>();
+
+    for (const e of els) {
+      const t = e.tags ?? {};
+      if (t.amenity === "restaurant" || t.amenity === "fast_food") {
+        restaurants++;
+      } else if (t.amenity === "bar" || t.amenity === "pub" || t.amenity === "cafe") {
+        barsEtCafes++;
+      } else if (t.leisure === "park" || t.leisure === "garden") {
+        parcs++;
+        const pos = elementLatLon(e);
+        if (pos) {
+          const d = haversineKm(lat, lon, pos.lat, pos.lon);
+          if (parcLePlusProcheKm == null || d < parcLePlusProcheKm) parcLePlusProcheKm = Math.round(d * 10) / 10;
+        }
+      } else if (t.amenity === "school") {
+        if (t.name) ecolesSet.add(t.name);
+      } else if (t.amenity && /pharmacy|doctors|clinic|hospital/.test(t.amenity)) {
+        sante++;
+      }
+    }
+
+    return {
+      restaurants,
+      barsEtCafes,
+      parcs,
+      parcLePlusProcheKm,
+      ecoles: Array.from(ecolesSet).slice(0, 4),
+      sante,
+      rayonSortiesM: RAYON_SORTIES_M,
+      rayonParcsM: RAYON_PARCS_M,
+    };
   }
   return null;
 }

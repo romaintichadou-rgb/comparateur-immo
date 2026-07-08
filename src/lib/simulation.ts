@@ -13,9 +13,11 @@ import type { ApartmentWithComputed } from "./types";
 
 export interface SimulationInputs {
   /**
-   * Capital emprunté (€). null = automatique : suit en temps réel le budget
-   * total du bien (prix + notaire + travaux), y compris les modifications en
-   * cours de saisie. Une valeur saisie fige le montant.
+   * Capital emprunté (€). null = automatique : suit en temps réel le prix
+   * d'achat + les travaux (hors frais de notaire, par défaut non financés —
+   * pratique bancaire courante, les notaires étant plutôt couverts par
+   * l'apport), y compris les modifications en cours de saisie. Une valeur
+   * saisie fige le montant.
    */
   montantEmprunte: number | null;
   /** Taux nominal annuel du crédit, en % (ex. 3.5). */
@@ -128,15 +130,19 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
   const loyerMensuel = apt.loyer_retenu;
   if (loyerMensuel == null || loyerMensuel <= 0) return null;
 
-  const montantAuto = Math.round(apt.budget_total ?? apt.prix ?? 0);
-  const capital = Math.max(0, inputs.montantEmprunte ?? montantAuto);
-  // Apport personnel = montant total de l'opération − montant emprunté (jamais
-  // négatif : un emprunt supérieur au budget total n'est pas modélisé comme
-  // un apport négatif).
-  const apport = Math.max(0, montantAuto - capital);
   // Base revalorisable : prix + travaux, hors frais de notaire (qui ne créent
   // pas de valeur patrimoniale), même convention que le simulateur de référence.
   const valeurBienInitiale = (apt.prix ?? 0) + (apt.travaux ?? 0);
+  // Montant emprunté par défaut : achat + travaux, SANS les frais de notaire
+  // (pratique bancaire courante — le notaire est plutôt couvert par l'apport,
+  // pas financé à crédit).
+  const montantAuto = Math.round(valeurBienInitiale);
+  const capital = Math.max(0, inputs.montantEmprunte ?? montantAuto);
+  // Apport personnel = coût total RÉEL de l'opération (achat + notaire +
+  // travaux) − montant emprunté (jamais négatif). Inclut donc les frais de
+  // notaire par défaut, puisqu'ils ne sont plus dans le capital emprunté.
+  const coutTotalReel = Math.round(apt.budget_total ?? apt.prix ?? 0);
+  const apport = Math.max(0, coutTotalReel - capital);
   const tauxRevalo = inputs.revalorisationBienPct / 100;
   const tauxMensuel = inputs.tauxCreditPct / 100 / 12;
   const nbMois = Math.max(1, Math.round(inputs.dureeAnnees * 12));

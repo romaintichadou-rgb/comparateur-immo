@@ -84,19 +84,11 @@ export async function buildBlocRisque(
       });
     }
   } else {
+    // La classe DPE/GES (échelle colorée ci-dessus) reste alors celle
+    // déclarée par le bien, faute de DPE officiel correspondant à sa
+    // surface — pas de fait chiffré supplémentaire ici, juste la mention en
+    // donnée manquante ci-dessous.
     donneesManquantes.push("DPE officiel correspondant à la surface du bien");
-    if (dpeData.records.length > 0) {
-      sources.push(SRC_ADEME);
-      faits.push({
-        label: "DPE à cette adresse",
-        value: dpeData.records.length,
-        unit: "DPE",
-        detail: "aucun ne correspond à la surface du bien",
-        perimetre: "adresse (ADEME)",
-        source: SRC_ADEME.label,
-        gravite: "info",
-      });
-    }
   }
 
   if (dpeRef && DPE_PENALITE[dpeRef.toUpperCase()] != null) {

@@ -49,6 +49,19 @@ export function rendementNetTone(
 }
 
 /**
+ * Couleur de bordure au survol, pour CHAQUE composant cliquable affichant un
+ * rendement (tableau, carte, fiche détaillée, Analyse IA) : source unique
+ * pour que cette bordure soit toujours dans la même teinte que la tonalité
+ * affichée (jamais une couleur fixe comme indigo, sans rapport avec la box).
+ */
+export const RENDEMENT_HOVER_RING: Record<RendementTone, string> = {
+  neutral: "hover:ring-2 hover:ring-inset hover:ring-slate-200",
+  positif: "hover:ring-2 hover:ring-inset hover:ring-emerald-200",
+  attention: "hover:ring-2 hover:ring-inset hover:ring-amber-200",
+  alerte: "hover:ring-2 hover:ring-inset hover:ring-red-200",
+};
+
+/**
  * Calcul de la note globale /5, pondérée par bloc, avec plafonds rédhibitoires.
  *
  * - Seuls les blocs notés entrent dans la moyenne (poids renormalisés).

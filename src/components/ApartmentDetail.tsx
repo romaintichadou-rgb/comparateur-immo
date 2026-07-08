@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -10,6 +11,7 @@ import {
   Home,
   KeyRound,
   Mail,
+  MapPin,
   Phone,
   ReceiptText,
   Star,
@@ -45,6 +47,16 @@ import AnalyseIA from "@/components/AnalyseIA";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
 import { rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import type { AppSettings } from "@/lib/settings";
+import { useRendementDetail } from "@/components/RendementDetailProvider";
+
+const ApartmentLocationMap = dynamic(() => import("./ApartmentLocationMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center bg-slate-100 text-xs text-slate-400">
+      Chargement de la carte...
+    </div>
+  ),
+});
 
 function isEstimated(apt: ApartmentWithComputed, key: ChampEstimable): boolean {
   return apt[key] != null && !apt.champs_manuels.includes(key);
@@ -74,6 +86,7 @@ export default function ApartmentDetail({
   settings: AppSettings;
 }) {
   const seuilsRendement = seuilsRendementFromSettings(settings);
+  const { open: openRendementDetail } = useRendementDetail();
   const [apt, setApt] = useState(initial);
   const [descPatch, setDescPatch] = useState<ApartmentPatch>({});
   const [finPatch, setFinPatch] = useState<ApartmentPatch>({});
@@ -203,6 +216,8 @@ export default function ApartmentDetail({
   const descDirty = Object.keys(descPatch).length > 0;
   const finDirty = Object.keys(finPatch).length > 0;
   const localisation = apt.adresse || [apt.quartier, apt.ville].filter(Boolean).join(", ");
+  const hasCoords = Number.isFinite(apt.latitude) && Number.isFinite(apt.longitude);
+  const localisationApproximative = apt.precision_localisation === "arrondissement";
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
@@ -215,28 +230,54 @@ export default function ApartmentDetail({
       </Link>
 
       {/* En-tête */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        {apt.photo_url ? (
-          <div className="relative h-56 w-full sm:h-72">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
-              <h1 className="text-2xl font-semibold text-white sm:text-3xl">
-                {formatApartmentTitle(apt)}
-              </h1>
-              {localisation && <p className="mt-1 text-sm text-white/85">{localisation}</p>}
-            </div>
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {/* Photo */}
+          <div className="relative h-56 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-72">
+            {apt.photo_url ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
+                  <h1 className="text-2xl font-semibold text-white sm:text-3xl">
+                    {formatApartmentTitle(apt)}
+                  </h1>
+                  {localisation && <p className="mt-1 text-sm text-white/85">{localisation}</p>}
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full flex-col justify-center bg-slate-50 p-5 sm:p-6">
+                <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">
+                  {formatApartmentTitle(apt)}
+                </h1>
+                {localisation && <p className="mt-1 text-sm text-slate-500">{localisation}</p>}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="p-6">
-            <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">
-              {formatApartmentTitle(apt)}
-            </h1>
-            {localisation && <p className="mt-1 text-sm text-slate-500">{localisation}</p>}
+
+          {/* Carte */}
+          <div className="relative h-56 w-full shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-72 sm:w-72">
+            {hasCoords ? (
+              <ApartmentLocationMap
+                latitude={apt.latitude!}
+                longitude={apt.longitude!}
+                approximatif={localisationApproximative}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-slate-50 text-slate-400">
+                <MapPin className="h-5 w-5" />
+                <span className="text-xs">Localisation indisponible</span>
+              </div>
+            )}
+            {hasCoords && localisationApproximative && (
+              <span className="pointer-events-none absolute bottom-2 left-2 z-[1000] rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-amber-600 shadow-sm">
+                Position approximative
+              </span>
+            )}
           </div>
-        )}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 px-5 py-3 text-sm text-slate-500 sm:px-6">
+        </div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-500 shadow-sm sm:px-6">
           <span>Ajouté le {formatDate(apt.date_ajout)}</span>
           <span>·</span>
           <span>{apt.plateforme}</span>
@@ -258,13 +299,13 @@ export default function ApartmentDetail({
 
       {/* Onglets */}
       <div className="border-b border-slate-200">
-        <nav className="flex gap-6">
+        <nav className="-mx-4 flex gap-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`border-b-2 px-1 py-3 text-sm font-medium transition ${
+              className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition ${
                 activeTab === tab.key
                   ? "border-indigo-600 text-indigo-600"
                   : "border-transparent text-slate-500 hover:text-slate-700"
@@ -276,7 +317,9 @@ export default function ApartmentDetail({
         </nav>
       </div>
 
-      {activeTab === "ia" && <AnalyseIA apartment={apt} onAnalysed={setApt} />}
+      {activeTab === "ia" && (
+        <AnalyseIA apartment={apt} seuilsRendement={seuilsRendement} onAnalysed={setApt} />
+      )}
 
       {activeTab === "financiere" && (
         <div className="space-y-6">
@@ -293,6 +336,7 @@ export default function ApartmentDetail({
               sub="loyer annuel / budget total"
               value={formatPercent(live.rendement_brut)}
               tone="neutral"
+              onClick={() => openRendementDetail(live, seuilsRendement)}
             />
             <ResultCard
               label="Rendement net"
@@ -300,6 +344,7 @@ export default function ApartmentDetail({
               value={formatPercent(live.rendement_net)}
               tone={rendementNetTone(live.rendement_net, seuilsRendement)}
               emphase
+              onClick={() => openRendementDetail(live, seuilsRendement)}
             />
           </div>
 

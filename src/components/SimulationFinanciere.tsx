@@ -6,6 +6,7 @@ import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { defaultInputs, simulate, LMNP, type AnneeSimulation, type SimulationInputs } from "@/lib/simulation";
 import { NumberField, SelectField } from "@/components/form/Fields";
+import { RENDEMENT_HOVER_RING } from "@/lib/analyse/scoring";
 
 /**
  * Onglet "Simulation financière" : cash-flow mensuel réel en LMNP réel,
@@ -143,9 +144,9 @@ export default function SimulationFinanciere({
           </div>
           <p className="text-xs text-slate-400">
             En mode <strong className="font-medium text-slate-500">auto</strong>, le montant emprunté
-            suit en temps réel le budget total du bien (prix + notaire + travaux), y compris pendant
-            la saisie dans les autres onglets. Modifie le champ pour le figer (simuler un apport) ;
-            vide-le pour repasser en auto.
+            suit en temps réel le prix d&apos;achat + les travaux (hors frais de notaire, supposés
+            couverts par l&apos;apport), y compris pendant la saisie dans les autres onglets. Modifie
+            le champ pour le figer (simuler un apport différent) ; vide-le pour repasser en auto.
           </p>
         </section>
 
@@ -574,12 +575,14 @@ export function ResultCard({
   value,
   tone,
   emphase = false,
+  onClick,
 }: {
   label: string;
   sub: string;
   value: string;
   tone: "neutral" | "positif" | "attention" | "alerte";
   emphase?: boolean;
+  onClick?: () => void;
 }) {
   const tones = {
     neutral: "bg-slate-50 text-slate-900",
@@ -599,13 +602,29 @@ export function ResultCard({
     attention: "ring-amber-200",
     alerte: "ring-red-200",
   } as const;
-  return (
-    <div className={`rounded-xl p-5 ${tones[tone]} ${emphase ? `ring-2 ring-inset ${rings[tone]}` : ""}`}>
+  const content = (
+    <>
       <p className={`text-xs font-medium ${labelTones[tone]}`}>{label}</p>
       <p className="mt-1 text-2xl font-bold">{value}</p>
       <p className={`mt-0.5 text-[11px] ${labelTones[tone]} opacity-80`}>{sub}</p>
-    </div>
+    </>
   );
+  const className = `rounded-xl p-5 ${tones[tone]} ${emphase ? `ring-2 ring-inset ${rings[tone]}` : ""}`;
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title="Voir le détail du calcul"
+        className={`w-full text-left transition ${RENDEMENT_HOVER_RING[tone]} ${className}`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 function WaterfallRow({ label, value, plus = false }: { label: string; value: number; plus?: boolean }) {

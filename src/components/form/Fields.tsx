@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 
 function FieldShell({
   label,
@@ -80,6 +80,16 @@ export function TextAreaField({
   );
 }
 
+// États intermédiaires valides pendant la frappe, à ne jamais transformer en
+// nombre (et donc ne jamais remonter via onChange tel quel) : "-" seul (le
+// signe négatif vient d'être tapé, les chiffres suivent) ou un texte qui se
+// termine par un point décimal ("12.", "-3.") — sans ça, Number("-") = NaN
+// repartirait aussitôt dans `value` et effacerait le champ avant que
+// l'utilisateur ait pu taper les chiffres suivants.
+function estEtatIntermediaire(text: string): boolean {
+  return text === "-" || text.endsWith(".");
+}
+
 export function NumberField({
   label,
   value,
@@ -93,14 +103,43 @@ export function NumberField({
   hint?: ReactNode;
   suffix?: string;
 }) {
+  // Texte affiché géré séparément de `value` : un <input type="number">
+  // contrôlé directement par le nombre parsé casse la saisie d'un signe
+  // moins ou d'un point décimal, puisque "-" seul donne Number("-") = NaN,
+  // qui repasserait aussitôt dans `value` et effacerait le champ avant que
+  // l'utilisateur ait pu taper les chiffres suivants.
+  const [texte, setTexte] = useState(value != null ? String(value) : "");
+  // Sert uniquement à détecter un changement de `value` VENU DE L'EXTÉRIEUR
+  // (ex. recalcul live ailleurs dans le formulaire), pour resynchroniser le
+  // texte affiché — ajusté pendant le rendu, pas dans un effet (cf. le guide
+  // React "adjusting state when a prop changes").
+  const [derniereValeurExterne, setDerniereValeurExterne] = useState(value);
+  if (value !== derniereValeurExterne) {
+    setDerniereValeurExterne(value);
+    if (!estEtatIntermediaire(texte)) {
+      setTexte(value != null ? String(value) : "");
+    }
+  }
+
+  function handleChange(text: string) {
+    setTexte(text);
+    if (text === "") {
+      onChange(null);
+      return;
+    }
+    if (estEtatIntermediaire(text)) return; // ex. "-" ou "12." : pas encore un nombre
+    const n = Number(text);
+    if (!Number.isNaN(n)) onChange(n);
+  }
+
   return (
     <FieldShell label={label} hint={hint}>
       <div className="relative">
         <input
           type="number"
           className={inputClass + (suffix ? " w-full pr-10" : " w-full")}
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+          value={texte}
+          onChange={(e) => handleChange(e.target.value)}
         />
         {suffix && (
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">

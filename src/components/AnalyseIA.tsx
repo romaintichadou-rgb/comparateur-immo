@@ -4,6 +4,15 @@ import { useState, type ReactNode } from "react";
 import { AlertTriangle, Banknote, CheckCircle2, Clock, Info, KeyRound, Loader2, MapPin, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, VerdictNiveau } from "@/lib/analyse/types";
+import { RENDEMENT_HOVER_RING, SEUILS_RENDEMENT_DEFAUT, type RendementSeuils } from "@/lib/analyse/scoring";
+import { useRendementDetail } from "@/components/RendementDetailProvider";
+import { formatDateTime } from "@/lib/format";
+
+// Les seuls BlocHighlight aujourd'hui affichés (bloc "location") sont les
+// deux rendements — on les rend cliquables en les identifiant par leur
+// libellé plutôt qu'en alourdissant le contrat BlocHighlight d'un flag
+// dédié à ce seul usage.
+const HIGHLIGHTS_RENDEMENT = new Set(["Rendement brut", "Rendement net"]);
 
 const HIGHLIGHT_TONES: Record<BlocHighlight["tone"], { wrap: string; label: string; value: string }> = {
   neutral: { wrap: "bg-slate-50", label: "text-slate-500", value: "text-slate-900" },
@@ -92,9 +101,11 @@ function renderBold(text: string): ReactNode {
 
 export default function AnalyseIA({
   apartment,
+  seuilsRendement = SEUILS_RENDEMENT_DEFAUT,
   onAnalysed,
 }: {
   apartment: ApartmentWithComputed;
+  seuilsRendement?: RendementSeuils;
   onAnalysed: (apt: ApartmentWithComputed) => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -181,7 +192,7 @@ export default function AnalyseIA({
               </span>
             ) : (
               <span className="whitespace-nowrap text-xs text-slate-400">
-                Généré le {new Date(analyse.genere_le).toLocaleDateString("fr-FR")}
+                Généré le {formatDateTime(analyse.genere_le)}
               </span>
             )}
             <button
@@ -228,7 +239,7 @@ export default function AnalyseIA({
       {/* Blocs notés */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {blocs.map((bloc) => (
-          <BlocCard key={bloc.cle} bloc={bloc} />
+          <BlocCard key={bloc.cle} bloc={bloc} apartment={apartment} seuilsRendement={seuilsRendement} />
         ))}
       </div>
 
@@ -236,7 +247,7 @@ export default function AnalyseIA({
           en pleine largeur car plus riche en faits que les blocs notés.
           Absent des analyses générées avant son ajout — invite à relancer. */}
       {analyse.blocs.quartier ? (
-        <BlocCard bloc={analyse.blocs.quartier} />
+        <BlocCard bloc={analyse.blocs.quartier} apartment={apartment} seuilsRendement={seuilsRendement} />
       ) : (
         <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-xs text-slate-400">
           Le bloc Quartier n&apos;existe pas encore pour cette analyse — clique sur « Relancer » pour le générer.
@@ -302,8 +313,19 @@ function ScoreGauge({ note, loading = false }: { note: number | null; loading?: 
   );
 }
 
-function BlocCard({ bloc }: { bloc: BlocAnalyse }) {
+function BlocCard({
+  bloc,
+  apartment,
+  seuilsRendement,
+}: {
+  bloc: BlocAnalyse;
+  apartment: ApartmentWithComputed;
+  seuilsRendement: RendementSeuils;
+}) {
   const Icon = BLOC_ICONS[bloc.cle];
+  // Le bloc "quartier" n'est pas noté et n'affiche pas de chiffres détaillés :
+  // c'est une description en mots (voir narration.ts), pas une liste de faits.
+  const isQuartier = bloc.cle === "quartier";
 
   return (
     <section className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -335,11 +357,23 @@ function BlocCard({ bloc }: { bloc: BlocAnalyse }) {
         <p className="mt-4 text-sm text-slate-400">{bloc.messageIndisponible}</p>
       ) : (
         <div className="mt-4 space-y-4">
-          {/* Résumé court */}
-          {bloc.narration && (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-700">
+          {/* Résumé court, ou pour "quartier" : la description à part entière */}
+          {bloc.narration ? (
+            <p
+              className={
+                isQuartier
+                  ? "text-[15px] leading-relaxed text-slate-700"
+                  : "rounded-lg bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-700"
+              }
+            >
               {renderBold(bloc.narration)}
             </p>
+          ) : (
+            isQuartier && (
+              <p className="text-sm text-slate-400">
+                Description indisponible pour cette analyse — clique sur « Relancer ».
+              </p>
+            )
           )}
 
           {/* Échelles DPE / GES (bloc Risques) */}
@@ -354,20 +388,22 @@ function BlocCard({ bloc }: { bloc: BlocAnalyse }) {
           {bloc.highlights && bloc.highlights.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               {bloc.highlights.map((h, i) => (
-                <HighlightCard key={i} highlight={h} />
+                <HighlightCard key={i} highlight={h} apartment={apartment} seuilsRendement={seuilsRendement} />
               ))}
             </div>
           )}
 
-          {/* Données structurées */}
-          <ul className="divide-y divide-slate-100">
-            {bloc.faits.map((f, i) => (
-              <FaitRow key={i} fait={f} />
-            ))}
-          </ul>
+          {/* Données structurées — pas pour "quartier", qui reste une description */}
+          {!isQuartier && (
+            <ul className="divide-y divide-slate-100">
+              {bloc.faits.map((f, i) => (
+                <FaitRow key={i} fait={f} />
+              ))}
+            </ul>
+          )}
 
           {/* Données manquantes (jamais estimées) */}
-          {bloc.donneesManquantes && bloc.donneesManquantes.length > 0 && (
+          {!isQuartier && bloc.donneesManquantes && bloc.donneesManquantes.length > 0 && (
             <p className="text-xs text-slate-400">
               Donnée(s) non disponible(s), non estimée(s) : {bloc.donneesManquantes.join(" · ")}.
             </p>
@@ -446,13 +482,37 @@ function EnergyScale({ label, value, palette }: { label: string; value: string; 
   );
 }
 
-function HighlightCard({ highlight }: { highlight: BlocHighlight }) {
+function HighlightCard({
+  highlight,
+  apartment,
+  seuilsRendement,
+}: {
+  highlight: BlocHighlight;
+  apartment: ApartmentWithComputed;
+  seuilsRendement: RendementSeuils;
+}) {
+  const { open: openRendementDetail } = useRendementDetail();
   const t = HIGHLIGHT_TONES[highlight.tone];
-  return (
-    <div className={`rounded-lg p-4 ${t.wrap}`}>
+  const content = (
+    <>
       <p className={`text-xs ${t.label}`}>{highlight.label}</p>
       <p className={`mt-1 text-2xl font-bold ${t.value}`}>{highlight.value}</p>
-    </div>
+    </>
+  );
+
+  if (!HIGHLIGHTS_RENDEMENT.has(highlight.label)) {
+    return <div className={`rounded-lg p-4 ${t.wrap}`}>{content}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => openRendementDetail(apartment, seuilsRendement)}
+      title="Voir le détail du calcul"
+      className={`rounded-lg p-4 text-left transition ${RENDEMENT_HOVER_RING[highlight.tone]} ${t.wrap}`}
+    >
+      {content}
+    </button>
   );
 }
 
@@ -462,7 +522,7 @@ function FaitRow({ fait }: { fait: Fait }) {
 
   return (
     <li className="flex items-start justify-between gap-3 py-2">
-      <div className="flex min-w-0 gap-2">
+      <div className="flex min-w-0 flex-1 gap-2">
         <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-800">
@@ -477,7 +537,7 @@ function FaitRow({ fait }: { fait: Fait }) {
         </div>
       </div>
       {hasValue && (
-        <div className={`shrink-0 whitespace-nowrap text-right text-base font-semibold ${style.value}`}>
+        <div className={`max-w-[45%] shrink-0 text-right text-base font-semibold ${style.value}`}>
           {fait.value}
           {fait.unit && <span className="ml-0.5 text-xs font-normal opacity-70">{fait.unit}</span>}
         </div>

@@ -30,7 +30,10 @@ export interface Narrations {
   status: NarrationStatus;
 }
 
-export async function narrateAll(analyse: AnalyseIA): Promise<Narrations> {
+export async function narrateAll(
+  analyse: AnalyseIA,
+  localisation?: { quartier: string; ville: string }
+): Promise<Narrations> {
   if (!getClient()) return { blocs: {}, synthese: "", status: "unavailable" };
 
   const blocsDispo = (Object.values(analyse.blocs) as BlocAnalyse[]).filter(
@@ -58,8 +61,10 @@ export async function narrateAll(analyse: AnalyseIA): Promise<Narrations> {
     ? analyse.verdicts.map((v) => `[${v.niveau.toUpperCase()}] ${v.titre} : ${v.detail}`).join("\n")
     : "Aucun point rédhibitoire détecté.";
 
-  const prompt = `Tu es un analyste en investissement immobilier locatif. L'objectif de l'investisseur est la RENTABILITÉ LOCATIVE (critère prioritaire). Voici l'analyse d'un bien, 100 % à partir de données publiques réelles. Note globale pondérée : ${analyse.score_global}/5.
+  const nomQuartier = [localisation?.quartier, localisation?.ville].filter(Boolean).join(", ");
 
+  const prompt = `Tu es un analyste en investissement immobilier locatif. L'objectif de l'investisseur est la RENTABILITÉ LOCATIVE (critère prioritaire). Voici l'analyse d'un bien, 100 % à partir de données publiques réelles. Note globale pondérée : ${analyse.score_global}/5.
+${nomQuartier ? `\nLOCALISATION DU BIEN : ${nomQuartier}\n` : ""}
 VERDICTS PRIORITAIRES (points rédhibitoires / de vigilance) :
 ${verdictsTexte}
 
@@ -70,10 +75,10 @@ Réponds UNIQUEMENT avec un objet JSON strict (rien avant ni après), de la form
 {"prix":"...","location":"...","risque":"...","potentiel":"...","quartier":"...","synthese":"..."}
 
 Consignes de rédaction (en français) :
-- Une clé par bloc présent ci-dessus : un RÉSUMÉ TRÈS COURT de 1 à 2 phrases (25 mots max), qui dit l'essentiel du bloc pour l'investisseur. Mets "" pour un bloc absent.
-- Le bloc "quartier" n'est PAS noté et n'entre PAS dans le score : ne parle pas de note pour lui. Rédige plutôt un point fort et un point faible du quartier (sécurité, accessibilité, caractère résidentiel/mixte) à partir de ses seuls faits ci-dessus — pas un jugement d'investissement.
+- Pour "prix", "location", "risque", "potentiel" : un RÉSUMÉ TRÈS COURT de 1 à 2 phrases (25 mots max), qui dit l'essentiel du bloc pour l'investisseur. Mets "" pour un bloc absent.
+- Pour "quartier" (JAMAIS noté, n'entre PAS dans le score — ne parle jamais de note ni de chiffre de rendement pour lui) : rédige une VRAIE description du quartier, 4 à 6 phrases, pensée pour quelqu'un qui ne le connaît pas du tout et veut savoir où il met les pieds — pas une liste de données. NOMME le quartier directement dès la première phrase à partir de LOCALISATION DU BIEN (ex. « Saint-Victor, à Marseille, est... » ou « Le quartier de X est... ») — n'écris JAMAIS "ce quartier" ou "ce secteur" de façon générique tant que le nom n'a pas été donné. Décris avec des mots, pas des chiffres : l'ambiance et la dynamique (animé ou calme, vie de quartier), le standing du secteur (à partir du revenu médian et de la typologie de la commune — traduis-les en impression qualitative, ne répète JAMAIS le chiffre brut), l'accessibilité, et le potentiel général du quartier pour quelqu'un qui s'y installerait. Aucun jugement d'investissement chiffré : uniquement une description, comme si tu présentais le quartier à un ami qui envisage d'y vivre.
 - "synthese" : 3 à 4 phrases. COMMENCE par le point le plus important : s'il existe un point rédhibitoire (ex. rendement insuffisant), énonce-le CLAIREMENT dès la première phrase — n'ouvre JAMAIS sur une formule rassurante qui le masque. Puis les points forts réels, puis les points de vigilance. La rentabilité prime sur un bon score global. Le quartier peut être mentionné mais ne doit jamais dominer la synthèse.
-- Mets en **gras** (syntaxe markdown **texte**) les 1 à 2 informations décisives de chaque résumé et de la synthèse (le chiffre clé, le verdict) — pas plus, pour qu'elles ressortent.
+- Mets en **gras** (syntaxe markdown **texte**) les 1 à 2 informations décisives de chaque résumé (le chiffre clé, le verdict) et de la synthèse — pas plus, pour qu'elles ressortent. Pour "quartier", mets en **gras** les 2 à 3 éléments les plus importants de la description (le nom du quartier lui-même, l'ambiance/dynamique, et le standing ou un atout notable) — jamais un chiffre.
 
 RÈGLES ABSOLUES :
 - N'utilise QUE les faits, notes et verdicts ci-dessus. N'invente AUCUN chiffre ni donnée absente.

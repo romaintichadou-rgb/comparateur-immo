@@ -68,3 +68,23 @@ export function formatDate(iso: string | null | undefined): string {
     return "—";
   }
 }
+
+/** Date + heure, format FR courant ("08/07/2026 à 14:32"). */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    const date = new Date(iso);
+    const jour = new Intl.DateTimeFormat("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date);
+    const heure = new Intl.DateTimeFormat("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+    return `${jour} à ${heure}`;
+  } catch {
+    return "—";
+  }
+}

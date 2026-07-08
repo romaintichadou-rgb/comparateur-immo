@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { RendementSeuils } from "@/lib/analyse/scoring";
 import ApartmentsTable, { SortKey } from "./ApartmentsTable";
+import ApartmentsCardList from "./ApartmentsCardList";
 import EmptyHomeState from "./EmptyHomeState";
 
 const ApartmentsMap = dynamic(() => import("./ApartmentsMap"), {
@@ -74,6 +75,7 @@ export default function HomeView({
       </div>
 
       <ApartmentsTable apartments={apartments} sortKey={sortKey} seuilsRendement={seuilsRendement} />
+      <ApartmentsCardList apartments={apartments} sortKey={sortKey} seuilsRendement={seuilsRendement} />
     </div>
   );
 }

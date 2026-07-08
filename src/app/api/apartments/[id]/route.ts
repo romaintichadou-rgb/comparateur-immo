@@ -5,7 +5,17 @@ import {
   CHAMPS_ESTIMABLES,
   ChampEstimable,
   apartmentPatchSchema,
+  type ApartmentPatch,
 } from "@/lib/types";
+import { geocodeApartmentLocation } from "@/lib/geocoding";
+
+// Champs dont dépend le géocodage : les coordonnées de la carte ne sont
+// calculées qu'à la création (voir POST /api/apartments). Un bien importé
+// sans adresse précise (ex. Leboncoin ne l'affiche pas publiquement) est
+// alors géocodé au niveau du quartier ; si l'adresse exacte est renseignée
+// plus tard ici, il faut re-géocoder, sinon le pin reste bloqué sur
+// l'ancienne position approximative malgré l'adresse à jour.
+const CHAMPS_LOCALISATION = ["adresse", "quartier", "ville", "code_postal"] as const;
 
 export async function GET(
   _req: NextRequest,
@@ -58,8 +68,36 @@ export async function PATCH(
       );
     }
 
+    const localisationChangee = CHAMPS_LOCALISATION.some(
+      (key) => key in patch && patch[key] !== current[key]
+    );
+
+    let geoPatch: ApartmentPatch = {};
+    if (localisationChangee) {
+      try {
+        const merged = { ...current, ...patch };
+        const geo = await geocodeApartmentLocation({
+          adresse: merged.adresse,
+          quartier: merged.quartier,
+          ville: merged.ville,
+          code_postal: merged.code_postal,
+        });
+        if (geo) {
+          geoPatch = {
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            precision_localisation: geo.precision_localisation,
+            code_insee: geo.code_insee,
+          };
+        }
+      } catch {
+        // Best-effort : la localisation reste inchangée en cas d'échec.
+      }
+    }
+
     const updated = await updateApartment(id, {
       ...patch,
+      ...geoPatch,
       champs_manuels: champsManuels,
     });
 

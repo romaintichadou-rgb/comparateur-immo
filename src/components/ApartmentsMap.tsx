@@ -6,7 +6,8 @@ import L from "leaflet";
 import Link from "next/link";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
-import { rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import { RENDEMENT_HOVER_RING, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import { useRendementDetail } from "@/components/RendementDetailProvider";
 
 const RENDEMENT_PILL_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
   neutral: "bg-slate-100 text-slate-600",
@@ -65,6 +66,8 @@ export default function ApartmentsMap({
   apartments: ApartmentWithComputed[];
   seuilsRendement: RendementSeuils;
 }) {
+  const { open: openRendementDetail } = useRendementDetail();
+
   // Number.isFinite exclut explicitement NaN : une coordonnée invalide (ex.
   // erreur de parsing) ne doit jamais pouvoir faire planter toute la carte.
   const located = useMemo(
@@ -81,7 +84,7 @@ export default function ApartmentsMap({
   return (
     <MapContainer
       center={center}
-      zoom={located.length > 0 ? 12 : 11}
+      zoom={located.length > 0 ? 13 : 12}
       scrollWheelZoom={false}
       className="h-full w-full"
     >
@@ -125,11 +128,14 @@ export default function ApartmentsMap({
                   <span className="text-base font-semibold text-slate-900">
                     {formatEuros(apt.prix)}
                   </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${RENDEMENT_PILL_CLASS[rendementNetTone(apt.rendement_net, seuilsRendement)]}`}
+                  <button
+                    type="button"
+                    onClick={() => openRendementDetail(apt, seuilsRendement)}
+                    title="Voir le détail du calcul"
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold transition ${RENDEMENT_HOVER_RING[rendementNetTone(apt.rendement_net, seuilsRendement)]} ${RENDEMENT_PILL_CLASS[rendementNetTone(apt.rendement_net, seuilsRendement)]}`}
                   >
                     {formatPercent(apt.rendement_net)} net
-                  </span>
+                  </button>
                 </div>
 
                 {apt.precision_localisation === "arrondissement" && (

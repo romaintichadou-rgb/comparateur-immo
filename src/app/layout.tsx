@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { RendementDetailProvider } from "@/components/RendementDetailProvider";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
@@ -29,7 +30,7 @@ export default function RootLayout({
       lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
+      <body className="min-h-full flex flex-col overflow-x-hidden bg-slate-50 text-slate-900">
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
@@ -54,7 +55,9 @@ export default function RootLayout({
             </nav>
           </div>
         </header>
-        <main className="flex-1">{children}</main>
+        <main className="flex-1">
+          <RendementDetailProvider>{children}</RendementDetailProvider>
+        </main>
       </body>
     </html>
   );

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent, formatSurface } from "@/lib/format";
-import { rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import { RENDEMENT_HOVER_RING, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
 import { formatNote, noteHex } from "@/components/AnalyseIA";
+import { useRendementDetail } from "@/components/RendementDetailProvider";
 
 const RENDEMENT_TEXT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
   neutral: "text-slate-700",
@@ -22,12 +23,28 @@ export type SortKey =
   | "prix_m2"
   | "surface_m2";
 
-const STATUT_STYLES: Record<string, string> = {
+export const STATUT_STYLES: Record<string, string> = {
   "à visiter": "bg-blue-50 text-blue-700",
   visité: "bg-violet-50 text-violet-700",
   abandonné: "bg-slate-100 text-slate-500",
   acheté: "bg-emerald-50 text-emerald-700",
 };
+
+/** Même logique de tri utilisée par la table (desktop) et la liste de cartes
+ * (mobile), pour ne jamais les laisser diverger. */
+export function sortApartments(
+  apartments: ApartmentWithComputed[],
+  sortKey: SortKey
+): ApartmentWithComputed[] {
+  return [...apartments].sort((a, b) => {
+    const av = a[sortKey];
+    const bv = b[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return bv - av;
+  });
+}
 
 export default function ApartmentsTable({
   apartments,
@@ -40,15 +57,9 @@ export default function ApartmentsTable({
 }) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { open: openRendementDetail } = useRendementDetail();
 
-  const sorted = [...apartments].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    return bv - av;
-  });
+  const sorted = sortApartments(apartments, sortKey);
 
   async function handleDelete(e: React.MouseEvent, apt: ApartmentWithComputed) {
     e.preventDefault();
@@ -71,7 +82,7 @@ export default function ApartmentsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+    <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white sm:block">
       <table className="w-full min-w-[900px] text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -134,10 +145,18 @@ export default function ApartmentsTable({
               </td>
               <td className="px-4 py-3 text-right">{formatSurface(apt.surface_m2)}</td>
               <td className="px-4 py-3 text-right">{formatEuros(apt.loyer_retenu)}</td>
-              <td
-                className={`px-4 py-3 text-right font-semibold ${RENDEMENT_TEXT_CLASS[rendementNetTone(apt.rendement_net, seuilsRendement)]}`}
-              >
-                {formatPercent(apt.rendement_net)}
+              <td className="px-4 py-3 text-right">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openRendementDetail(apt, seuilsRendement);
+                  }}
+                  title="Voir le détail du calcul"
+                  className={`-mx-1.5 -my-0.5 rounded-md px-1.5 py-0.5 font-semibold transition ${RENDEMENT_HOVER_RING[rendementNetTone(apt.rendement_net, seuilsRendement)]} ${RENDEMENT_TEXT_CLASS[rendementNetTone(apt.rendement_net, seuilsRendement)]}`}
+                >
+                  {formatPercent(apt.rendement_net)}
+                </button>
               </td>
               <td className="px-4 py-3 text-center">
                 <ScoreBadge score={apt.analyse_ia?.score_global ?? null} />
@@ -170,7 +189,7 @@ export default function ApartmentsTable({
   );
 }
 
-function ScoreBadge({ score }: { score: number | null }) {
+export function ScoreBadge({ score }: { score: number | null }) {
   if (score == null) {
     return <span className="text-xs text-slate-400" title="Analyse IA non générée">—</span>;
   }
