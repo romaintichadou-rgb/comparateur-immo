@@ -1,12 +1,13 @@
 import type { Apartment } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
 import { geocodeApartmentLocation } from "@/lib/geocoding";
-import { getSettings } from "@/lib/sheets";
+import { getSettings } from "@/lib/db";
 import { buildBlocRisque } from "./blocs/risque";
 import { buildBlocPrix } from "./blocs/prix";
 import { buildBlocLocation } from "./blocs/location";
 import { buildBlocPotentiel } from "./blocs/potentiel";
 import { buildBlocQuartier } from "./blocs/quartier";
+import { buildBlocSimulation } from "./blocs/simulation";
 import { fetchDvf } from "./sources/dvf";
 import { fetchCommodites } from "./sources/osm";
 import { narrateAll, type NarrationStatus } from "./narration";
@@ -56,8 +57,11 @@ export async function runAnalyse(
     getSettings(),
   ]);
   const seuils = seuilsRendementFromSettings(settings);
+  const aptComputed = computeDerived(apt);
 
-  // Les blocs sont indépendants : on les construit en parallèle.
+  // Les blocs sont indépendants : on les construit en parallèle. Le bloc
+  // "simulation" est purement déterministe (pas d'appel réseau) : il n'a pas
+  // besoin de faire partie du Promise.all.
   const [prix, location, risque, potentiel, quartier] = await Promise.all([
     buildBlocPrix(apt, dvf),
     buildBlocLocation(apt, codeInsee, seuils),
@@ -65,9 +69,10 @@ export async function runAnalyse(
     buildBlocPotentiel(apt, dvf, commodites, codeInsee),
     buildBlocQuartier(codeInsee, { lat, lon }),
   ]);
+  const simulation = buildBlocSimulation(aptComputed, settings);
 
   // Rendement net réel du bien : pilote le plafond rédhibitoire et les verdicts.
-  const rendementNet = computeDerived(apt).rendement_net;
+  const rendementNet = aptComputed.rendement_net;
 
   const analyse: AnalyseIA = {
     version: ANALYSE_VERSION,
@@ -75,7 +80,7 @@ export async function runAnalyse(
     score_global: null,
     verdicts: [],
     synthese: "",
-    blocs: { prix, location, risque, potentiel, quartier },
+    blocs: { prix, location, risque, potentiel, quartier, simulation },
   };
 
   // Score global pondéré (avec plafonds) + verdicts, AVANT la narration (la
@@ -90,6 +95,7 @@ export async function runAnalyse(
   risque.narration = narr.blocs.risque ?? "";
   potentiel.narration = narr.blocs.potentiel ?? "";
   quartier.narration = narr.blocs.quartier ?? "";
+  simulation.narration = narr.blocs.simulation ?? "";
   scored.synthese = narr.synthese;
 
   return { analyse: scored, codeInsee, narrationStatus: narr.status };

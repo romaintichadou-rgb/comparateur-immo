@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApartment, updateApartment } from "@/lib/sheets";
+import { getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { runAnalyse } from "@/lib/analyse/run";
 

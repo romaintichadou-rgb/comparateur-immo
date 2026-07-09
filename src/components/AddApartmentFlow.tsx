@@ -3,17 +3,15 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Banknote, Check, ClipboardList, Home, Loader2, Sparkles, Star, User } from "lucide-react";
+import { ArrowLeft, Banknote, Check, Home, Loader2, Sparkles, User } from "lucide-react";
 import {
   DEFAULT_HYPOTHESE_GESTION_PCT,
   DPE_GES_VALEURS,
   ETATS_BIEN,
   PLATEFORMES,
-  STATUTS,
   TYPES_BIEN,
   type ApartmentInput,
   type Plateforme,
-  type Statut,
 } from "@/lib/types";
 import type { ParsedListing } from "@/lib/parsers";
 import {
@@ -24,13 +22,6 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/form/Fields";
-
-const STATUT_STYLES: Record<string, string> = {
-  "à visiter": "bg-blue-50 text-blue-700",
-  visité: "bg-violet-50 text-violet-700",
-  abandonné: "bg-slate-100 text-slate-500",
-  acheté: "bg-emerald-50 text-emerald-700",
-};
 
 function emptyInput(): ApartmentInput {
   return {
@@ -414,12 +405,13 @@ export default function AddApartmentFlow() {
                 <div>
                   <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
                     <Banknote className="h-4 w-4 text-slate-400" />
-                    Analyse financière
+                    Données financières
                   </h2>
                   <p className="mt-2 text-xs text-slate-500">
-                    Les champs laissés vides (frais de notaire, charges, taxe foncière, assurance)
-                    seront pré-estimés automatiquement. Le loyer sera estimé via IA juste après
-                    l&apos;enregistrement.
+                    Les frais de notaire, l&apos;assurance et les frais de gestion sont pré-estimés
+                    automatiquement (modifiables depuis la fiche du bien après création). Les
+                    champs ci-dessous laissés vides (charges copro, taxe foncière) seront eux
+                    aussi pré-estimés. Le loyer sera estimé via IA juste après l&apos;enregistrement.
                   </p>
                 </div>
 
@@ -430,12 +422,6 @@ export default function AddApartmentFlow() {
                       label="Travaux"
                       value={form.travaux}
                       onChange={(v) => set("travaux", v)}
-                      suffix="€"
-                    />
-                    <NumberField
-                      label="Frais de notaire (laisser vide = estimé)"
-                      value={form.frais_notaire_estimes}
-                      onChange={(v) => set("frais_notaire_estimes", v)}
                       suffix="€"
                     />
                   </div>
@@ -456,18 +442,6 @@ export default function AddApartmentFlow() {
                       onChange={(v) => set("taxe_fonciere", v)}
                       suffix="€/an"
                     />
-                    <NumberField
-                      label="Assurance (laisser vide = estimée)"
-                      value={form.assurance_annuelle}
-                      onChange={(v) => set("assurance_annuelle", v)}
-                      suffix="€/an"
-                    />
-                    <NumberField
-                      label="Hypothèse frais de gestion locative"
-                      value={form.hypothese_gestion_pct}
-                      onChange={(v) => set("hypothese_gestion_pct", v ?? 0)}
-                      suffix="%"
-                    />
                   </div>
                 </Subsection>
               </section>
@@ -475,53 +449,6 @@ export default function AddApartmentFlow() {
 
             {/* Colonne latérale */}
             <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  <ClipboardList className="h-4 w-4 text-slate-400" />
-                  Suivi
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <span className="mb-1.5 block text-sm font-medium text-slate-700">Statut</span>
-                    <select
-                      value={form.statut}
-                      onChange={(e) => set("statut", e.target.value as Statut)}
-                      className={`w-full rounded-full border-0 px-3 py-1.5 text-sm font-medium ${
-                        STATUT_STYLES[form.statut] ?? "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {STATUTS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <span className="mb-1.5 block text-sm font-medium text-slate-700">Coup de cœur</span>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() =>
-                            set("score_coup_de_coeur", form.score_coup_de_coeur === n ? null : n)
-                          }
-                          className="text-amber-400 transition hover:scale-110"
-                          aria-label={`${n} étoile(s)`}
-                        >
-                          <Star
-                            className="h-6 w-6"
-                            fill={form.score_coup_de_coeur != null && n <= form.score_coup_de_coeur ? "currentColor" : "none"}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <TextAreaField label="Notes libres" value={form.notes} onChange={(v) => set("notes", v)} rows={3} />
-                </div>
-              </div>
-
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
                   <User className="h-4 w-4 text-slate-400" />

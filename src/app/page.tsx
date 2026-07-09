@@ -1,4 +1,4 @@
-import { listApartments, getSettings } from "@/lib/sheets";
+import { listApartments, getSettings } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import HomeView from "@/components/HomeView";

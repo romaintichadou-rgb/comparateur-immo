@@ -200,7 +200,7 @@ export function ScoreBadge({ score }: { score: number | null }) {
       style={{ backgroundColor: `${color}1a`, color }}
       title="Score global — Analyse IA"
     >
-      {formatNote(score)}/5
+      {formatNote(score)}/10
     </span>
   );
 }

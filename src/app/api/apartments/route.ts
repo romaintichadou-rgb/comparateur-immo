@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createApartment, listApartments } from "@/lib/sheets";
+import { createApartment, listApartments } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { apartmentInputSchema, type ChampEstimable } from "@/lib/types";
 import {

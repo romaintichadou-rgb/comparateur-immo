@@ -13,8 +13,9 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } fro
  *    Paris/Lyon/Marseille (comparaison intra-ville).
  *  - OpenStreetMap : commodités (attractivité durable du quartier).
  *
- * Note /5 = moyenne des sous-notes réellement disponibles (dynamique,
- * liquidité, sécurité). Chaque sous-note est déterministe.
+ * Note /10 = moyenne des sous-notes réellement disponibles (dynamique,
+ * liquidité, sécurité), doublée pour être exprimée sur 10. Chaque sous-note
+ * est déterministe.
  */
 
 const SRC_DVF: Source = { label: "DVF (DGFiP)", url: "https://app.dvf.etalab.gouv.fr/" };
@@ -139,7 +140,7 @@ export async function buildBlocPotentiel(
 
   const note =
     sousNotes.length > 0
-      ? clampNote(sousNotes.reduce((s, n) => s + n, 0) / sousNotes.length)
+      ? clampNote((sousNotes.reduce((s, n) => s + n, 0) / sousNotes.length) * 2)
       : null;
 
   const disponible = note != null || faits.length > 0;

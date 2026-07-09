@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSettings, updateSettings } from "@/lib/sheets";
+import { getSettings, updateSettings } from "@/lib/db";
 import { settingsPatchSchema } from "@/lib/settings";
 
 export async function GET() {

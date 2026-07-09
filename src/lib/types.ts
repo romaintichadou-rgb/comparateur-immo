@@ -49,8 +49,9 @@ export const CHAMPS_ESTIMABLES = [
 ] as const;
 export type ChampEstimable = (typeof CHAMPS_ESTIMABLES)[number];
 
-// Champs stockés tels quels dans le Google Sheet (une ligne = un appartement).
-// Les champs calculés (prix_m2, budget_total, rendement_brut, rendement_net)
+// Champs stockés tels quels dans la table `apartments` (une ligne = un
+// appartement). Les champs calculés (prix_m2, budget_total, rendement_brut,
+// rendement_net)
 // ne sont volontairement PAS stockés : ils sont recalculés à l'affichage
 // pour rester toujours cohérents avec les valeurs sources.
 export interface Apartment {
@@ -118,51 +119,6 @@ export interface Apartment {
   // qu'aucune analyse n'a été lancée.
   analyse_ia: AnalyseIA | null;
 }
-
-// Ordre exact des colonnes dans la Google Sheet (ligne d'en-tête).
-export const SHEET_COLUMNS: (keyof Apartment)[] = [
-  "id",
-  "url",
-  "plateforme",
-  "description",
-  "date_ajout",
-  "statut",
-  "adresse",
-  "quartier",
-  "ville",
-  "code_postal",
-  "code_insee",
-  "latitude",
-  "longitude",
-  "precision_localisation",
-  "type_bien",
-  "surface_m2",
-  "nb_pieces",
-  "nb_chambres",
-  "etage",
-  "ascenseur",
-  "annee_construction",
-  "etat_bien",
-  "dpe",
-  "ges",
-  "prix",
-  "frais_notaire_estimes",
-  "travaux",
-  "charges_copro_annuelles",
-  "taxe_fonciere",
-  "assurance_annuelle",
-  "loyer_retenu",
-  "loyer_justification",
-  "hypothese_gestion_pct",
-  "notes",
-  "score_coup_de_coeur",
-  "photo_url",
-  "contact_nom",
-  "contact_telephone",
-  "contact_email",
-  "champs_manuels",
-  "analyse_ia",
-];
 
 export const DEFAULT_HYPOTHESE_GESTION_PCT = 5;
 

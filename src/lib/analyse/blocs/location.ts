@@ -117,7 +117,7 @@ export async function buildBlocLocation(
     else base = 1;
 
     if (loyerOptimiste) base = Math.min(base, 3); // loyer optimiste → rendement surestimé
-    note = clampNote(base);
+    note = clampNote(base * 2);
   } else {
     donneesManquantes.push("rendement (prix ou loyer manquant)");
   }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteApartment, getApartment, updateApartment } from "@/lib/sheets";
+import { deleteApartment, getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import {
   CHAMPS_ESTIMABLES,

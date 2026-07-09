@@ -3,12 +3,13 @@
  *
  * Principe directeur (non négociable) : l'IA ne produit JAMAIS un chiffre.
  * Chaque `Fait` provient d'une API publique réelle (BAN, Géorisques, ADEME,
- * DVF...). Les notes /5 sont calculées par des règles déterministes
- * (voir scoring.ts). Le LLM n'intervient que dans `narration` / `synthese`,
- * pour mettre les faits en mots — sans inventer de donnée absente des faits.
+ * DVF...) ou d'un calcul déterministe (simulation financière). Les notes /10
+ * sont calculées par des règles déterministes (voir scoring.ts). Le LLM
+ * n'intervient que dans `narration` / `synthese`, pour mettre les faits en
+ * mots — sans inventer de donnée absente des faits.
  */
 
-export type BlocKey = "prix" | "location" | "risque" | "potentiel" | "quartier";
+export type BlocKey = "prix" | "location" | "risque" | "potentiel" | "quartier" | "simulation";
 
 export const BLOC_LABELS: Record<BlocKey, string> = {
   prix: "Prix d'achat",
@@ -16,17 +17,21 @@ export const BLOC_LABELS: Record<BlocKey, string> = {
   risque: "Risques",
   potentiel: "Potentiel",
   quartier: "Quartier",
+  simulation: "Simulation financière",
 };
 
-// Poids de chaque bloc dans la note globale. Prix + location dominent
-// volontairement (décision produit). Le total fait 1 sur les 4 blocs notés.
-// "quartier" est purement informatif : poids 0, jamais noté, jamais compté
-// dans la moyenne (computeScoreGlobal filtre déjà sur note != null).
+// Poids de chaque bloc dans la note globale. Prix + simulation financière
+// dominent volontairement (décision produit) : le prix d'achat et le
+// cash-flow réel après crédit et fiscalité sont les deux critères les plus
+// déterminants pour la décision d'achat. Le total fait 1 sur les 5 blocs
+// notés. "quartier" est purement informatif : poids 0, jamais noté, jamais
+// compté dans la moyenne (computeScoreGlobal filtre déjà sur note != null).
 export const BLOC_POIDS: Record<BlocKey, number> = {
-  prix: 0.3,
-  location: 0.3,
-  risque: 0.2,
-  potentiel: 0.2,
+  prix: 0.25,
+  location: 0.2,
+  risque: 0.15,
+  potentiel: 0.15,
+  simulation: 0.25,
   quartier: 0,
 };
 
@@ -47,7 +52,7 @@ export interface Source {
 export interface Fait {
   label: string; // ex. "Prix/m² médian comparable"
   value: string | number | null; // donnée principale (ex. 4544, "D", "2,9 – 5,7")
-  unit?: string; // ex. "€/m²", "%", "‰", "/5"
+  unit?: string; // ex. "€/m²", "%", "‰", "/10"
   detail?: string; // contexte non chiffré (ex. "446 ventes · 2024–2026")
   perimetre?: string; // base de comparaison (ex. "rayon 500 m", "arrondissement")
   source: string; // label de la source (doit correspondre à un Source.label)
@@ -64,7 +69,7 @@ export interface BlocHighlight {
 export interface BlocAnalyse {
   cle: BlocKey;
   titre: string;
-  /** Note /5 (5 = meilleur). null si les données ne sont pas disponibles. */
+  /** Note /10 (10 = meilleur). null si les données ne sont pas disponibles. */
   note: number | null;
   poids: number;
   /** Métriques mises en avant en cartes, au-dessus des faits (ex. rendement). */
@@ -99,7 +104,7 @@ export interface Verdict {
 export interface AnalyseIA {
   version: number;
   genere_le: string; // ISO 8601
-  /** Note globale /5 pondérée (avec plafonds rédhibitoires appliqués). */
+  /** Note globale /10 pondérée (avec plafonds rédhibitoires appliqués). */
   score_global: number | null;
   /** Verdicts textuels indépendants du score (dealbreakers en tête). */
   verdicts: Verdict[];

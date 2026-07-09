@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getApartment, getSettings } from "@/lib/sheets";
+import { getApartment, getSettings } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import ApartmentDetail from "@/components/ApartmentDetail";
 import SetupNotice from "@/components/SetupNotice";

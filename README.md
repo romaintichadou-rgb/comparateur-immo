@@ -4,9 +4,9 @@ Application personnelle pour comparer des appartements en vue d'un investissemen
 locatif : ajout d'une annonce par URL (ou saisie manuelle), extraction des
 caractéristiques, estimation de rentabilité, tableau triable et carte.
 
-Stack : Next.js (App Router) + TypeScript, Google Sheets comme base de données,
-Leaflet/OSM pour la carte, Gemini (recherche Google, palier gratuit) pour
-l'estimation de loyer.
+Stack : Next.js (App Router) + TypeScript, Supabase (Postgres) comme base de
+données, Leaflet/OSM pour la carte, Gemini (recherche Google, palier gratuit)
+pour l'estimation de loyer.
 
 ## Objectifs
 
@@ -26,9 +26,10 @@ questions :
    (amortissements, art. 39 C) et évolution du patrimoine (Simulation
    financière).
 
-L'app n'a pas vocation à devenir un produit multi-utilisateurs : c'est un
-outil de décision personnel, optimisé pour comparer une poignée de biens en
-cours de prospection.
+Aujourd'hui, c'est un outil de décision mono-utilisateur, optimisé pour
+comparer une poignée de biens en cours de prospection. L'authentification
+multi-utilisateurs (création de compte, isolation des données par
+utilisateur) est un chantier à venir, pas encore implémenté.
 
 ## 1. Installer les dépendances
 
@@ -36,42 +37,42 @@ cours de prospection.
 npm install
 ```
 
-## 2. Configurer Google Sheets (obligatoire)
+## 2. Configurer Supabase (obligatoire)
 
-L'app lit/écrit dans la Google Sheet via un **compte de service** Google (pas
-d'OAuth utilisateur à gérer).
+L'app lit/écrit dans une base Postgres Supabase via la **service role key**
+(accès serveur uniquement, jamais exposée au client — pas d'auth utilisateur
+pour l'instant, l'app reste mono-utilisateur).
 
-1. Va sur [console.cloud.google.com](https://console.cloud.google.com/) et crée
-   un nouveau projet (ou réutilise un projet existant).
-2. Dans **APIs & Services → Bibliothèque**, cherche **Google Sheets API** et
-   clique sur **Activer**.
-3. Dans **APIs & Services → Identifiants**, clique sur **Créer des
-   identifiants → Compte de service**. Donne-lui un nom (ex.
-   `comparateur-locatif`), pas besoin de rôle particulier au niveau projet.
-4. Une fois le compte de service créé, ouvre-le, va dans l'onglet **Clés**,
-   puis **Ajouter une clé → Créer une clé → JSON**. Un fichier `.json` se
-   télécharge : garde-le précieusement, **ne le commit jamais**.
-5. Ouvre la Google Sheet cible :
-   https://docs.google.com/spreadsheets/d/1YLHBiIfOOuzrhEvDfd_sTdM0Umf97Ar1KM_mj2RHhs0/edit
-   Clique sur **Partager**, et ajoute l'adresse email du compte de service
-   (visible dans le JSON, champ `client_email`, du type
-   `xxx@xxx.iam.gserviceaccount.com`) en tant qu'**Éditeur**.
-6. Copie `.env.local.example` vers `.env.local` :
+Recommandé : **deux projets Supabase séparés**, un pour la production et un
+pour le développement local, pour ne jamais risquer d'écrire des données de
+test dans les vraies données (le plan Free inclut 2 projets gratuits).
+
+1. Crée un projet sur [supabase.com/dashboard](https://supabase.com/dashboard)
+   (répète l'étape pour un 2e projet si tu veux séparer prod/dev).
+2. Dans **SQL Editor**, colle et exécute le contenu de
+   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) —
+   dans **chaque** projet que tu crées. Ça crée les tables `apartments` et
+   `app_settings`, avec RLS activé (aucune policy publique : seule la
+   service role key peut lire/écrire).
+3. Dans **Project Settings → API Keys**, récupère :
+   - Le **Project URL** (aussi visible via le bouton **Connect** en haut du
+     dashboard).
+   - La **Secret key** (section "Secret keys", remplace l'ancienne
+     `service_role` — clé serveur à privilèges élevés, ne jamais l'exposer
+     côté client ni la committer).
+4. Copie `.env.local.example` vers `.env.local` :
 
    ```bash
    cp .env.local.example .env.local
    ```
 
-7. Remplis `.env.local` avec les valeurs du JSON téléchargé :
-   - `GOOGLE_SERVICE_ACCOUNT_EMAIL` → champ `client_email` du JSON
-   - `GOOGLE_PRIVATE_KEY` → champ `private_key` du JSON, **collé tel quel avec
-     les `\n` littéraux** (ne pas les remplacer par de vrais retours à la
-     ligne, ne pas retirer les guillemets)
-   - `GOOGLE_SHEET_ID` déjà pré-rempli (id de la Sheet ci-dessus)
+5. Remplis `.env.local` avec les valeurs du projet **dev** (celui du
+   développement local) :
+   - `SUPABASE_URL` → Project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` → Secret key
 
-L'app initialise automatiquement la ligne d'en-têtes dans le premier onglet de
-la Sheet au premier lancement si elle est vide — pas besoin de la créer à la
-main.
+En production (Vercel), renseigne les mêmes variables mais avec les
+credentials du projet **prod** — voir la section Déploiement plus bas.
 
 ## 3. (Optionnel) Estimation de loyer par IA
 
@@ -97,10 +98,11 @@ Ouvre [http://localhost:3000](http://localhost:3000).
 
 Chaque bien ajouté dispose d'une fiche détaillée à 3 onglets :
 
-- **Analyse IA** — score global (/5) et note par bloc (Prix d'achat,
-  Potentiel locatif, Risques, Potentiel du quartier), basés sur des données
-  réelles (DVF, ANIL, ADEME, Géorisques, SSMSI, OpenStreetMap) et une
-  narration générée par IA. Relançable manuellement.
+- **Analyse IA** — score global (/10) et note par bloc (Prix d'achat,
+  Potentiel locatif, Simulation financière, Potentiel, Risques), plus un
+  bloc Quartier informatif, basés sur des données réelles (DVF, ANIL, ADEME,
+  Géorisques, SSMSI, OpenStreetMap) et une narration générée par IA.
+  Relançable manuellement.
 - **Description de l'appartement** — champs éditables (achat, location,
   charges annuelles), avec recalcul live des indicateurs dérivés (prix/m²,
   budget total, rendements brut/net) à chaque saisie.
@@ -145,9 +147,13 @@ corriger un champ mal détecté.
 ## Déploiement sur Vercel
 
 Le projet est prêt pour Vercel : `vercel deploy` (ou connecter le repo GitHub
-sur vercel.com), puis renseigner les mêmes variables d'environnement
-(`GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`,
-`GEMINI_API_KEY`) dans les paramètres du projet Vercel. Note : les IP des
-fonctions serverless Vercel sont, comme tout datacenter, également
-fréquemment bloquées par les protections anti-bot — les limites ci-dessus
-s'appliquent aussi (voire plus) en production.
+sur vercel.com), puis renseigner les variables d'environnement
+(`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`) dans les
+paramètres du projet Vercel — en scopant `SUPABASE_URL`/
+`SUPABASE_SERVICE_ROLE_KEY` sur **Production** avec les credentials du
+projet Supabase prod, et sur **Preview**/**Development** avec ceux du projet
+dev, pour qu'un déploiement de preview ne puisse jamais écrire dans les
+vraies données. Note : les IP des fonctions serverless Vercel sont, comme
+tout datacenter, fréquemment bloquées par les protections anti-bot des
+parsers — les limites ci-dessous s'appliquent aussi (voire plus) en
+production.

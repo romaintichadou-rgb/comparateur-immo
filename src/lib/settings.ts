@@ -4,8 +4,8 @@ import { z } from "zod";
  * Réglages personnels de l'app : les seuils vert/ambre/rouge utilisés pour
  * colorer le rendement net et le cash-flow mensuel partout où ils sont
  * affichés (tableau, carte, Analyse IA, Simulation financière). Persistés
- * dans un onglet dédié de la Google Sheet, pour rester la seule source de
- * vérité côté serveur (score/verdicts) comme côté client (affichage).
+ * Persistés dans la table `app_settings` (Supabase), pour rester la seule
+ * source de vérité côté serveur (score/verdicts) comme côté client (affichage).
  */
 
 export interface AppSettings {

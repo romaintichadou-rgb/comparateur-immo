@@ -11,9 +11,10 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } fro
  *  - Géorisques : retrait-gonflement des argiles, radon, sismicité, et risques
  *    recensés sur la commune (inondation, feu de forêt...).
  *
- * La note /5 (5 = risque faible) est purement déterministe : on part de 5 et
- * on soustrait des pénalités, chacune adossée à un fait affiché. Aucune
- * pénalité n'existe sans un fait réel correspondant.
+ * La note /10 (10 = risque faible) est purement déterministe : on part de 5
+ * et on soustrait des pénalités, chacune adossée à un fait affiché, avant de
+ * doubler le résultat pour l'exprimer sur 10. Aucune pénalité n'existe sans
+ * un fait réel correspondant.
  */
 
 const SRC_ADEME: Source = { label: "ADEME — DPE", url: "https://observatoire-dpe-audit.ademe.fr/" };
@@ -174,7 +175,7 @@ export async function buildBlocRisque(
   // --- Note déterministe ---
   const aDesDonnees = faits.length > 0 && (dpeRef !== "" || sources.some((s) => s.label === SRC_GEORISQUES.label));
   const note = aDesDonnees
-    ? clampNote(5 - penalites.reduce((s, p) => s + p, 0))
+    ? clampNote((5 - penalites.reduce((s, p) => s + p, 0)) * 2)
     : null;
 
   return {

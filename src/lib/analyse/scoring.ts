@@ -62,12 +62,12 @@ export const RENDEMENT_HOVER_RING: Record<RendementTone, string> = {
 };
 
 /**
- * Calcul de la note globale /5, pondérée par bloc, avec plafonds rédhibitoires.
+ * Calcul de la note globale /10, pondérée par bloc, avec plafonds rédhibitoires.
  *
  * - Seuls les blocs notés entrent dans la moyenne (poids renormalisés).
- * - Plafond risque : risque <= 2 → global plafonné à 2.
+ * - Plafond risque : risque <= 4 → global plafonné à 4.
  * - Plafond rendement : rendement net < seuil rédhibitoire → global plafonné
- *   à 2,5 (l'objectif locatif n'est pas rempli). C'est le garde-fou contre la
+ *   à 5 (l'objectif locatif n'est pas rempli). C'est le garde-fou contre la
  *   "dilution" d'un point rédhibitoire par la moyenne pondérée.
  */
 export function computeScoreGlobal(
@@ -84,10 +84,10 @@ export function computeScoreGlobal(
   let global = notes.reduce((s, b) => s + (b.note as number) * b.poids, 0) / poidsTotal;
 
   const risque = blocs.risque;
-  if (risque.note != null && risque.note <= 2) global = Math.min(global, 2);
+  if (risque.note != null && risque.note <= 4) global = Math.min(global, 4);
 
   if (rendementNet != null && rendementNet < seuils.redhibitoire) {
-    global = Math.min(global, 2.5);
+    global = Math.min(global, 5);
   }
 
   return round1(global);
@@ -132,26 +132,26 @@ export function buildVerdicts(
     }
   }
 
-  // 2) Tout bloc noté ≤ 2,5/5 remonte comme point d'attention critique.
+  // 2) Tout bloc noté ≤ 5/10 remonte comme point d'attention critique.
   for (const b of Object.values(blocs) as BlocAnalyse[]) {
-    if (b.note != null && b.note <= 2.5) {
+    if (b.note != null && b.note <= 5) {
       verdicts.push({
-        niveau: b.note <= 2 ? "alerte" : "attention",
-        titre: `${b.titre} faible (${b.note}/5)`,
+        niveau: b.note <= 4 ? "alerte" : "attention",
+        titre: `${b.titre} faible (${b.note}/10)`,
         detail: "Un des critères est défavorable — voir le détail du bloc ci-dessous.",
       });
     }
   }
 
-  // 3) Points forts marquants (note ≥ 4,5) — équilibre, en dernier, max 2.
+  // 3) Points forts marquants (note ≥ 9/10) — équilibre, en dernier, max 2.
   const forts = (Object.values(blocs) as BlocAnalyse[])
-    .filter((b) => b.note != null && (b.note as number) >= 4.5)
+    .filter((b) => b.note != null && (b.note as number) >= 9)
     .sort((a, b) => (b.note as number) - (a.note as number))
     .slice(0, 2);
   for (const b of forts) {
     verdicts.push({
       niveau: "positif",
-      titre: `${b.titre} (${b.note}/5)`,
+      titre: `${b.titre} (${b.note}/10)`,
       detail: "Point fort du bien — voir le détail du bloc ci-dessous.",
     });
   }
@@ -160,7 +160,7 @@ export function buildVerdicts(
 }
 
 export function clampNote(n: number): number {
-  return round1(Math.max(0, Math.min(5, n)));
+  return round1(Math.max(0, Math.min(10, n)));
 }
 
 function round1(n: number): number {

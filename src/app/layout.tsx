@@ -44,7 +44,7 @@ export default function RootLayout({
                 href="/parametres"
                 className="font-medium text-slate-500 transition hover:text-slate-700"
               >
-                Paramètres
+                Profil investisseur
               </Link>
               <Link
                 href="/appartements/nouveau"

@@ -9,7 +9,7 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } fro
  * travaux, pour rester comparable aux prix de vente DVF) à la médiane réelle
  * du secteur sur les 3 dernières années, et on affiche l'évolution sur ~10 ans.
  *
- * Note /5 (5 = affaire) purement déterministe : elle dépend uniquement de
+ * Note /10 (10 = affaire) purement déterministe : elle dépend uniquement de
  * l'écart au prix médian réel du quartier.
  */
 
@@ -70,14 +70,14 @@ export async function buildBlocPrix(
         gravite: ecart <= -0.05 ? "positif" : ecart <= 0.05 ? "info" : ecart <= 0.15 ? "attention" : "alerte",
       });
 
-      // Note = écart au marché (5 = nettement sous le marché).
+      // Note = écart au marché (10 = nettement sous le marché).
       let penalite: number;
       if (ecart <= -0.15) penalite = 0;
       else if (ecart <= -0.05) penalite = 1;
       else if (ecart <= 0.05) penalite = 2;
       else if (ecart <= 0.15) penalite = 3;
       else penalite = 4;
-      note = clampNote(5 - penalite);
+      note = clampNote((5 - penalite) * 2);
     }
     // Note : l'évolution des prix du secteur est affichée dans le bloc
     // « Potentiel » (dynamique du quartier), pas ici, pour éviter le doublon.

@@ -1,4 +1,4 @@
-import { getSettings } from "@/lib/sheets";
+import { getSettings } from "@/lib/db";
 import SettingsForm from "@/components/SettingsForm";
 import SetupNotice from "@/components/SetupNotice";
 

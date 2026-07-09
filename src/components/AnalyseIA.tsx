@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, Banknote, CheckCircle2, Clock, Info, KeyRound, Loader2, MapPin, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
+import { AlertTriangle, Banknote, Calculator, CheckCircle2, Clock, Info, KeyRound, Loader2, MapPin, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, VerdictNiveau } from "@/lib/analyse/types";
 import { RENDEMENT_HOVER_RING, SEUILS_RENDEMENT_DEFAUT, type RendementSeuils } from "@/lib/analyse/scoring";
@@ -33,12 +33,15 @@ const BLOC_ICONS: Record<BlocKey, typeof Banknote> = {
   risque: ShieldAlert,
   potentiel: TrendingUp,
   quartier: MapPin,
+  simulation: Calculator,
 };
 
-// Ordre d'affichage des 4 blocs notés (par poids décroissant dans la note
-// globale). Le bloc "quartier" (non noté) est affiché séparément, en pleine
-// largeur, après ceux-ci — voir plus bas.
-const BLOC_ORDRE: BlocKey[] = ["prix", "location", "risque", "potentiel"];
+// Ordre d'affichage des 5 blocs notés, en grille 2 colonnes : Simulation
+// financière est placée sous Prix d'achat et à côté de Potentiel (décision
+// produit — les deux critères financiers les plus déterminants côte à côte).
+// Le bloc "quartier" (non noté) est affiché séparément, en pleine largeur,
+// après ceux-ci — voir plus bas.
+const BLOC_ORDRE: BlocKey[] = ["prix", "location", "simulation", "potentiel", "risque"];
 
 const GRAVITE_STYLES: Record<FaitGravite, { dot: string; value: string }> = {
   positif: { dot: "bg-emerald-500", value: "text-emerald-700" },
@@ -48,8 +51,8 @@ const GRAVITE_STYLES: Record<FaitGravite, { dot: string; value: string }> = {
 };
 
 function noteColorClasses(note: number): string {
-  if (note >= 4) return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  if (note >= 2.5) return "bg-amber-50 text-amber-700 ring-amber-200";
+  if (note >= 8) return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (note >= 5) return "bg-amber-50 text-amber-700 ring-amber-200";
   return "bg-red-50 text-red-700 ring-red-200";
 }
 
@@ -67,7 +70,7 @@ function syntheseCourte(analyse: { score_global: number | null; verdicts: Verdic
   if (s == null) return "Analyse indisponible : données insuffisantes.";
 
   const qualifier =
-    s >= 4 ? "Belle opportunité" : s >= 3 ? "Opportunité correcte" : s >= 2 ? "Opportunité limitée" : "Opportunité faible";
+    s >= 8 ? "Belle opportunité" : s >= 6 ? "Opportunité correcte" : s >= 4 ? "Opportunité limitée" : "Opportunité faible";
 
   const alerte = analyse.verdicts.find((v) => v.niveau === "alerte");
   if (alerte) return `${qualifier} — ${alerte.titre.toLowerCase()}.`;
@@ -82,7 +85,7 @@ function syntheseCourte(analyse: { score_global: number | null; verdicts: Verdic
   );
   const best = leviers.length ? leviers.reduce((a, b) => ((b.note as number) > (a.note as number) ? b : a)) : null;
   return best
-    ? `${qualifier} — aucun point rédhibitoire, atout principal : ${best.titre.toLowerCase()} (${formatNote(best.note as number)}/5).`
+    ? `${qualifier} — aucun point rédhibitoire, atout principal : ${best.titre.toLowerCase()} (${formatNote(best.note as number)}/10).`
     : `${qualifier}.`;
 }
 
@@ -163,7 +166,14 @@ export default function AnalyseIA({
     );
   }
 
-  const blocs = BLOC_ORDRE.map((k) => analyse.blocs[k]);
+  // .filter(Boolean) : les analyses générées avant l'ajout d'un bloc (ex.
+  // "simulation") ne l'ont pas encore en base — on l'omet sans planter,
+  // jusqu'à ce que l'utilisateur clique sur « Relancer ».
+  const blocsNotes = BLOC_ORDRE.map((k) => analyse.blocs[k]).filter((b): b is BlocAnalyse => b != null);
+  // Quartier (non noté) est ajouté en dernier dans la même grille 2 colonnes,
+  // pour s'afficher juste à côté de Risque (dernier bloc noté, seul sur sa ligne).
+  const quartier = analyse.blocs.quartier;
+  const blocs = quartier ? [...blocsNotes, quartier] : blocsNotes;
 
   return (
     <div className="space-y-6">
@@ -236,19 +246,15 @@ export default function AnalyseIA({
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
 
-      {/* Blocs notés */}
+      {/* Blocs notés + Quartier (informatif, non noté), à côté de Risque */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {blocs.map((bloc) => (
           <BlocCard key={bloc.cle} bloc={bloc} apartment={apartment} seuilsRendement={seuilsRendement} />
         ))}
       </div>
 
-      {/* Quartier : bloc informatif (pas de note, pas de poids dans le score),
-          en pleine largeur car plus riche en faits que les blocs notés.
-          Absent des analyses générées avant son ajout — invite à relancer. */}
-      {analyse.blocs.quartier ? (
-        <BlocCard bloc={analyse.blocs.quartier} apartment={apartment} seuilsRendement={seuilsRendement} />
-      ) : (
+      {/* Absent des analyses générées avant l'ajout du bloc Quartier — invite à relancer. */}
+      {!quartier && (
         <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-xs text-slate-400">
           Le bloc Quartier n&apos;existe pas encore pour cette analyse — clique sur « Relancer » pour le générer.
         </p>
@@ -273,18 +279,18 @@ function VerdictChip({ verdict }: { verdict: Verdict }) {
 
 export function noteHex(note: number | null): string {
   if (note == null) return "#cbd5e1";
-  if (note >= 4) return "#10b981";
-  if (note >= 2.5) return "#f59e0b";
+  if (note >= 8) return "#10b981";
+  if (note >= 5) return "#f59e0b";
   return "#ef4444";
 }
 
-/** Jauge circulaire : anneau de progression proportionnel à la note /5. */
+/** Jauge circulaire : anneau de progression proportionnel à la note /10. */
 function ScoreGauge({ note, loading = false }: { note: number | null; loading?: boolean }) {
   const size = 96;
   const stroke = 9;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const ratio = note != null ? Math.max(0, Math.min(1, note / 5)) : 0;
+  const ratio = note != null ? Math.max(0, Math.min(1, note / 10)) : 0;
   const color = noteHex(note);
 
   return (
@@ -307,7 +313,7 @@ function ScoreGauge({ note, loading = false }: { note: number | null; loading?: 
         <span className="text-2xl font-bold leading-none" style={{ color }}>
           {note != null ? formatNote(note) : "—"}
         </span>
-        <span className="text-[10px] text-slate-400">/ 5</span>
+        <span className="text-[10px] text-slate-400">/ 10</span>
       </div>
     </div>
   );
@@ -340,7 +346,7 @@ function BlocCard({
               bloc.note
             )}`}
           >
-            {formatNote(bloc.note)}/5
+            {formatNote(bloc.note)}/10
           </span>
         ) : bloc.cle === "quartier" ? (
           <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-500">
