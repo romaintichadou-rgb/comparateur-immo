@@ -52,7 +52,7 @@ import { useRendementDetail } from "@/components/RendementDetailProvider";
 const ApartmentLocationMap = dynamic(() => import("./ApartmentLocationMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full items-center justify-center bg-slate-100 text-xs text-slate-400">
+    <div className="flex h-full items-center justify-center bg-ink-100 text-xs text-ink-400">
       Chargement de la carte...
     </div>
   ),
@@ -74,7 +74,7 @@ const TABS: { key: Tab; label: string }[] = [
 const STATUT_STYLES: Record<string, string> = {
   "à visiter": "bg-blue-50 text-blue-700",
   visité: "bg-violet-50 text-violet-700",
-  abandonné: "bg-slate-100 text-slate-500",
+  abandonné: "bg-ink-100 text-ink-500",
   acheté: "bg-emerald-50 text-emerald-700",
 };
 
@@ -223,7 +223,7 @@ export default function ApartmentDetail({
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+        className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-700"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour à la liste
@@ -233,31 +233,31 @@ export default function ApartmentDetail({
       <div className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row">
           {/* Photo */}
-          <div className="relative h-56 min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-72">
+          <div className="relative h-56 min-w-0 flex-1 overflow-hidden rounded-xl border border-ink-200 shadow-sm sm:h-72">
             {apt.photo_url ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
-                  <h1 className="text-2xl font-semibold text-white sm:text-3xl">
+                  <h1 className="font-display text-2xl font-semibold text-white sm:text-3xl">
                     {formatApartmentTitle(apt)}
                   </h1>
                   {localisation && <p className="mt-1 text-sm text-white/85">{localisation}</p>}
                 </div>
               </>
             ) : (
-              <div className="flex h-full flex-col justify-center bg-slate-50 p-5 sm:p-6">
-                <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">
+              <div className="flex h-full flex-col justify-center bg-ink-50 p-5 sm:p-6">
+                <h1 className="font-display text-2xl font-semibold text-ink-900 sm:text-3xl">
                   {formatApartmentTitle(apt)}
                 </h1>
-                {localisation && <p className="mt-1 text-sm text-slate-500">{localisation}</p>}
+                {localisation && <p className="mt-1 text-sm text-ink-500">{localisation}</p>}
               </div>
             )}
           </div>
 
           {/* Carte */}
-          <div className="relative h-56 w-full shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-72 sm:w-72">
+          <div className="relative h-56 w-full shrink-0 overflow-hidden rounded-xl border border-ink-200 shadow-sm sm:h-72 sm:w-72">
             {hasCoords ? (
               <ApartmentLocationMap
                 latitude={apt.latitude!}
@@ -265,7 +265,7 @@ export default function ApartmentDetail({
                 approximatif={localisationApproximative}
               />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-slate-50 text-slate-400">
+              <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-ink-50 text-ink-400">
                 <MapPin className="h-5 w-5" />
                 <span className="text-xs">Localisation indisponible</span>
               </div>
@@ -277,7 +277,7 @@ export default function ApartmentDetail({
             )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-500 shadow-sm sm:px-6">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-ink-200 bg-white px-5 py-3 text-sm text-ink-500 shadow-sm sm:px-6">
           <span>Ajouté le {formatDate(apt.date_ajout)}</span>
           <span>·</span>
           <span>{apt.plateforme}</span>
@@ -288,7 +288,7 @@ export default function ApartmentDetail({
                 href={apt.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800"
+                className="inline-flex items-center gap-1 text-accent-600 hover:text-accent-800"
               >
                 Voir l&apos;annonce <ExternalLink className="h-3.5 w-3.5" />
               </a>
@@ -298,7 +298,7 @@ export default function ApartmentDetail({
       </div>
 
       {/* Onglets */}
-      <div className="border-b border-slate-200">
+      <div className="border-b border-ink-200">
         <nav className="-mx-4 flex gap-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           {TABS.map((tab) => (
             <button
@@ -307,8 +307,8 @@ export default function ApartmentDetail({
               onClick={() => setActiveTab(tab.key)}
               className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition ${
                 activeTab === tab.key
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
+                  ? "border-accent-600 text-accent-600"
+                  : "border-transparent text-ink-500 hover:text-ink-700"
               }`}
             >
               {tab.label}
@@ -349,21 +349,21 @@ export default function ApartmentDetail({
           </div>
 
           {finDirty && (
-            <div className="flex items-center justify-between gap-3 rounded-md bg-indigo-50 px-4 py-2.5">
-              <p className="text-xs text-indigo-700">Modifications non enregistrées.</p>
+            <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
+              <p className="text-xs text-accent-700">Modifications non enregistrées.</p>
               <button
                 onClick={() => save(finPatch, setSavingFin, () => setFinPatch({}))}
                 disabled={savingFin}
-                className="shrink-0 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="shrink-0 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
               >
                 {savingFin ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>
           )}
 
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              <Banknote className="h-4 w-4 text-slate-400" />
+          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+              <Banknote className="h-4 w-4 text-ink-400" />
               Achat
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -391,9 +391,9 @@ export default function ApartmentDetail({
             </div>
           </section>
 
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              <KeyRound className="h-4 w-4 text-slate-400" />
+          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+              <KeyRound className="h-4 w-4 text-ink-400" />
               Location
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -410,7 +410,7 @@ export default function ApartmentDetail({
                 <button
                   onClick={handleReestimer}
                   disabled={reestimating}
-                  className="mb-[1px] shrink-0 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                  className="mb-[1px] shrink-0 rounded-md border border-accent-200 bg-accent-50 px-3 py-2 text-xs font-medium text-accent-700 hover:bg-accent-100 disabled:opacity-50"
                 >
                   {reestimating ? "Estimation..." : "Réestimer"}
                 </button>
@@ -421,16 +421,16 @@ export default function ApartmentDetail({
                 </p>
               )}
               {apt.loyer_justification && (
-                <p className="sm:col-span-2 rounded-md bg-slate-50 p-3 text-xs text-slate-600">
+                <p className="sm:col-span-2 rounded-md bg-ink-50 p-3 text-xs text-ink-600">
                   {apt.loyer_justification}
                 </p>
               )}
             </div>
           </section>
 
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              <ReceiptText className="h-4 w-4 text-slate-400" />
+          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+              <ReceiptText className="h-4 w-4 text-ink-400" />
               Charges annuelles
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -474,17 +474,17 @@ export default function ApartmentDetail({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         {/* Colonne principale */}
         <div className="min-w-0 space-y-6">
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                <Home className="h-4 w-4 text-slate-400" />
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+                <Home className="h-4 w-4 text-ink-400" />
                 Description du bien
               </h2>
               {descDirty && (
                 <button
                   onClick={() => save(descPatch, setSavingDesc, () => setDescPatch({}))}
                   disabled={savingDesc}
-                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
                 >
                   {savingDesc ? "Enregistrement..." : "Enregistrer"}
                 </button>
@@ -517,19 +517,19 @@ export default function ApartmentDetail({
 
         {/* Colonne latérale */}
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              <ClipboardList className="h-4 w-4 text-slate-400" />
+          <div className="rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+              <ClipboardList className="h-4 w-4 text-ink-400" />
               Suivi
             </h2>
             <div className="space-y-4">
               <div>
-                <span className="mb-1.5 block text-sm font-medium text-slate-700">Statut</span>
+                <span className="mb-1.5 block text-sm font-medium text-ink-700">Statut</span>
                 <select
                   value={apt.statut}
                   onChange={(e) => patchNow({ statut: e.target.value as Statut })}
                   className={`w-full rounded-full border-0 px-3 py-1.5 text-sm font-medium ${
-                    STATUT_STYLES[apt.statut] ?? "bg-slate-100 text-slate-600"
+                    STATUT_STYLES[apt.statut] ?? "bg-ink-100 text-ink-600"
                   }`}
                 >
                   {STATUTS.map((s) => (
@@ -540,7 +540,7 @@ export default function ApartmentDetail({
                 </select>
               </div>
               <div>
-                <span className="mb-1.5 block text-sm font-medium text-slate-700">Coup de cœur</span>
+                <span className="mb-1.5 block text-sm font-medium text-ink-700">Coup de cœur</span>
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
@@ -570,12 +570,12 @@ export default function ApartmentDetail({
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              <User className="h-4 w-4 text-slate-400" />
+          <div className="rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+              <User className="h-4 w-4 text-ink-400" />
               Contact
             </h2>
-            <p className="mb-3 text-xs text-slate-400">
+            <p className="mb-3 text-xs text-ink-400">
               Agence ou propriétaire — facultatif, enregistré automatiquement.
             </p>
             <div className="space-y-3">
@@ -595,7 +595,7 @@ export default function ApartmentDetail({
                 {apt.contact_telephone && (
                   <a
                     href={`tel:${apt.contact_telephone.replace(/\s/g, "")}`}
-                    className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                    className="mt-1 inline-flex items-center gap-1 text-xs text-accent-600 hover:text-accent-800"
                   >
                     <Phone className="h-3 w-3" /> Appeler
                   </a>
@@ -611,7 +611,7 @@ export default function ApartmentDetail({
                 {apt.contact_email && (
                   <a
                     href={`mailto:${apt.contact_email}`}
-                    className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                    className="mt-1 inline-flex items-center gap-1 text-xs text-accent-600 hover:text-accent-800"
                   >
                     <Mail className="h-3 w-3" /> Écrire
                   </a>
@@ -629,8 +629,8 @@ export default function ApartmentDetail({
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 text-sm">
-      <span className="font-medium text-slate-700">{label}</span>
-      <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-slate-500">
+      <span className="font-medium text-ink-700">{label}</span>
+      <div className="rounded-md border border-dashed border-ink-200 bg-ink-50 px-3 py-2 text-ink-500">
         {value}
       </div>
     </div>

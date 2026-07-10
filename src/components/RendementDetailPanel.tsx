@@ -14,7 +14,7 @@ const TRANSITION_MS = 300;
 // (tableau, carte, fiche détaillée, Analyse IA) : le rendement net doit se
 // lire de la même façon, où qu'on l'ouvre depuis.
 const TONE_STYLES: Record<RendementTone, { wrap: string; label: string; value: string }> = {
-  neutral: { wrap: "bg-slate-50", label: "text-slate-500", value: "text-slate-900" },
+  neutral: { wrap: "bg-ink-50", label: "text-ink-500", value: "text-ink-900" },
   positif: { wrap: "bg-emerald-50", label: "text-emerald-700", value: "text-emerald-800" },
   attention: { wrap: "bg-amber-50", label: "text-amber-700", value: "text-amber-800" },
   alerte: { wrap: "bg-red-50", label: "text-red-700", value: "text-red-700" },
@@ -107,7 +107,7 @@ export default function RendementDetailPanel({
   return (
     <div className="fixed inset-0 z-[2000]">
       <div
-        className={`absolute inset-0 bg-slate-900/40 transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-ink-900/40 transition-opacity duration-300 ${
           show ? "opacity-100" : "opacity-0"
         }`}
         onClick={onClose}
@@ -117,18 +117,18 @@ export default function RendementDetailPanel({
           show ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-3.5">
+        <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-6 py-3.5">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
               Détail du calcul du rendement
             </h2>
-            <p className="mt-0.5 truncate text-sm text-slate-400">{formatApartmentTitle(apt)}</p>
+            <p className="mt-0.5 truncate text-sm text-ink-400">{formatApartmentTitle(apt)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="shrink-0 rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-600"
           >
             <X className="h-4 w-4" />
           </button>
@@ -136,7 +136,7 @@ export default function RendementDetailPanel({
 
         <div className="flex-1 overflow-hidden px-6 py-5">
           {donneesInsuffisantes ? (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-ink-500">
               Renseigne le prix d&apos;achat et le loyer pour voir le détail du calcul.
             </p>
           ) : (
@@ -164,10 +164,10 @@ export default function RendementDetailPanel({
 
               <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
                 <section className="space-y-1.5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
                     Budget total de l&apos;opération
                   </h3>
-                  <ul className="divide-y divide-slate-100 text-sm">
+                  <ul className="divide-y divide-ink-100 text-sm">
                     <Row label="Prix d'achat" value={prix} />
                     <Row label="Frais de notaire" value={fraisNotaire} />
                     <Row label="Travaux" value={travaux} />
@@ -176,10 +176,10 @@ export default function RendementDetailPanel({
                 </section>
 
                 <section className="space-y-1.5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
                     Revenu net annuel
                   </h3>
-                  <ul className="divide-y divide-slate-100 text-sm">
+                  <ul className="divide-y divide-ink-100 text-sm">
                     <Row label="Loyer annuel" value={loyerAnnuel} />
                     <Row label="Charges copro annuelles" value={-chargesCopro} />
                     <Row label="Taxe foncière" value={-taxeFonciere} />
@@ -193,7 +193,7 @@ export default function RendementDetailPanel({
                 </section>
               </div>
 
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-ink-400">
                 Frais de gestion calculés sur le loyer annuel, hors vacance locative.
               </p>
             </div>
@@ -232,13 +232,13 @@ function Row({ label, value }: { label: string; value: number }) {
   const negative = value < 0;
   return (
     <li className="flex items-center justify-between gap-3 py-1.5">
-      <span className="text-slate-600">
-        <span className="mr-1.5 inline-block w-3 text-center font-semibold text-slate-400">
+      <span className="text-ink-600">
+        <span className="mr-1.5 inline-block w-3 text-center font-semibold text-ink-400">
           {negative ? "−" : "+"}
         </span>
         {label}
       </span>
-      <span className="shrink-0 font-medium text-slate-800">{formatEuros(Math.abs(value))}</span>
+      <span className="shrink-0 font-medium text-ink-800">{formatEuros(Math.abs(value))}</span>
     </li>
   );
 }
@@ -246,8 +246,8 @@ function Row({ label, value }: { label: string; value: number }) {
 function TotalRow({ label, value }: { label: string; value: number }) {
   return (
     <li className="flex items-center justify-between gap-3 py-2">
-      <span className="font-semibold text-slate-900">{label}</span>
-      <span className="shrink-0 text-base font-bold text-slate-900">{formatEuros(value)}</span>
+      <span className="font-semibold text-ink-900">{label}</span>
+      <span className="shrink-0 text-base font-bold text-ink-900">{formatEuros(value)}</span>
     </li>
   );
 }

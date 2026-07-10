@@ -45,8 +45,8 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Profil investisseur</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
+        <p className="mt-1 text-sm text-ink-500">
           Seuils personnels utilisés pour colorer le rendement net et le cash-flow mensuel,
           partout dans l&apos;app (tableau, carte, Analyse IA, Simulation financière).
         </p>
@@ -86,7 +86,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         <button
           onClick={handleSave}
           disabled={saving || !rendementValide || !cashflowValide}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-50"
         >
           {saving ? "Enregistrement..." : "Enregistrer"}
         </button>
@@ -125,13 +125,13 @@ function SeuilCard({
   valide: boolean;
 }) {
   return (
-    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
       <div>
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          <Icon className="h-4 w-4 text-slate-400" />
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <Icon className="h-4 w-4 text-ink-400" />
           {titre}
         </h2>
-        <p className="mt-1 text-xs text-slate-400">{description}</p>
+        <p className="mt-1 text-xs text-ink-400">{description}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -145,11 +145,11 @@ function SeuilCard({
 
       <div className="space-y-1.5">
         <div className="flex h-2 overflow-hidden rounded-full">
-          <div className={`flex-1 ${valide ? "bg-red-400" : "bg-slate-200"}`} />
-          <div className={`flex-1 ${valide ? "bg-amber-400" : "bg-slate-200"}`} />
-          <div className={`flex-1 ${valide ? "bg-emerald-400" : "bg-slate-200"}`} />
+          <div className={`flex-1 ${valide ? "bg-red-400" : "bg-ink-200"}`} />
+          <div className={`flex-1 ${valide ? "bg-amber-400" : "bg-ink-200"}`} />
+          <div className={`flex-1 ${valide ? "bg-emerald-400" : "bg-ink-200"}`} />
         </div>
-        <div className="flex justify-between text-[11px] text-slate-500">
+        <div className="flex justify-between text-[11px] text-ink-500">
           <span>Rouge &lt; {formatValue(rouge)}</span>
           <span>Ambre</span>
           <span>Vert ≥ {formatValue(vert)}</span>

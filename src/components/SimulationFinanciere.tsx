@@ -57,10 +57,10 @@ export default function SimulationFinanciere({
 
   if (!result) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <Calculator className="mx-auto h-8 w-8 text-slate-300" />
-        <h2 className="mt-3 text-lg font-semibold text-slate-900">Simulation financière</h2>
-        <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+      <div className="rounded-xl border border-ink-200 bg-white p-10 text-center shadow-sm">
+        <Calculator className="mx-auto h-8 w-8 text-ink-300" />
+        <h2 className="mt-3 text-lg font-semibold text-ink-900">Simulation financière</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
           Renseigne d&apos;abord un loyer et un prix dans l&apos;onglet « Description de
           l&apos;appartement » pour simuler le cash-flow.
         </p>
@@ -98,9 +98,9 @@ export default function SimulationFinanciere({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Simulateur de crédit */}
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            <Landmark className="h-4 w-4 text-slate-400" />
+        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <Landmark className="h-4 w-4 text-ink-400" />
             Crédit immobilier
           </h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -111,7 +111,7 @@ export default function SimulationFinanciere({
               suffix="€"
               hint={
                 result.montantAutomatique ? (
-                  <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
+                  <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
                     auto
                   </span>
                 ) : undefined
@@ -136,14 +136,14 @@ export default function SimulationFinanciere({
               suffix="%/an"
             />
           </div>
-          <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Mensualité hors assurance : <strong className="text-slate-900">{euros(result.mensualiteHorsAssurance)} €</strong>
-            {" · "}assurance : <strong className="text-slate-900">{euros(result.assuranceMensuelle)} €</strong>
-            {" · "}coût total du crédit : <strong className="text-slate-900">{euros(result.coutCredit)} €</strong>
-            {" · "}apport personnel : <strong className="text-slate-900">{euros(result.apport)} €</strong>
+          <div className="rounded-lg bg-ink-50 px-4 py-3 text-sm text-ink-600">
+            Mensualité hors assurance : <strong className="text-ink-900">{euros(result.mensualiteHorsAssurance)} €</strong>
+            {" · "}assurance : <strong className="text-ink-900">{euros(result.assuranceMensuelle)} €</strong>
+            {" · "}coût total du crédit : <strong className="text-ink-900">{euros(result.coutCredit)} €</strong>
+            {" · "}apport personnel : <strong className="text-ink-900">{euros(result.apport)} €</strong>
           </div>
-          <p className="text-xs text-slate-400">
-            En mode <strong className="font-medium text-slate-500">auto</strong>, le montant emprunté
+          <p className="text-xs text-ink-400">
+            En mode <strong className="font-medium text-ink-500">auto</strong>, le montant emprunté
             suit en temps réel le prix d&apos;achat + les travaux (hors frais de notaire, supposés
             couverts par l&apos;apport), y compris pendant la saisie dans les autres onglets. Modifie
             le champ pour le figer (simuler un apport différent) ; vide-le pour repasser en auto.
@@ -151,12 +151,12 @@ export default function SimulationFinanciere({
         </section>
 
         {/* Détail mensuel année 1 — la "participation mensuelle" */}
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            <Banknote className="h-4 w-4 text-slate-400" />
+        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <Banknote className="h-4 w-4 text-ink-400" />
             Détail mensuel — année 1
           </h3>
-          <ul className="divide-y divide-slate-100 text-sm">
+          <ul className="divide-y divide-ink-100 text-sm">
             <WaterfallRow label="Loyer (CC)" value={apartment.loyer_retenu ?? 0} plus />
             <WaterfallRow label="Mensualité de crédit (assurance incl.)" value={-result.mensualiteTotale} />
             <WaterfallRow
@@ -165,22 +165,22 @@ export default function SimulationFinanciere({
             />
             <WaterfallRow label="Impôt LMNP (IR + prélèvements sociaux)" value={-result.impotMensuelAn1} />
             <li className="flex items-center justify-between py-3">
-              <span className="font-semibold text-slate-900">Cash-flow mensuel</span>
+              <span className="font-semibold text-ink-900">Cash-flow mensuel</span>
               <span className={`text-lg font-bold ${cashflowTextClass(cfAn1, cashflowSeuils)}`}>
                 {signe(cfAn1)} €
               </span>
             </li>
           </ul>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-400">
             Avant impôt : {signe(result.cashflowMensuelAvantImpotAn1)} €/mois.
           </p>
         </section>
       </div>
 
       {/* Fiscalité LMNP */}
-      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          <ReceiptText className="h-4 w-4 text-slate-400" />
+      <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <ReceiptText className="h-4 w-4 text-ink-400" />
           Fiscalité — LMNP au réel
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -190,24 +190,24 @@ export default function SimulationFinanciere({
             onChange={(v) => set("tmiPct", Number(v))}
             options={TMI_OPTIONS}
             allowEmpty={false}
-            hint={<span className="text-xs font-normal text-slate-400">+ {LMNP.prelevementsSociauxPct} % de prélèvements sociaux</span>}
+            hint={<span className="text-xs font-normal text-ink-400">+ {LMNP.prelevementsSociauxPct} % de prélèvements sociaux</span>}
           />
-          <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm sm:col-span-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+          <div className="rounded-lg bg-ink-50 px-4 py-3 text-sm sm:col-span-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-ink-400">
               Amortissements annuels déductibles
             </p>
-            <p className="mt-1 text-slate-700">
-              Bâti {euros(result.amortissements.bati)} € <span className="text-slate-400">(90 % du prix · 40 ans)</span>
+            <p className="mt-1 text-ink-700">
+              Bâti {euros(result.amortissements.bati)} € <span className="text-ink-400">(90 % du prix · 40 ans)</span>
               {result.amortissements.travaux > 0 && (
-                <> · Travaux {euros(result.amortissements.travaux)} € <span className="text-slate-400">(15 ans)</span></>
+                <> · Travaux {euros(result.amortissements.travaux)} € <span className="text-ink-400">(15 ans)</span></>
               )}
               {result.amortissements.notaire > 0 && (
-                <> · Notaire {euros(result.amortissements.notaire)} € <span className="text-slate-400">(5 ans)</span></>
+                <> · Notaire {euros(result.amortissements.notaire)} € <span className="text-ink-400">(5 ans)</span></>
               )}
             </p>
           </div>
         </div>
-        <p className="flex items-start gap-1.5 text-xs text-slate-400">
+        <p className="flex items-start gap-1.5 text-xs text-ink-400">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Au régime réel, les amortissements ne peuvent pas créer de déficit : ils sont plafonnés au
           résultat de l&apos;année et l&apos;excédent est reporté sans limite (art. 39 C). Résultat
@@ -217,9 +217,9 @@ export default function SimulationFinanciere({
       </section>
 
       {/* Tableau année par année */}
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <h3 className="flex items-center gap-2 p-5 pb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          <Calculator className="h-4 w-4 text-slate-400" />
+      <section className="rounded-xl border border-ink-200 bg-white shadow-sm">
+        <h3 className="flex items-center gap-2 p-5 pb-3 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <Calculator className="h-4 w-4 text-ink-400" />
           Cash-flow année par année
         </h3>
         <div className="grid grid-cols-2 gap-4 px-5 pb-4">
@@ -239,7 +239,7 @@ export default function SimulationFinanciere({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-y border-slate-100 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr className="border-y border-ink-100 bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-400">
                 <th className="px-5 py-2 font-medium">Année</th>
                 <th className="px-3 py-2 text-right font-medium">Loyers</th>
                 <th className="px-3 py-2 text-right font-medium">Crédit</th>
@@ -249,16 +249,16 @@ export default function SimulationFinanciere({
                 <th className="px-5 py-2 text-right font-medium">/mois</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-ink-50">
               {result.annees.map((a) => (
-                <tr key={a.annee} className="hover:bg-slate-50/60">
-                  <td className="px-5 py-1.5 text-slate-500">{a.annee}</td>
-                  <td className="px-3 py-1.5 text-right text-slate-700">{euros(a.loyers)}</td>
-                  <td className="px-3 py-1.5 text-right text-slate-700">
+                <tr key={a.annee} className="hover:bg-ink-50/60">
+                  <td className="px-5 py-1.5 text-ink-500">{a.annee}</td>
+                  <td className="px-3 py-1.5 text-right text-ink-700">{euros(a.loyers)}</td>
+                  <td className="px-3 py-1.5 text-right text-ink-700">
                     {euros(-(result.mensualiteTotale * 12))}
                   </td>
-                  <td className="px-3 py-1.5 text-right text-slate-700">{euros(-a.chargesExploitation)}</td>
-                  <td className="px-3 py-1.5 text-right text-slate-700">{euros(-a.impot)}</td>
+                  <td className="px-3 py-1.5 text-right text-ink-700">{euros(-a.chargesExploitation)}</td>
+                  <td className="px-3 py-1.5 text-right text-ink-700">{euros(-a.impot)}</td>
                   <td className={`px-3 py-1.5 text-right font-medium ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
                     {signe(a.cashflowAnnuel)}
                   </td>
@@ -270,7 +270,7 @@ export default function SimulationFinanciere({
             </tbody>
           </table>
         </div>
-        <p className="px-5 py-3 text-xs text-slate-400">
+        <p className="px-5 py-3 text-xs text-ink-400">
           Total impôts sur {inputs.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer revalorisé à{" "}
           {inputs.revalorisationLoyerPct} %/an ; charges de copropriété et taxe foncière supposées
           constantes (pas de revalorisation).
@@ -279,24 +279,24 @@ export default function SimulationFinanciere({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         {/* Financement du projet */}
-        <section className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            <PieChart className="h-4 w-4 text-slate-400" />
+        <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-4 shadow-sm">
+          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <PieChart className="h-4 w-4 text-ink-400" />
             Financement du projet
           </h3>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-400">
             {`D'où vient l'argent qui couvre le coût total de l'opération sur ${inputs.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
           </p>
           <FinancementDonut financement={result.financementProjet} />
         </section>
 
         {/* Évolution du patrimoine */}
-        <section className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            <TrendingUp className="h-4 w-4 text-slate-400" />
+        <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <TrendingUp className="h-4 w-4 text-ink-400" />
             Évolution du patrimoine
           </h3>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-400">
             Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
             (valeur du bien au-delà de la dette et de l&apos;apport non récupéré), et l&apos;effort
             d&apos;épargne encore porté (apport pas encore compensé par le cash-flow cumulé). Hypothèse
@@ -310,7 +310,7 @@ export default function SimulationFinanciere({
   );
 }
 
-const FINANCEMENT_COLORS = { loyers: "#6366f1", economieFiscale: "#a5b4fc", participation: "#f59e0b" };
+const FINANCEMENT_COLORS = { loyers: "#3d3580", economieFiscale: "#b3a9e8", participation: "#f59e0b" };
 
 interface TooltipState {
   x: number;
@@ -322,7 +322,7 @@ interface TooltipState {
 function ChartTooltip({ tooltip }: { tooltip: TooltipState }) {
   return (
     <div
-      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-lg"
+      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-ink-900 px-3 py-2 text-xs text-white shadow-lg"
       style={{ left: tooltip.x, top: tooltip.y - 10 }}
     >
       {tooltip.content}
@@ -334,7 +334,7 @@ function TooltipRow({ color, label, value }: { color: string; label: string; val
   return (
     <div className="flex items-center gap-2">
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-slate-300">{label}</span>
+      <span className="text-ink-300">{label}</span>
       <span className="ml-auto font-semibold text-white">{value}</span>
     </div>
   );
@@ -350,7 +350,7 @@ function FinancementDonut({
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   if (total <= 0) {
-    return <p className="text-sm text-slate-400">Données insuffisantes pour ce calcul.</p>;
+    return <p className="text-sm text-ink-400">Données insuffisantes pour ce calcul.</p>;
   }
 
   const segments = [
@@ -406,7 +406,7 @@ function FinancementDonut({
           onMouseMove={showTooltip}
           onMouseLeave={() => setTooltip(null)}
         >
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e6e1f0" strokeWidth={stroke} />
           {geoSegments.map((s) => (
             <circle
               key={s.key}
@@ -449,12 +449,12 @@ function FinancementDonut({
       <ul className="w-full max-w-[220px] space-y-1.5 text-xs">
         {segments.map((s) => (
           <li key={s.key} className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5 text-slate-600">
+            <span className="flex items-center gap-1.5 text-ink-600">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
               {s.label}
             </span>
-            <span className="whitespace-nowrap font-medium text-slate-800">
-              {euros(s.value)} € <span className="text-slate-400">({pct(s.value, total)} %)</span>
+            <span className="whitespace-nowrap font-medium text-ink-800">
+              {euros(s.value)} € <span className="text-ink-400">({pct(s.value, total)} %)</span>
             </span>
           </li>
         ))}
@@ -463,7 +463,7 @@ function FinancementDonut({
   );
 }
 
-const PATRIMOINE_COLORS = { dette: "#93c5fd", enrichissement: "#64748b", effortEpargne: "#1e3a8a" };
+const PATRIMOINE_COLORS = { dette: "#c9c2d9", enrichissement: "#10b981", effortEpargne: "#3d3580" };
 
 function PatrimoineChart({ annees }: { annees: AnneeSimulation[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -539,7 +539,7 @@ function PatrimoineChart({ annees }: { annees: AnneeSimulation[] }) {
                   )
               )}
               {showLabel && (
-                <text x={x + barWidth / 2} y={chartHeight + 16} textAnchor="middle" fontSize={10} fill="#94a3b8">
+                <text x={x + barWidth / 2} y={chartHeight + 16} textAnchor="middle" fontSize={10} fill="#8b8393">
                   {a.annee}
                 </text>
               )}
@@ -547,7 +547,7 @@ function PatrimoineChart({ annees }: { annees: AnneeSimulation[] }) {
           );
         })}
       </svg>
-      <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
+      <div className="mt-3 flex flex-wrap gap-4 text-xs text-ink-500">
         <LegendDot color={PATRIMOINE_COLORS.dette} label="Dette restante" />
         <LegendDot color={PATRIMOINE_COLORS.enrichissement} label="Enrichissement" />
         <LegendDot color={PATRIMOINE_COLORS.effortEpargne} label="Effort d'épargne" />
@@ -585,19 +585,19 @@ export function ResultCard({
   onClick?: () => void;
 }) {
   const tones = {
-    neutral: "bg-slate-50 text-slate-900",
+    neutral: "bg-ink-50 text-ink-900",
     positif: "bg-emerald-50 text-emerald-800",
     attention: "bg-amber-50 text-amber-800",
     alerte: "bg-red-50 text-red-700",
   } as const;
   const labelTones = {
-    neutral: "text-slate-500",
+    neutral: "text-ink-500",
     positif: "text-emerald-700",
     attention: "text-amber-700",
     alerte: "text-red-700",
   } as const;
   const rings = {
-    neutral: "ring-slate-200",
+    neutral: "ring-ink-200",
     positif: "ring-emerald-200",
     attention: "ring-amber-200",
     alerte: "ring-red-200",
@@ -605,7 +605,7 @@ export function ResultCard({
   const content = (
     <>
       <p className={`text-xs font-medium ${labelTones[tone]}`}>{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
+      <p className="mt-1 font-mono text-2xl font-semibold">{value}</p>
       <p className={`mt-0.5 text-[11px] ${labelTones[tone]} opacity-80`}>{sub}</p>
     </>
   );
@@ -630,11 +630,11 @@ export function ResultCard({
 function WaterfallRow({ label, value, plus = false }: { label: string; value: number; plus?: boolean }) {
   return (
     <li className="flex items-center justify-between py-2">
-      <span className="text-slate-600">
-        <span className="mr-1.5 inline-block w-3 text-center font-semibold text-slate-400">{plus ? "+" : "−"}</span>
+      <span className="text-ink-600">
+        <span className="mr-1.5 inline-block w-3 text-center font-semibold text-ink-400">{plus ? "+" : "−"}</span>
         {label}
       </span>
-      <span className="font-medium text-slate-800">{euros(Math.abs(value))} €</span>
+      <span className="font-medium text-ink-800">{euros(Math.abs(value))} €</span>
     </li>
   );
 }

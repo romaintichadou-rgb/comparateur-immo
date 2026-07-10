@@ -1,23 +1,33 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
+import { Fraunces, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import Navbar from "@/components/Navbar";
 import { RendementDetailProvider } from "@/components/RendementDetailProvider";
+import { APP_NAME } from "@/lib/constants";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fraunces = Fraunces({
+  variable: "--font-display",
   subsets: ["latin"],
+  weight: ["600", "900"],
+  style: ["normal", "italic"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "Comparateur d'investissement locatif",
-  description: "Comparer des appartements pour un investissement locatif",
+  title: APP_NAME,
+  description: "Voir clair, pas deviner — comparateur d'investissement locatif",
 };
 
 export default function RootLayout({
@@ -28,34 +38,11 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col overflow-x-hidden bg-slate-50 text-slate-900">
-        <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-            <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-sm font-bold text-white">
-                €
-              </span>
-              <span className="text-slate-900">Comparateur locatif</span>
-            </Link>
-            <nav className="flex items-center gap-4 text-sm">
-              <Link
-                href="/parametres"
-                className="font-medium text-slate-500 transition hover:text-slate-700"
-              >
-                Profil investisseur
-              </Link>
-              <Link
-                href="/appartements/nouveau"
-                className="rounded-md bg-indigo-600 px-3 py-1.5 font-medium text-white transition hover:bg-indigo-700"
-              >
-                + Ajouter un bien
-              </Link>
-            </nav>
-          </div>
-        </header>
-        <main className="flex-1">
+      <body className="min-h-full flex flex-col bg-ink-50 text-ink-900">
+        <Navbar />
+        <main className="flex-1 overflow-x-hidden">
           <RendementDetailProvider>{children}</RendementDetailProvider>
         </main>
       </body>

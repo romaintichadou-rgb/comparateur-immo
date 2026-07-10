@@ -1,28 +1,53 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f4f9;
+  --foreground: #14171d;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Bruyère — neutre teinté par l'accent, remplace la gamme slate. */
+  --color-ink-50: #f6f4f9;
+  --color-ink-100: #e6e1f0;
+  --color-ink-200: #e3deed;
+  --color-ink-300: #c9c2d9;
+  --color-ink-400: #8b8393;
+  --color-ink-500: #58515f;
+  --color-ink-600: #453f4e;
+  --color-ink-700: #332e3a;
+  --color-ink-800: #221f28;
+  --color-ink-900: #14171d;
+
+  /* Violet d'encre — l'unique accent de marque, remplace indigo. */
+  --color-accent-50: #f0edfa;
+  --color-accent-100: #ddd6f5;
+  --color-accent-200: #c4b9ec;
+  --color-accent-300: #b3a9e8;
+  --color-accent-400: #8478c9;
+  --color-accent-500: #5b4fa0;
+  --color-accent-600: #3d3580;
+  --color-accent-700: #322b69;
+  --color-accent-800: #262052;
+  --color-accent-900: #1a1638;
+
+  /* Argile — signal et actions destructives, jamais décoratif. */
+  --color-signal-50: #f7eee8;
+  --color-signal-100: #eedcce;
+  --color-signal-300: #d9926e;
+  --color-signal-500: #b3714e;
+  --color-signal-600: #9c5a3c;
+  --color-signal-700: #7c4830;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
 /* Popup carte "carte de bien" : image plein cadre, coins arrondis, sans le
@@ -31,7 +56,7 @@ body {
   padding: 0;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 8px 24px rgba(20, 23, 29, 0.18);
 }
 .apartment-popup .leaflet-popup-content {
   margin: 0;

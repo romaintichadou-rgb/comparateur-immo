@@ -55,7 +55,7 @@ export function rendementNetTone(
  * affichée (jamais une couleur fixe comme indigo, sans rapport avec la box).
  */
 export const RENDEMENT_HOVER_RING: Record<RendementTone, string> = {
-  neutral: "hover:ring-2 hover:ring-inset hover:ring-slate-200",
+  neutral: "hover:ring-2 hover:ring-inset hover:ring-ink-200",
   positif: "hover:ring-2 hover:ring-inset hover:ring-emerald-200",
   attention: "hover:ring-2 hover:ring-inset hover:ring-amber-200",
   alerte: "hover:ring-2 hover:ring-inset hover:ring-red-200",

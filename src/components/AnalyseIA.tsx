@@ -15,7 +15,7 @@ import { formatDateTime } from "@/lib/format";
 const HIGHLIGHTS_RENDEMENT = new Set(["Rendement brut", "Rendement net"]);
 
 const HIGHLIGHT_TONES: Record<BlocHighlight["tone"], { wrap: string; label: string; value: string }> = {
-  neutral: { wrap: "bg-slate-50", label: "text-slate-500", value: "text-slate-900" },
+  neutral: { wrap: "bg-ink-50", label: "text-ink-500", value: "text-ink-900" },
   positif: { wrap: "bg-emerald-50", label: "text-emerald-700", value: "text-emerald-800" },
   attention: { wrap: "bg-amber-50", label: "text-amber-700", value: "text-amber-800" },
   alerte: { wrap: "bg-red-50", label: "text-red-700", value: "text-red-700" },
@@ -45,7 +45,7 @@ const BLOC_ORDRE: BlocKey[] = ["prix", "location", "simulation", "potentiel", "r
 
 const GRAVITE_STYLES: Record<FaitGravite, { dot: string; value: string }> = {
   positif: { dot: "bg-emerald-500", value: "text-emerald-700" },
-  info: { dot: "bg-slate-300", value: "text-slate-800" },
+  info: { dot: "bg-ink-300", value: "text-ink-800" },
   attention: { dot: "bg-amber-500", value: "text-amber-700" },
   alerte: { dot: "bg-red-500", value: "text-red-600" },
 };
@@ -93,7 +93,7 @@ function syntheseCourte(analyse: { score_global: number | null; verdicts: Verdic
 function renderBold(text: string): ReactNode {
   return text.split(/\*\*(.+?)\*\*/g).map((seg, i) =>
     i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-slate-900">
+      <strong key={i} className="font-semibold text-ink-900">
         {seg}
       </strong>
     ) : (
@@ -141,10 +141,10 @@ export default function AnalyseIA({
   // État initial : aucune analyse encore lancée.
   if (!analyse) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <Sparkles className="mx-auto h-8 w-8 text-indigo-500" />
-        <h2 className="mt-3 text-lg font-semibold text-slate-900">Analyse IA</h2>
-        <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+      <div className="rounded-xl border border-ink-200 bg-white p-10 text-center shadow-sm">
+        <Sparkles className="mx-auto h-8 w-8 text-accent-500" />
+        <h2 className="mt-3 text-lg font-semibold text-ink-900">Analyse IA</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
           Une analyse fondée uniquement sur des données publiques réelles (ADEME, Géorisques,
           BAN…) : notes par bloc et score global, sans estimation inventée.
         </p>
@@ -152,13 +152,13 @@ export default function AnalyseIA({
         <button
           onClick={lancer}
           disabled={loading}
-          className="mt-6 inline-flex items-center gap-2 rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-70"
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-70"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {loading ? "Analyse en cours…" : "Lancer l'analyse"}
         </button>
         {loading && (
-          <p className="mt-3 text-xs text-slate-400">
+          <p className="mt-3 text-xs text-ink-400">
             Collecte des données réelles et rédaction — environ 30 s, ne quittez pas la page.
           </p>
         )}
@@ -178,37 +178,37 @@ export default function AnalyseIA({
   return (
     <div className="space-y-6">
       {/* Score global + synthèse */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-sm">
         {/* Barre de progression indéterminée pendant l'analyse */}
-        {loading && <div className="h-1 w-full animate-pulse bg-indigo-500" />}
+        {loading && <div className="h-1 w-full animate-pulse bg-accent-500" />}
 
         <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-5">
             <ScoreGauge note={analyse.score_global} loading={loading} />
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
                 Score global · opportunité d&apos;achat
               </p>
-              <p className="mt-1 text-base font-medium leading-snug text-slate-800">
+              <p className="mt-1 text-base font-medium leading-snug text-ink-800">
                 {syntheseCourte(analyse)}
               </p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end">
             {loading ? (
-              <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-indigo-600">
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-accent-600">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Analyse en cours… (~30 s)
               </span>
             ) : (
-              <span className="whitespace-nowrap text-xs text-slate-400">
+              <span className="whitespace-nowrap text-xs text-ink-400">
                 Généré le {formatDateTime(analyse.genere_le)}
               </span>
             )}
             <button
               onClick={lancer}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-60"
             >
               {loading && <Loader2 className="h-3 w-3 animate-spin" />}
               {loading ? "Analyse…" : "Relancer"}
@@ -218,7 +218,7 @@ export default function AnalyseIA({
 
         {/* Alertes compactes (points forts / de vigilance) */}
         {analyse.verdicts && analyse.verdicts.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-6 py-3">
+          <div className="flex flex-wrap gap-1.5 border-t border-ink-100 px-6 py-3">
             {analyse.verdicts.map((v, i) => (
               <VerdictChip key={i} verdict={v} />
             ))}
@@ -226,14 +226,14 @@ export default function AnalyseIA({
         )}
 
         {analyse.synthese && (
-          <p className="border-t border-slate-100 px-6 py-4 text-sm leading-relaxed text-slate-700">
+          <p className="border-t border-ink-100 px-6 py-4 text-sm leading-relaxed text-ink-700">
             {renderBold(analyse.synthese)}
           </p>
         )}
 
         {/* Avis discret : résumés IA indisponibles (quota Gemini) */}
         {quotaNotice && (
-          <p className="flex items-start gap-1.5 border-t border-slate-100 px-6 py-3 text-xs text-amber-600">
+          <p className="flex items-start gap-1.5 border-t border-ink-100 px-6 py-3 text-xs text-amber-600">
             <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Résumés IA temporairement indisponibles (quota gratuit atteint). Les scores et données
             chiffrées sont complets — réessayez dans quelques minutes, ou demain si le quota
@@ -255,7 +255,7 @@ export default function AnalyseIA({
 
       {/* Absent des analyses générées avant l'ajout du bloc Quartier — invite à relancer. */}
       {!quartier && (
-        <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-xs text-slate-400">
+        <p className="rounded-xl border border-dashed border-ink-200 bg-white p-4 text-center text-xs text-ink-400">
           Le bloc Quartier n&apos;existe pas encore pour cette analyse — clique sur « Relancer » pour le générer.
         </p>
       )}
@@ -278,7 +278,7 @@ function VerdictChip({ verdict }: { verdict: Verdict }) {
 }
 
 export function noteHex(note: number | null): string {
-  if (note == null) return "#cbd5e1";
+  if (note == null) return "#c9c2d9";
   if (note >= 8) return "#10b981";
   if (note >= 5) return "#f59e0b";
   return "#ef4444";
@@ -296,7 +296,7 @@ function ScoreGauge({ note, loading = false }: { note: number | null; loading?: 
   return (
     <div className={`relative shrink-0 ${loading ? "animate-pulse" : ""}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e6e1f0" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -310,10 +310,10 @@ function ScoreGauge({ note, loading = false }: { note: number | null; loading?: 
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold leading-none" style={{ color }}>
+        <span className="font-mono text-2xl font-semibold leading-none" style={{ color }}>
           {note != null ? formatNote(note) : "—"}
         </span>
-        <span className="text-[10px] text-slate-400">/ 10</span>
+        <span className="font-mono text-[10px] text-ink-400">/ 10</span>
       </div>
     </div>
   );
@@ -334,10 +334,10 @@ function BlocCard({
   const isQuartier = bloc.cle === "quartier";
 
   return (
-    <section className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="flex flex-col rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          <Icon className="h-4 w-4 text-slate-400" />
+        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <Icon className="h-4 w-4 text-ink-400" />
           {bloc.titre}
         </h3>
         {bloc.note != null ? (
@@ -346,21 +346,21 @@ function BlocCard({
               bloc.note
             )}`}
           >
-            {formatNote(bloc.note)}/10
+            <span className="font-mono">{formatNote(bloc.note)}/10</span>
           </span>
         ) : bloc.cle === "quartier" ? (
-          <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-500">
+          <span className="rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-500">
             Informatif
           </span>
         ) : (
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-400">
+          <span className="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-400">
             À venir
           </span>
         )}
       </div>
 
       {!bloc.disponible ? (
-        <p className="mt-4 text-sm text-slate-400">{bloc.messageIndisponible}</p>
+        <p className="mt-4 text-sm text-ink-400">{bloc.messageIndisponible}</p>
       ) : (
         <div className="mt-4 space-y-4">
           {/* Résumé court, ou pour "quartier" : la description à part entière */}
@@ -368,15 +368,15 @@ function BlocCard({
             <p
               className={
                 isQuartier
-                  ? "text-[15px] leading-relaxed text-slate-700"
-                  : "rounded-lg bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-700"
+                  ? "text-[15px] leading-relaxed text-ink-700"
+                  : "rounded-lg bg-ink-50 px-3 py-2 text-sm leading-relaxed text-ink-700"
               }
             >
               {renderBold(bloc.narration)}
             </p>
           ) : (
             isQuartier && (
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-ink-400">
                 Description indisponible pour cette analyse — clique sur « Relancer ».
               </p>
             )
@@ -401,7 +401,7 @@ function BlocCard({
 
           {/* Données structurées — pas pour "quartier", qui reste une description */}
           {!isQuartier && (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-ink-100">
               {bloc.faits.map((f, i) => (
                 <FaitRow key={i} fait={f} />
               ))}
@@ -410,19 +410,19 @@ function BlocCard({
 
           {/* Données manquantes (jamais estimées) */}
           {!isQuartier && bloc.donneesManquantes && bloc.donneesManquantes.length > 0 && (
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-400">
               Donnée(s) non disponible(s), non estimée(s) : {bloc.donneesManquantes.join(" · ")}.
             </p>
           )}
 
           {bloc.sources.length > 0 && (
-            <p className="border-t border-slate-100 pt-3 text-xs text-slate-400">
+            <p className="border-t border-ink-100 pt-3 text-xs text-ink-400">
               Sources :{" "}
               {bloc.sources.map((s, i) => (
                 <span key={s.label}>
                   {i > 0 && " · "}
                   {s.url ? (
-                    <a href={s.url} target="_blank" rel="noreferrer" className="underline hover:text-slate-600">
+                    <a href={s.url} target="_blank" rel="noreferrer" className="underline hover:text-ink-600">
                       {s.label}
                     </a>
                   ) : (
@@ -464,7 +464,7 @@ function EnergyScale({ label, value, palette }: { label: string; value: string; 
   const active = (value || "").toUpperCase();
   return (
     <div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-ink-400">{label}</p>
       <div className="flex items-center gap-0.5">
         {LETTERS.map((l) => {
           const c = palette[l];
@@ -531,15 +531,15 @@ function FaitRow({ fait }: { fait: Fait }) {
       <div className="flex min-w-0 flex-1 gap-2">
         <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-800">
+          <p className="text-sm font-medium text-ink-800">
             {fait.label}
             {fait.perimetre && (
-              <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+              <span className="ml-1.5 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-400">
                 {fait.perimetre}
               </span>
             )}
           </p>
-          {fait.detail && <p className="text-xs leading-snug text-slate-500">{fait.detail}</p>}
+          {fait.detail && <p className="text-xs leading-snug text-ink-500">{fait.detail}</p>}
         </div>
       </div>
       {hasValue && (

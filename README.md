@@ -1,4 +1,4 @@
-# Comparateur d'investissement locatif
+# Lucide
 
 Application personnelle pour comparer des appartements en vue d'un investissement
 locatif : ajout d'une annonce par URL (ou saisie manuelle), extraction des
@@ -127,6 +127,33 @@ Chaque bien ajouté dispose d'une fiche détaillée à 3 onglets :
     projet, 2/3 pour Évolution du patrimoine).
   - Tous les chiffres se recalculent en direct dès la saisie dans les autres
     onglets (même non enregistrée).
+
+## Identité visuelle — Lucide
+
+L'app a été rebaptisée **Lucide** avec une charte graphique dédiée,
+appliquée à l'ensemble de l'interface :
+
+- **Palette** — un fond neutre teinté violet ("Bruyère", `ink-50` à
+  `ink-900`, remplace le `slate` par défaut de Tailwind), un accent unique
+  violet d'encre (`accent-50` à `accent-900`, base `#3D3580`, remplace
+  `indigo`), et une couleur "signal" argile (`signal-*`, `#9C5A3C`) réservée
+  aux actions destructives (jamais utilisée comme couleur décorative). Les
+  couleurs sémantiques de statut/score (vert/ambre/rouge) restent séparées
+  de l'accent de marque.
+- **Typographie** — Fraunces (`font-display`) pour les titres et le
+  wordmark, IBM Plex Sans (`font-sans`) pour le corps de texte, IBM Plex
+  Mono (`font-mono`) pour tous les chiffres clés (scores, prix, rendements,
+  cash-flow), toutes auto-hébergées via `next/font/google`.
+- **Logo** — un motif d'anneau ouvert (écho du `ScoreGauge` de l'Analyse
+  IA), exporté en composant réutilisable `LucideMark` depuis
+  `src/components/Navbar.tsx`.
+- **Boutons** — 5 variantes (Primaire, Secondaire, Tertiaire, Destructif,
+  Désactivé), toutes sans icône à l'intérieur du CTA.
+- Le nom de l'app est centralisé dans `src/lib/constants.ts` (`APP_NAME`),
+  réutilisé partout où il apparaît (navbar, titre de page, bookmarklet).
+
+Ces règles sont contraignantes pour toute évolution future de l'UI — voir
+le détail dans [`AGENTS.md`](AGENTS.md).
 
 ## Limites connues des parsers (important)
 

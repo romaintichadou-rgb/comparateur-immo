@@ -10,7 +10,7 @@ import { RENDEMENT_HOVER_RING, rendementNetTone, type RendementSeuils } from "@/
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 
 const RENDEMENT_PILL_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
-  neutral: "bg-slate-100 text-slate-600",
+  neutral: "bg-ink-100 text-ink-600",
   positif: "bg-emerald-50 text-emerald-700",
   attention: "bg-amber-50 text-amber-700",
   alerte: "bg-red-50 text-red-600",
@@ -108,24 +108,24 @@ export default function ApartmentsMap({
                   className="h-28 w-full object-cover"
                 />
               ) : (
-                <div className="flex h-16 w-full items-center justify-center bg-slate-100 text-xs text-slate-400">
+                <div className="flex h-16 w-full items-center justify-center bg-ink-100 text-xs text-ink-400">
                   Pas de photo
                 </div>
               )}
               <div className="space-y-2 p-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-ink-900">
                     {formatApartmentTitle(apt)}
                   </p>
                   {(apt.adresse || apt.quartier || apt.ville) && (
-                    <p className="truncate text-xs text-slate-500">
+                    <p className="truncate text-xs text-ink-500">
                       {apt.adresse || [apt.quartier, apt.ville].filter(Boolean).join(", ")}
                     </p>
                   )}
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-base font-semibold text-slate-900">
+                  <span className="text-base font-semibold text-ink-900">
                     {formatEuros(apt.prix)}
                   </span>
                   <button
@@ -142,8 +142,8 @@ export default function ApartmentsMap({
                   <p className="text-[11px] text-amber-600">Position approximative</p>
                 )}
 
-                <div className="flex gap-3 border-t border-slate-100 pt-2 text-xs font-medium">
-                  <Link href={`/appartements/${apt.id}`} className="text-indigo-600 hover:text-indigo-800">
+                <div className="flex gap-3 border-t border-ink-100 pt-2 text-xs font-medium">
+                  <Link href={`/appartements/${apt.id}`} className="text-accent-600 hover:text-accent-800">
                     Voir la fiche
                   </Link>
                   {apt.url && (
@@ -151,7 +151,7 @@ export default function ApartmentsMap({
                       href={apt.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-slate-500 hover:text-slate-700"
+                      className="text-ink-500 hover:text-ink-700"
                     >
                       Annonce ↗
                     </a>

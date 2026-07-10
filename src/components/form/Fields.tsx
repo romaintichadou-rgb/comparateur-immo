@@ -13,7 +13,7 @@ function FieldShell({
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="flex items-center gap-1.5 font-medium text-slate-700">
+      <span className="flex items-center gap-1.5 font-medium text-ink-700">
         {label}
         {hint}
       </span>
@@ -23,7 +23,7 @@ function FieldShell({
 }
 
 const inputClass =
-  "rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+  "rounded-md border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900 shadow-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500";
 
 export function TextField({
   label,
@@ -142,7 +142,7 @@ export function NumberField({
           onChange={(e) => handleChange(e.target.value)}
         />
         {suffix && (
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">
             {suffix}
           </span>
         )}

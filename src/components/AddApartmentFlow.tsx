@@ -3,7 +3,19 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Banknote, Check, Home, Loader2, Sparkles, User } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Banknote,
+  Check,
+  CheckCircle2,
+  Home,
+  Info,
+  Link2,
+  Loader2,
+  Sparkles,
+  User,
+} from "lucide-react";
 import {
   DEFAULT_HYPOTHESE_GESTION_PCT,
   DPE_GES_VALEURS,
@@ -22,6 +34,7 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/form/Fields";
+import { LucideMark } from "@/components/Navbar";
 
 function emptyInput(): ApartmentInput {
   return {
@@ -127,7 +140,7 @@ interface InitialState {
   banner: Banner;
 }
 
-// Prise en charge du bookmarklet "Importer dans Comparateur locatif" : les
+// Prise en charge du bookmarklet "Importer dans Lucide" : les
 // données lues dans la page (déjà chargée par le navigateur de
 // l'utilisateur, hors de toute détection anti-bot) arrivent en query param
 // au premier rendu — pas besoin d'effect, juste un état initial dérivé.
@@ -286,49 +299,74 @@ export default function AddApartmentFlow() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 transition-colors hover:text-accent-600"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour à la liste
       </Link>
 
-      <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Ajouter un bien</h1>
+      <div className="mt-4 mb-8">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+          Ajouter un bien
+        </h1>
+        <p className="mt-1.5 text-sm text-ink-500">
+          Colle une annonce ou saisis les infos à la main — le loyer et l&apos;analyse du
+          quartier se font automatiquement juste après.
+        </p>
+      </div>
 
       {step === "url" && (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-600">
-            Colle l&apos;URL d&apos;une annonce Leboncoin, SeLoger, PAP ou Orpi. Les champs
-            détectés seront pré-remplis, à vérifier avant d&apos;enregistrer.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="url"
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              placeholder="https://www.leboncoin.fr/ad/..."
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none"
-            />
-            <button
-              onClick={handleAnalyse}
-              disabled={analysing}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {analysing ? "Analyse..." : "Analyser"}
-            </button>
+        <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm">
+          <div className="relative overflow-hidden bg-gradient-to-br from-accent-50 via-white to-white p-6 sm:p-8">
+            <LucideMark className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 text-accent-600 opacity-[0.07]" />
+            <span className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-accent-100/70 blur-3xl" />
+            <div className="relative flex items-start gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-600 text-white shadow-sm shadow-accent-200">
+                <Link2 className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-ink-900">
+                  Colle l&apos;URL d&apos;une annonce
+                </h2>
+                <p className="mt-0.5 text-sm text-ink-500">
+                  Leboncoin, SeLoger, PAP ou Orpi — les champs détectés seront pré-remplis, à
+                  vérifier avant d&apos;enregistrer.
+                </p>
+              </div>
+            </div>
+
+            <div className="relative mt-5 flex flex-col gap-2.5 sm:flex-row">
+              <input
+                type="url"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://www.leboncoin.fr/ad/..."
+                className="flex-1 rounded-lg border border-ink-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition-colors focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+              />
+              <button
+                onClick={handleAnalyse}
+                disabled={analysing}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-50"
+              >
+                {analysing && <Loader2 className="h-4 w-4 animate-spin" />}
+                {analysing ? "Analyse en cours…" : "Analyser"}
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+
+          <div className="flex flex-col gap-3 border-t border-ink-100 bg-ink-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
             <button
               onClick={() => setStep("review")}
-              className="text-sm text-slate-500 underline hover:text-slate-700"
+              className="text-sm font-medium text-ink-600 underline decoration-ink-300 underline-offset-2 transition-colors hover:text-ink-900"
             >
               Ou saisir directement à la main, sans URL
             </button>
             <Link
               href="/bookmarklet"
-              className="text-sm text-indigo-600 underline hover:text-indigo-800"
+              className="text-sm font-medium text-accent-600 transition-colors hover:text-accent-800"
             >
               Site protégé contre le scraping ? Utilise le bookmarklet →
             </Link>
@@ -337,30 +375,18 @@ export default function AddApartmentFlow() {
       )}
 
       {step === "review" && (
-        <div className="space-y-6">
-          {banner && (
-            <div
-              className={`rounded-lg border p-3 text-sm ${
-                banner.tone === "success"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : banner.tone === "warning"
-                    ? "border-amber-200 bg-amber-50 text-amber-800"
-                    : "border-slate-200 bg-slate-50 text-slate-700"
-              }`}
-            >
-              {banner.text}
-            </div>
-          )}
+        <div className="space-y-6 pb-8">
+          {banner && <BannerCard banner={banner} />}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
             {/* Colonne principale */}
             <div className="min-w-0 space-y-6">
-              <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  <Home className="h-4 w-4 text-slate-400" />
+              <section className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
+                  <SectionIcon icon={Home} />
                   Description du bien
                 </h2>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <SelectField
                     label="Plateforme"
                     value={form.plateforme}
@@ -401,13 +427,13 @@ export default function AddApartmentFlow() {
                 <TextAreaField label="Description" value={form.description} onChange={(v) => set("description", v)} />
               </section>
 
-              <section className="space-y-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <section className="space-y-8 rounded-2xl border border-ink-200 bg-white p-6 shadow-sm sm:p-8">
                 <div>
-                  <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    <Banknote className="h-4 w-4 text-slate-400" />
+                  <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
+                    <SectionIcon icon={Banknote} />
                     Données financières
                   </h2>
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="mt-3 rounded-lg bg-ink-50 px-3.5 py-2.5 text-xs leading-relaxed text-ink-500">
                     Les frais de notaire, l&apos;assurance et les frais de gestion sont pré-estimés
                     automatiquement (modifiables depuis la fiche du bien après création). Les
                     champs ci-dessous laissés vides (charges copro, taxe foncière) seront eux
@@ -415,7 +441,7 @@ export default function AddApartmentFlow() {
                   </p>
                 </div>
 
-                <Subsection title="Achat" accent="bg-slate-400">
+                <Subsection title="Achat" accent="bg-ink-400">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <NumberField label="Prix" value={form.prix} onChange={(v) => set("prix", v)} suffix="€" hint={extrait("prix") && <ExtractedBadge />} />
                     <NumberField
@@ -449,12 +475,12 @@ export default function AddApartmentFlow() {
 
             {/* Colonne latérale */}
             <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  <User className="h-4 w-4 text-slate-400" />
+              <div className="rounded-2xl border border-ink-200 bg-white p-5 shadow-sm">
+                <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
+                  <SectionIcon icon={User} size="sm" />
                   Contact
                 </h2>
-                <p className="mb-3 text-xs text-slate-400">
+                <p className="mt-2 mb-4 text-xs text-ink-400">
                   Agence ou propriétaire — facultatif.
                 </p>
                 <div className="space-y-3">
@@ -473,26 +499,54 @@ export default function AddApartmentFlow() {
                   />
                 </div>
               </div>
-            </aside>
-          </div>
 
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setStep("url")}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Retour
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={saving}
-              className="rounded-md bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? "Enregistrement..." : "Enregistrer le bien"}
-            </button>
+              <button
+                onClick={handleSubmit}
+                disabled={saving}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-5 w-5 animate-spin" />}
+                {saving ? "Enregistrement..." : "Enregistrer"}
+              </button>
+            </aside>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Icône de section, dans un badge circulaire teinté — remplace l'icône grise
+ * plate pour donner un peu plus de repère visuel à chaque bloc du formulaire. */
+function SectionIcon({
+  icon: Icon,
+  size = "md",
+}: {
+  icon: typeof Home;
+  size?: "sm" | "md";
+}) {
+  const dims = size === "sm" ? "h-7 w-7" : "h-8 w-8";
+  const iconDims = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
+  return (
+    <span className={`flex ${dims} shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600`}>
+      <Icon className={iconDims} />
+    </span>
+  );
+}
+
+const BANNER_STYLES = {
+  success: { wrap: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2, iconClass: "text-emerald-500" },
+  warning: { wrap: "border-amber-200 bg-amber-50 text-amber-800", icon: AlertTriangle, iconClass: "text-amber-500" },
+  info: { wrap: "border-ink-200 bg-ink-50 text-ink-700", icon: Info, iconClass: "text-ink-400" },
+} as const;
+
+function BannerCard({ banner }: { banner: NonNullable<Banner> }) {
+  const style = BANNER_STYLES[banner.tone];
+  const Icon = style.icon;
+  return (
+    <div className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-sm ${style.wrap}`}>
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${style.iconClass}`} />
+      <span>{banner.text}</span>
     </div>
   );
 }
@@ -507,8 +561,8 @@ function Subsection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border-t border-slate-100 pt-6 first:border-t-0 first:pt-0">
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+    <div className="border-t border-ink-100 pt-6 first:border-t-0 first:pt-0">
+      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
         <span className={`h-1.5 w-1.5 rounded-full ${accent}`} />
         {title}
       </h3>
@@ -530,12 +584,12 @@ function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
       <div className="w-full max-w-lg text-center">
         {/* Illustration */}
         <div className="relative mx-auto mb-8 h-40 w-40">
-          <span className="absolute inset-0 animate-ping rounded-full bg-indigo-100 opacity-60" />
-          <span className="absolute inset-2 rounded-full bg-indigo-50" />
+          <span className="absolute inset-0 animate-ping rounded-full bg-accent-100 opacity-60" />
+          <span className="absolute inset-2 rounded-full bg-accent-50" />
           <svg viewBox="0 0 120 120" className="relative h-full w-full" aria-hidden="true">
             {/* immeuble */}
-            <rect x="34" y="40" width="34" height="52" rx="2" className="fill-indigo-600" />
-            <rect x="68" y="52" width="22" height="40" rx="2" className="fill-indigo-400" />
+            <rect x="34" y="40" width="34" height="52" rx="2" className="fill-accent-600" />
+            <rect x="68" y="52" width="22" height="40" rx="2" className="fill-accent-400" />
             {[46, 58, 70].map((y) => (
               <g key={y}>
                 <rect x="40" y={y} width="6" height="6" rx="1" className="fill-white/80" />
@@ -547,18 +601,18 @@ function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
             <rect x="74" y="72" width="5" height="5" rx="1" className="fill-white/80" />
             <rect x="82" y="72" width="5" height="5" rx="1" className="fill-white/80" />
             {/* loupe (analyse) */}
-            <circle cx="76" cy="42" r="15" className="fill-none stroke-slate-900" strokeWidth="4" />
+            <circle cx="76" cy="42" r="15" className="fill-none stroke-ink-900" strokeWidth="4" />
             <circle cx="76" cy="42" r="15" className="fill-white/70" />
-            <line x1="87" y1="53" x2="98" y2="64" className="stroke-slate-900" strokeWidth="5" strokeLinecap="round" />
-            <path d="M69 44 l4 4 l9 -11" className="fill-none stroke-indigo-600" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="87" y1="53" x2="98" y2="64" className="stroke-ink-900" strokeWidth="5" strokeLinecap="round" />
+            <path d="M69 44 l4 4 l9 -11" className="fill-none stroke-accent-600" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
 
-        <h1 className="flex items-center justify-center gap-2 text-2xl font-semibold text-slate-900">
-          <Sparkles className="h-5 w-5 text-indigo-500" />
+        <h1 className="font-display flex items-center justify-center gap-2 text-2xl font-semibold text-ink-900">
+          <Sparkles className="h-5 w-5 text-accent-500" />
           Analyse de votre bien en cours
         </h1>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+        <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
           Nous enregistrons le bien puis collectons des données publiques réelles (DVF, ADEME,
           Géorisques, loyers, sécurité…) pour bâtir votre analyse. Quelques dizaines de secondes,
           aucune action requise.
@@ -573,28 +627,28 @@ function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
                 key={s.key}
                 className={`flex items-start gap-3 rounded-lg border p-3 transition ${
                   state === "active"
-                    ? "border-indigo-200 bg-indigo-50/60"
-                    : "border-slate-200 bg-white"
+                    ? "border-accent-200 bg-accent-50/60"
+                    : "border-ink-200 bg-white"
                 }`}
               >
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
                   {state === "done" ? (
                     <Check className="h-5 w-5 text-emerald-500" />
                   ) : state === "active" ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+                    <Loader2 className="h-5 w-5 animate-spin text-accent-600" />
                   ) : (
-                    <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-ink-300" />
                   )}
                 </span>
                 <span>
                   <span
                     className={`block text-sm font-medium ${
-                      state === "pending" ? "text-slate-400" : "text-slate-800"
+                      state === "pending" ? "text-ink-400" : "text-ink-800"
                     }`}
                   >
                     {s.label}
                   </span>
-                  <span className="block text-xs text-slate-400">{s.detail}</span>
+                  <span className="block text-xs text-ink-400">{s.detail}</span>
                 </span>
               </li>
             );

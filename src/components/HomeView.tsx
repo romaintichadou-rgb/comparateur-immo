@@ -11,7 +11,7 @@ import EmptyHomeState from "./EmptyHomeState";
 const ApartmentsMap = dynamic(() => import("./ApartmentsMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full items-center justify-center text-sm text-slate-400">
+    <div className="flex h-full items-center justify-center text-sm text-ink-400">
       Chargement de la carte...
     </div>
   ),
@@ -39,27 +39,27 @@ export default function HomeView({
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900">
             {apartments.length} bien{apartments.length > 1 ? "s" : ""} suivi
             {apartments.length > 1 ? "s" : ""}
           </h1>
-          <p className="text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-ink-500">
             Trié par {SORT_OPTIONS.find((o) => o.key === sortKey)?.label.toLowerCase()},
             décroissant
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <label htmlFor="sort" className="text-slate-500">
+          <label htmlFor="sort" className="text-ink-500">
             Trier par
           </label>
           <select
             id="sort"
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none"
+            className="rounded-lg border border-ink-300 bg-white px-3 py-2 text-ink-700 shadow-sm transition-colors focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
           >
             {SORT_OPTIONS.map((opt) => (
               <option key={opt.key} value={opt.key}>
@@ -70,7 +70,7 @@ export default function HomeView({
         </div>
       </div>
 
-      <div className="h-[420px] overflow-hidden rounded-xl border border-slate-200">
+      <div className="h-[420px] overflow-hidden rounded-2xl border border-ink-200 shadow-sm">
         <ApartmentsMap apartments={apartments} seuilsRendement={seuilsRendement} />
       </div>
 
