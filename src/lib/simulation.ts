@@ -28,10 +28,12 @@ export interface SimulationInputs {
   tauxAssurancePct: number;
   /** Tranche marginale d'imposition, en % (11/30/41/45). */
   tmiPct: number;
-  /** Revalorisation annuelle du bien, en % (hypothèse prudente par défaut). */
-  revalorisationBienPct: number;
-  /** Revalorisation annuelle du loyer, en % (indexation type IRL). */
-  revalorisationLoyerPct: number;
+  /** Revalorisation annuelle du bien, en %. null = désactivée (hypothèse par défaut, la plus prudente). */
+  revalorisationBienPct: number | null;
+  /** Revalorisation annuelle du loyer, en % (indexation type IRL). null = désactivée. */
+  revalorisationLoyerPct: number | null;
+  /** Indexation annuelle des charges de copro + taxe foncière, en %. null = désactivée (figées en euros courants). */
+  indexationChargesPct: number | null;
 }
 
 /** Hypothèses LMNP réel (calées sur le simulateur de référence). */
@@ -114,6 +116,12 @@ export interface SimulationResult {
   financementProjet: FinancementProjet;
 }
 
+// Valeurs par défaut proposées quand l'utilisateur active une hypothèse
+// optionnelle (boutons "+" de l'onglet Simulation financière).
+export const REVALORISATION_BIEN_DEFAUT_PCT = 1;
+export const REVALORISATION_LOYER_DEFAUT_PCT = 1;
+export const INDEXATION_CHARGES_DEFAUT_PCT = 2;
+
 export function defaultInputs(): SimulationInputs {
   return {
     montantEmprunte: null, // auto : suit le budget total en temps réel
@@ -121,8 +129,11 @@ export function defaultInputs(): SimulationInputs {
     dureeAnnees: 25,
     tauxAssurancePct: 0.3,
     tmiPct: 30,
-    revalorisationBienPct: 1,
-    revalorisationLoyerPct: 1,
+    // Désactivées par défaut : hypothèse la plus prudente (aucune inflation
+    // supposée) tant que l'utilisateur ne les active pas explicitement.
+    revalorisationBienPct: null,
+    revalorisationLoyerPct: null,
+    indexationChargesPct: null,
   };
 }
 
@@ -143,7 +154,7 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
   // notaire par défaut, puisqu'ils ne sont plus dans le capital emprunté.
   const coutTotalReel = Math.round(apt.budget_total ?? apt.prix ?? 0);
   const apport = Math.max(0, coutTotalReel - capital);
-  const tauxRevalo = inputs.revalorisationBienPct / 100;
+  const tauxRevalo = (inputs.revalorisationBienPct ?? 0) / 100;
   const tauxMensuel = inputs.tauxCreditPct / 100 / 12;
   const nbMois = Math.max(1, Math.round(inputs.dureeAnnees * 12));
 
@@ -160,11 +171,13 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
 
   // Exploitation annuelle (valeurs réelles du bien, déjà live-estimées). Le
   // loyer année 1 sert de base ; il est revalorisé chaque année dans la
-  // boucle. Les charges de copro/taxe foncière/assurance restent constantes
-  // (pas d'hypothèse d'inflation dessus) — seuls le loyer et les frais de
-  // gestion (qui en sont un pourcentage) évoluent avec lui.
+  // boucle si l'hypothèse est activée. Les charges de copro et la taxe
+  // foncière peuvent elles aussi être indexées (hypothèse séparée) ;
+  // l'assurance PNO reste toujours constante.
   const loyersAnnuelsAn1 = loyerMensuel * 12;
-  const tauxRevaloLoyer = inputs.revalorisationLoyerPct / 100;
+  const tauxRevaloLoyer = (inputs.revalorisationLoyerPct ?? 0) / 100;
+  const tauxIndexationCharges = (inputs.indexationChargesPct ?? 0) / 100;
+  const chargesIndexablesAn1 = (apt.charges_copro_annuelles ?? 0) + (apt.taxe_fonciere ?? 0);
 
   // Amortissements LMNP réel annuels théoriques.
   const amortBati = (apt.prix ?? 0) * LMNP.partBati * LMNP.tauxBati;
@@ -202,11 +215,8 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
     // année après année.
     const loyersAnnuels = loyersAnnuelsAn1 * Math.pow(1 + tauxRevaloLoyer, a - 1);
     const gestionAnnuelle = loyersAnnuels * (apt.hypothese_gestion_pct / 100);
-    const chargesExploitation =
-      (apt.charges_copro_annuelles ?? 0) +
-      (apt.taxe_fonciere ?? 0) +
-      (apt.assurance_annuelle ?? 0) +
-      gestionAnnuelle;
+    const chargesIndexables = chargesIndexablesAn1 * Math.pow(1 + tauxIndexationCharges, a - 1);
+    const chargesExploitation = chargesIndexables + (apt.assurance_annuelle ?? 0) + gestionAnnuelle;
     if (a === 1) chargesExploitationAn1 = chargesExploitation;
 
     // Fiscalité LMNP réel : amortissements disponibles selon leur durée de vie.

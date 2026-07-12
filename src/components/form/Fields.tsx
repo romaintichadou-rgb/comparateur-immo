@@ -225,3 +225,19 @@ export function ExtractedBadge() {
     </span>
   );
 }
+
+/**
+ * Distinct du badge "Estimé" générique (formules déterministes) : signale
+ * une valeur produite par un LLM (recherche web + Gemini), non vérifiée
+ * contre une source structurée — voir estimateRent().
+ */
+export function AiEstimatedBadge() {
+  return (
+    <span
+      className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-red-700"
+      title="Estimation par IA (recherche web), non vérifiée — à confirmer avant de s'y fier"
+    >
+      Estimation IA
+    </span>
+  );
+}

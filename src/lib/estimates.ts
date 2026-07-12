@@ -34,13 +34,17 @@ export function estimateTaxeFonciere(surfaceM2: number | null): number | null {
 }
 
 /**
- * Charges de copropriété annuelles : montant fixe par défaut (1650€/an),
- * indépendant de la surface — à corriger manuellement dès que l'utilisateur
- * a le montant réel (appel de charges, syndic...).
+ * Charges de copropriété annuelles : estimées au m² (~20€/m²/an, ordre de
+ * grandeur usuel pour des charges courantes hors travaux exceptionnels), avec
+ * un plancher pour les petites surfaces (un studio a des charges fixes de
+ * syndic/assurance d'immeuble incompressibles) — à corriger manuellement dès
+ * que l'utilisateur a le montant réel (appel de charges, syndic...).
  */
-export function estimateChargesCopro(): number {
-  const CHARGES_COPRO_PAR_DEFAUT_EUR_AN = 1650;
-  return CHARGES_COPRO_PAR_DEFAUT_EUR_AN;
+export function estimateChargesCopro(surfaceM2: number | null): number {
+  const CHARGES_COPRO_EUR_PAR_M2_AN = 20;
+  const CHARGES_COPRO_PLANCHER_EUR_AN = 800;
+  if (surfaceM2 == null || surfaceM2 <= 0) return CHARGES_COPRO_PLANCHER_EUR_AN;
+  return Math.max(CHARGES_COPRO_PLANCHER_EUR_AN, Math.round(surfaceM2 * CHARGES_COPRO_EUR_PAR_M2_AN));
 }
 
 /**
@@ -71,7 +75,7 @@ export function applyLiveEstimates(apt: Apartment): Apartment {
       : estimateTaxeFonciere(apt.surface_m2),
     charges_copro_annuelles: apt.champs_manuels.includes("charges_copro_annuelles")
       ? apt.charges_copro_annuelles
-      : estimateChargesCopro(),
+      : estimateChargesCopro(apt.surface_m2),
     assurance_annuelle: apt.champs_manuels.includes("assurance_annuelle")
       ? apt.assurance_annuelle
       : estimateAssurance(),

@@ -42,9 +42,15 @@ export async function buildBlocRisque(
   const penalites: number[] = [];
 
   // --- ADEME : DPE réel + cohérence + loi climat ---
-  const dpeData = geo.banId
-    ? await fetchDpe({ banId: geo.banId, surface: apt.surface_m2 })
-    : { records: [], meilleurMatch: null };
+  // Jointure ADEME par identifiant BAN = jointure EXACTE : sans adresse exacte
+  // saisie, le géocodage retombe sur le centroïde du quartier/ville, dont le
+  // banId correspond à un immeuble arbitraire — appeler fetchDpe renverrait
+  // alors le DPE réel d'un AUTRE bâtiment, présenté à tort comme celui du bien.
+  const adresseExacte = apt.adresse.trim() !== "";
+  const dpeData =
+    geo.banId && adresseExacte
+      ? await fetchDpe({ banId: geo.banId, surface: apt.surface_m2 })
+      : { records: [], meilleurMatch: null };
 
   // Étiquettes de référence : les valeurs officielles ADEME si trouvées, sinon
   // les valeurs saisies (déclaratives) faute de mieux.
@@ -89,7 +95,11 @@ export async function buildBlocRisque(
     // déclarée par le bien, faute de DPE officiel correspondant à sa
     // surface — pas de fait chiffré supplémentaire ici, juste la mention en
     // donnée manquante ci-dessous.
-    donneesManquantes.push("DPE officiel correspondant à la surface du bien");
+    donneesManquantes.push(
+      adresseExacte
+        ? "DPE officiel correspondant à la surface du bien"
+        : "DPE officiel (adresse exacte non renseignée — non vérifiable sans risque de confondre avec un autre bâtiment)"
+    );
   }
 
   if (dpeRef && DPE_PENALITE[dpeRef.toUpperCase()] != null) {

@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       estimateFraisNotaire(input.prix, input.etat_bien);
     const taxeFonciere =
       input.taxe_fonciere ?? estimateTaxeFonciere(input.surface_m2);
-    const chargesCopro = input.charges_copro_annuelles ?? estimateChargesCopro();
+    const chargesCopro = input.charges_copro_annuelles ?? estimateChargesCopro(input.surface_m2);
     const assuranceAnnuelle = input.assurance_annuelle ?? estimateAssurance();
 
     let latitude = input.latitude;

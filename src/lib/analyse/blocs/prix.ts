@@ -1,4 +1,4 @@
-import type { Apartment } from "@/lib/types";
+import type { Apartment, PrecisionLocalisation } from "@/lib/types";
 import type { DvfData } from "../sources/dvf";
 import { clampNote } from "../scoring";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } from "../types";
@@ -20,7 +20,8 @@ const SRC_DVF: Source = {
 
 export async function buildBlocPrix(
   apt: Apartment,
-  dvf: DvfData | null
+  dvf: DvfData | null,
+  precision: PrecisionLocalisation | null
 ): Promise<BlocAnalyse> {
   const faits: Fait[] = [];
   const sources: Source[] = [];
@@ -45,6 +46,20 @@ export async function buildBlocPrix(
 
   if (dvf?.medianeRecente != null) {
     sources.push(SRC_DVF);
+
+    // Le rayon de 500 m est centré sur les coordonnées géocodées du bien : si
+    // l'adresse exacte est inconnue, ce centre est le centroïde du
+    // quartier/de la ville, pas l'immeuble réel — la comparaison peut donc
+    // porter sur un micro-marché différent de celui du bien.
+    if (precision !== "exacte") {
+      faits.push({
+        label: "Comparaison approximative",
+        value: null,
+        detail: "adresse exacte non renseignée — le rayon de comparaison est centré sur le quartier, pas sur le bien",
+        source: SRC_DVF.label,
+        gravite: "attention",
+      });
+    }
 
     faits.push({
       label: "Prix/m² médian comparable",

@@ -1,4 +1,4 @@
-import type { Apartment } from "@/lib/types";
+import type { Apartment, PrecisionLocalisation } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
 import { geocodeApartmentLocation } from "@/lib/geocoding";
 import { getSettings } from "@/lib/db";
@@ -29,6 +29,7 @@ export async function runAnalyse(
   let lon = apt.longitude;
   let codeInsee = apt.code_insee;
   let banId = "";
+  let precision: PrecisionLocalisation | null = apt.precision_localisation;
 
   try {
     const geo = await geocodeApartmentLocation({
@@ -42,6 +43,7 @@ export async function runAnalyse(
       lon = geo.longitude;
       codeInsee = geo.code_insee || codeInsee;
       banId = geo.ban_id;
+      precision = geo.precision_localisation;
     }
   } catch {
     // Géocodage best-effort : on retombe sur les coordonnées déjà stockées.
@@ -63,7 +65,7 @@ export async function runAnalyse(
   // "simulation" est purement déterministe (pas d'appel réseau) : il n'a pas
   // besoin de faire partie du Promise.all.
   const [prix, location, risque, potentiel, quartier] = await Promise.all([
-    buildBlocPrix(apt, dvf),
+    buildBlocPrix(apt, dvf, precision),
     buildBlocLocation(apt, codeInsee, seuils),
     buildBlocRisque(apt, { lat, lon, codeInsee, banId }),
     buildBlocPotentiel(apt, dvf, commodites, codeInsee),

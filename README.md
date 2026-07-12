@@ -126,7 +126,15 @@ Chaque bien ajouté dispose d'une fiche détaillée à 3 onglets :
     s'adapte à la largeur disponible (colonne 1/3 pour Financement du
     projet, 2/3 pour Évolution du patrimoine).
   - Tous les chiffres se recalculent en direct dès la saisie dans les autres
-    onglets (même non enregistrée).
+    onglets (même non enregistrée). Les hypothèses de revalorisation (bien,
+    loyer) et d'indexation (charges de copro + taxe foncière) sont
+    désactivées par défaut (hypothèse la plus prudente) et s'activent au cas
+    par cas via un petit bouton dédié.
+  - Les hypothèses (crédit, revalorisations) peuvent être **enregistrées**
+    explicitement (bouton dédié, distinct de la sauvegarde des autres
+    onglets) : le bloc "Simulation financière" de l'Analyse IA se base alors
+    sur ces hypothèses réellement modélisées plutôt que sur un scénario par
+    défaut générique.
 
 ## Identité visuelle — Lucide
 

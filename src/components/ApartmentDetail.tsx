@@ -36,6 +36,7 @@ import {
 } from "@/lib/estimates";
 import { formatApartmentTitle, formatDate, formatEuros, formatPercent } from "@/lib/format";
 import {
+  AiEstimatedBadge,
   BooleanField,
   EstimatedBadge,
   NumberField,
@@ -125,7 +126,9 @@ export default function ApartmentDetail({
 
   const chargesCoproManuel =
     apt.champs_manuels.includes("charges_copro_annuelles") || "charges_copro_annuelles" in finPatch;
-  const chargesCoproLive = chargesCoproManuel ? merged.charges_copro_annuelles : estimateChargesCopro();
+  const chargesCoproLive = chargesCoproManuel
+    ? merged.charges_copro_annuelles
+    : estimateChargesCopro(merged.surface_m2);
 
   const assuranceManuel =
     apt.champs_manuels.includes("assurance_annuelle") || "assurance_annuelle" in finPatch;
@@ -404,7 +407,7 @@ export default function ApartmentDetail({
                     value={value(finPatch, "loyer_retenu")}
                     onChange={(v) => setFinPatch((p) => ({ ...p, loyer_retenu: v }))}
                     suffix="€/mois CC"
-                    hint={isEstimated(apt, "loyer_retenu") && !("loyer_retenu" in finPatch) && <EstimatedBadge />}
+                    hint={isEstimated(apt, "loyer_retenu") && !("loyer_retenu" in finPatch) && <AiEstimatedBadge />}
                   />
                 </div>
                 <button
@@ -467,7 +470,7 @@ export default function ApartmentDetail({
       )}
 
       {activeTab === "simulation" && (
-        <SimulationFinanciere apartment={live} settings={settings} />
+        <SimulationFinanciere apartment={live} settings={settings} onSaved={setApt} />
       )}
 
       {activeTab === "donnees" && (

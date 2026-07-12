@@ -1,10 +1,19 @@
 "use client";
 
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Banknote, Calculator, Info, Landmark, PieChart, ReceiptText, TrendingUp } from "lucide-react";
+import { Banknote, Calculator, Info, Landmark, PieChart, Plus, ReceiptText, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
-import { defaultInputs, simulate, LMNP, type AnneeSimulation, type SimulationInputs } from "@/lib/simulation";
+import {
+  defaultInputs,
+  simulate,
+  LMNP,
+  INDEXATION_CHARGES_DEFAUT_PCT,
+  REVALORISATION_BIEN_DEFAUT_PCT,
+  REVALORISATION_LOYER_DEFAUT_PCT,
+  type AnneeSimulation,
+  type SimulationInputs,
+} from "@/lib/simulation";
 import { NumberField, SelectField } from "@/components/form/Fields";
 import { RENDEMENT_HOVER_RING } from "@/lib/analyse/scoring";
 
@@ -12,8 +21,51 @@ import { RENDEMENT_HOVER_RING } from "@/lib/analyse/scoring";
  * Onglet "Simulation financière" : cash-flow mensuel réel en LMNP réel,
  * année par année sur la durée du prêt. Le simulateur de crédit est
  * modifiable ; l'exploitation (loyer, charges, taxe foncière…) vient des
- * données du bien. Tout est recalculé en direct, rien n'est stocké.
+ * données du bien. Se recalcule en direct ; les hypothèses (crédit,
+ * revalorisations) sont enregistrées explicitement (bouton dédié) pour que
+ * le score de l'Analyse IA reflète ce que l'utilisateur a réellement modélisé.
  */
+
+/** Petit contrôle "+" discret pour activer une hypothèse optionnelle
+ * (désactivée par défaut = la plus prudente), avec une valeur de repli au clic. */
+function OptionalRateField({
+  label,
+  value,
+  defaut,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  defaut: number;
+  onChange: (v: number | null) => void;
+}) {
+  if (value == null) {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(defaut)}
+        className="inline-flex items-center gap-1 rounded-md border border-dashed border-ink-300 px-2.5 py-2 text-xs font-medium text-ink-400 transition-colors hover:border-ink-400 hover:text-ink-600"
+      >
+        <Plus className="h-3 w-3" />
+        {label}
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-end gap-1">
+      <NumberField label={label} value={value} onChange={(v) => onChange(v ?? 0)} suffix="%/an" />
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        title="Désactiver cette hypothèse"
+        aria-label={`Désactiver ${label}`}
+        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
 
 const TMI_OPTIONS = ["11", "30", "41", "45"] as const;
 
@@ -39,20 +91,53 @@ function cashflowTextClass(monthly: number, seuils: CashflowSeuils): string {
 export default function SimulationFinanciere({
   apartment,
   settings,
+  onSaved,
 }: {
   apartment: ApartmentWithComputed;
   settings: AppSettings;
+  /** Appelé après l'enregistrement des hypothèses, pour resynchroniser le bien côté parent. */
+  onSaved?: (apartment: ApartmentWithComputed) => void;
 }) {
   const cashflowSeuils: CashflowSeuils = {
     vert: settings.cashflowSeuilVertEuros,
     rouge: settings.cashflowSeuilRougeEuros,
   };
-  const [inputs, setInputs] = useState<SimulationInputs>(defaultInputs);
+
+  // `simulation_inputs` (persisté) est la source de vérité utilisée par le
+  // score de l'Analyse IA. `inputs` est l'état local édité en direct ; il se
+  // resynchronise dès que la valeur enregistrée change (après un save, ou si
+  // le bien affiché change), via le pattern "ajuster l'état pendant le rendu"
+  // déjà utilisé dans NumberField.
+  const [savedInputs, setSavedInputs] = useState(apartment.simulation_inputs);
+  const [inputs, setInputs] = useState<SimulationInputs>(() => apartment.simulation_inputs ?? defaultInputs());
+  if (apartment.simulation_inputs !== savedInputs) {
+    setSavedInputs(apartment.simulation_inputs);
+    setInputs(apartment.simulation_inputs ?? defaultInputs());
+  }
+  const [saving, setSaving] = useState(false);
+  const dirty = JSON.stringify(inputs) !== JSON.stringify(savedInputs ?? defaultInputs());
 
   const result = useMemo(() => simulate(apartment, inputs), [apartment, inputs]);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
+  }
+
+  async function handleSaveInputs() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/apartments/${apartment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ simulation_inputs: inputs }),
+      });
+      if (res.ok) {
+        const { apartment: updated } = await res.json();
+        onSaved?.(updated);
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (!result) {
@@ -73,6 +158,22 @@ export default function SimulationFinanciere({
 
   return (
     <div className="space-y-6">
+      {dirty && (
+        <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
+          <p className="text-xs text-accent-700">
+            Hypothèses modifiées, non enregistrées — le score de l&apos;Analyse IA se base sur les
+            dernières hypothèses enregistrées.
+          </p>
+          <button
+            onClick={handleSaveInputs}
+            disabled={saving}
+            className="shrink-0 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+          >
+            {saving ? "Enregistrement..." : "Enregistrer les hypothèses"}
+          </button>
+        </div>
+      )}
+
       {/* Résultat principal : le cash-flow mensuel concret */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <ResultCard
@@ -222,20 +323,30 @@ export default function SimulationFinanciere({
           <Calculator className="h-4 w-4 text-ink-400" />
           Cash-flow année par année
         </h3>
-        <div className="grid grid-cols-2 gap-4 px-5 pb-4">
-          <NumberField
+        <div className="flex flex-wrap items-end gap-3 px-5 pb-4">
+          <OptionalRateField
             label="Revalorisation du bien"
             value={inputs.revalorisationBienPct}
-            onChange={(v) => set("revalorisationBienPct", v ?? 0)}
-            suffix="%/an"
+            defaut={REVALORISATION_BIEN_DEFAUT_PCT}
+            onChange={(v) => set("revalorisationBienPct", v)}
           />
-          <NumberField
+          <OptionalRateField
             label="Revalorisation du loyer"
             value={inputs.revalorisationLoyerPct}
-            onChange={(v) => set("revalorisationLoyerPct", v ?? 0)}
-            suffix="%/an"
+            defaut={REVALORISATION_LOYER_DEFAUT_PCT}
+            onChange={(v) => set("revalorisationLoyerPct", v)}
+          />
+          <OptionalRateField
+            label="Indexation charges (copro + taxe foncière)"
+            value={inputs.indexationChargesPct}
+            defaut={INDEXATION_CHARGES_DEFAUT_PCT}
+            onChange={(v) => set("indexationChargesPct", v)}
           />
         </div>
+        <p className="px-5 pb-4 text-xs text-ink-400">
+          Par défaut, aucune revalorisation ni indexation n&apos;est supposée (hypothèse la plus
+          prudente) — active-les au besoin.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -271,9 +382,15 @@ export default function SimulationFinanciere({
           </table>
         </div>
         <p className="px-5 py-3 text-xs text-ink-400">
-          Total impôts sur {inputs.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer revalorisé à{" "}
-          {inputs.revalorisationLoyerPct} %/an ; charges de copropriété et taxe foncière supposées
-          constantes (pas de revalorisation).
+          Total impôts sur {inputs.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer{" "}
+          {inputs.revalorisationLoyerPct != null
+            ? `revalorisé à ${inputs.revalorisationLoyerPct} %/an`
+            : "supposé constant (pas de revalorisation)"}{" "}
+          ; charges de copropriété et taxe foncière{" "}
+          {inputs.indexationChargesPct != null
+            ? `indexées à ${inputs.indexationChargesPct} %/an`
+            : "supposées constantes (pas d'indexation)"}
+          .
         </p>
       </section>
 
@@ -299,9 +416,11 @@ export default function SimulationFinanciere({
           <p className="text-xs text-ink-400">
             Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
             (valeur du bien au-delà de la dette et de l&apos;apport non récupéré), et l&apos;effort
-            d&apos;épargne encore porté (apport pas encore compensé par le cash-flow cumulé). Hypothèse
-            de revalorisation du bien : {inputs.revalorisationBienPct} %/an — hors fiscalité de la
-            plus-value à la revente.
+            d&apos;épargne encore porté (apport pas encore compensé par le cash-flow cumulé).{" "}
+            {inputs.revalorisationBienPct != null
+              ? `Hypothèse de revalorisation du bien : ${inputs.revalorisationBienPct} %/an`
+              : "Aucune revalorisation du bien supposée"}{" "}
+            — hors fiscalité de la plus-value à la revente.
           </p>
           <PatrimoineChart annees={result.annees} />
         </section>

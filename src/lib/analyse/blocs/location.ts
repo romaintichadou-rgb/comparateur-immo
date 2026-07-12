@@ -53,21 +53,42 @@ export async function buildBlocLocation(
 
   const donneesManquantes: string[] = [];
   let loyerOptimiste = false;
+  // Loyer encore en mode "estimé" (jamais repris à la main) : dans les faits,
+  // ça signifie presque toujours une estimation IA (recherche web + Gemini,
+  // voir estimateRent()) plutôt qu'une donnée déterministe — à ne jamais
+  // traiter avec la même confiance qu'un loyer vérifié par l'utilisateur.
+  const loyerNonVerifie = !apt.champs_manuels.includes("loyer_retenu");
 
   // --- 1) Loyer du bien (CC), en valeur mensuelle réelle ---
   if (apt.loyer_retenu != null) {
     const ecart = loyerBienM2CC != null && marcheM2CC != null ? (loyerBienM2CC - marcheM2CC) / marcheM2CC : null;
-    if (loyerRef && loyerBienM2CC != null) loyerOptimiste = loyerBienM2CC > loyerRef.max + PROVISION_CHARGES_M2;
+    // Discount systématique : soit nettement au-dessus du haut de la
+    // fourchette ANIL (quelle que soit son origine), soit encore une
+    // estimation IA non vérifiée et déjà sensiblement au-dessus de la
+    // médiane (pas seulement au-dessus du max) — un loyer IA modérément
+    // optimiste ne doit pas passer inaperçu simplement parce qu'il reste
+    // dans la fourchette.
+    if (loyerRef && loyerBienM2CC != null) {
+      const auDessusMax = loyerBienM2CC > loyerRef.max + PROVISION_CHARGES_M2;
+      const optimisteEtNonVerifie = loyerNonVerifie && ecart != null && ecart > 0.1;
+      loyerOptimiste = auDessusMax || optimisteEtNonVerifie;
+    }
+    const suffixeDetail = [
+      loyerOptimiste ? "optimiste" : null,
+      loyerNonVerifie ? "estimation IA non vérifiée" : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     faits.push({
       label: "Loyer du bien (CC)",
       value: apt.loyer_retenu.toLocaleString("fr-FR"),
       unit: "€/mois CC",
       detail:
         ecart != null
-          ? `${ecart > 0 ? "+" : ""}${Math.round(ecart * 100)} % vs marché${loyerOptimiste ? " · optimiste" : ""}`
-          : undefined,
+          ? `${ecart > 0 ? "+" : ""}${Math.round(ecart * 100)} % vs marché${suffixeDetail ? " · " + suffixeDetail : ""}`
+          : suffixeDetail || undefined,
       source: SRC_LOYERS.label,
-      gravite: ecart == null ? "info" : loyerOptimiste ? "attention" : ecart <= 0.05 ? "positif" : "info",
+      gravite: ecart == null ? (loyerNonVerifie ? "attention" : "info") : loyerOptimiste ? "attention" : ecart <= 0.05 ? "positif" : "info",
     });
   } else {
     donneesManquantes.push("loyer du bien");

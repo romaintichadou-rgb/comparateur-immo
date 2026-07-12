@@ -7,10 +7,10 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fai
 /**
  * Bloc "Simulation financière" — résume l'onglet du même nom : cash-flow réel
  * en LMNP au réel (crédit amortissable, charges d'exploitation, fiscalité
- * avec amortissements plafonnés art. 39 C), avec les hypothèses de crédit et
- * de fiscalité par défaut (mêmes valeurs que celles pré-remplies dans
- * l'onglet Simulation financière — l'utilisateur peut les personnaliser
- * là-bas, mais l'Analyse IA reste basée sur un scénario standard reproductible).
+ * avec amortissements plafonnés art. 39 C). Utilise les hypothèses de crédit
+ * et de revalorisation enregistrées par l'utilisateur dans l'onglet
+ * Simulation financière (apartment.simulation_inputs) quand elles existent,
+ * sinon le scénario standard par défaut (defaultInputs()).
  *
  * Note /10 purement déterministe : dérivée du cash-flow mensuel MOYEN sur
  * toute la durée du crédit (indicateur le plus représentatif, lisse les
@@ -22,7 +22,11 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fai
 const SRC_CALC = "Calcul — simulation LMNP";
 
 export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSettings): BlocAnalyse {
-  const result = simulate(apt, defaultInputs());
+  // Utilise les hypothèses réellement enregistrées par l'utilisateur dans
+  // l'onglet Simulation financière (crédit, revalorisations) quand elles
+  // existent, plutôt que toujours le scénario standard par défaut — pour que
+  // le score reflète ce que l'utilisateur a effectivement modélisé.
+  const result = simulate(apt, apt.simulation_inputs ?? defaultInputs());
 
   if (!result) {
     return {

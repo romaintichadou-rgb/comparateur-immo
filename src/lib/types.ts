@@ -1,5 +1,17 @@
 import { z } from "zod";
 import type { AnalyseIA } from "./analyse/types";
+import type { SimulationInputs } from "./simulation";
+
+const simulationInputsSchema = z.object({
+  montantEmprunte: z.number().nullable(),
+  tauxCreditPct: z.number(),
+  dureeAnnees: z.number(),
+  tauxAssurancePct: z.number(),
+  tmiPct: z.number(),
+  revalorisationBienPct: z.number().nullable(),
+  revalorisationLoyerPct: z.number().nullable(),
+  indexationChargesPct: z.number().nullable(),
+});
 
 export const PLATEFORMES = [
   "Leboncoin",
@@ -118,6 +130,12 @@ export interface Apartment {
   // par la route /api/analyse/[id], jamais via les formulaires. null tant
   // qu'aucune analyse n'a été lancée.
   analyse_ia: AnalyseIA | null;
+
+  // Hypothèses de l'onglet Simulation financière (crédit, revalorisations),
+  // enregistrées explicitement par l'utilisateur (bouton dédié, pas à chaque
+  // frappe). null tant qu'aucune hypothèse n'a été enregistrée : le bloc
+  // "Simulation financière" de l'Analyse IA utilise alors defaultInputs().
+  simulation_inputs: SimulationInputs | null;
 }
 
 export const DEFAULT_HYPOTHESE_GESTION_PCT = 5;
@@ -163,6 +181,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     contact_email: "",
     champs_manuels: [],
     analyse_ia: null,
+    simulation_inputs: null,
   };
 }
 
@@ -209,15 +228,22 @@ const apartmentBaseFields = {
   contact_telephone: z.string(),
   contact_email: z.string(),
   champs_manuels: z.array(z.enum(CHAMPS_ESTIMABLES)),
+  simulation_inputs: simulationInputsSchema.nullable(),
 };
 
 // Schéma de validation pour la création depuis les formulaires et les
 // routes API. Tous les champs sont optionnels à la création car un ajout
 // par URL ne renseigne que ce que le parser a réussi à extraire ; chaque
-// champ absent reçoit ici sa valeur de repli explicite.
+// champ absent reçoit ici sa valeur de repli explicite. Exception : le prix
+// est obligatoire — sans lui, budget total, rendement et cash-flow ne
+// peuvent tout simplement pas être calculés, l'analyse serait vide de sens.
 export const apartmentInputSchema = z
   .object(apartmentBaseFields)
   .partial()
+  .refine((data) => data.prix != null, {
+    message: "Le prix d'achat est obligatoire.",
+    path: ["prix"],
+  })
   .transform((data) => ({
     url: data.url ?? "",
     plateforme: data.plateforme ?? "Manuel",
@@ -257,6 +283,7 @@ export const apartmentInputSchema = z
     contact_telephone: data.contact_telephone ?? "",
     contact_email: data.contact_email ?? "",
     champs_manuels: data.champs_manuels ?? [],
+    simulation_inputs: data.simulation_inputs ?? null,
   }));
 
 export type ApartmentInput = z.infer<typeof apartmentInputSchema>;
