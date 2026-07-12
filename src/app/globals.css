@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f4f9;
+  --background: #fafafd;
   --foreground: #14171d;
 }
 
@@ -13,7 +13,7 @@
   --font-display: var(--font-display);
 
   /* Bruyère — neutre teinté par l'accent, remplace la gamme slate. */
-  --color-ink-50: #f6f4f9;
+  --color-ink-50: #fafafd;
   --color-ink-100: #e6e1f0;
   --color-ink-200: #e3deed;
   --color-ink-300: #c9c2d9;

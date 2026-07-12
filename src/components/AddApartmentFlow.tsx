@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   Home,
   Info,
-  Link2,
   Loader2,
   Sparkles,
   User,
@@ -34,7 +33,7 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/form/Fields";
-import { LucideMark } from "@/components/Navbar";
+import UrlHeroCard from "@/components/UrlHeroCard";
 
 function emptyInput(): ApartmentInput {
   return {
@@ -76,6 +75,7 @@ function emptyInput(): ApartmentInput {
     contact_telephone: "",
     contact_email: "",
     champs_manuels: [],
+    simulation_inputs: null,
   };
 }
 
@@ -144,9 +144,16 @@ interface InitialState {
 // données lues dans la page (déjà chargée par le navigateur de
 // l'utilisateur, hors de toute détection anti-bot) arrivent en query param
 // au premier rendu — pas besoin d'effect, juste un état initial dérivé.
-function computeInitialState(prefillParam: string | null): InitialState {
+// `manualParam` (venant du lien "Saisir à la main" de la home) saute
+// directement à l'étape de saisie manuelle, sans passer par l'étape URL.
+function computeInitialState(prefillParam: string | null, manualParam: string | null): InitialState {
   if (!prefillParam) {
-    return { step: "url", form: emptyInput(), champsExtraits: new Set(), banner: null };
+    return {
+      step: manualParam ? "review" : "url",
+      form: emptyInput(),
+      champsExtraits: new Set(),
+      banner: null,
+    };
   }
 
   const decoded = decodePrefill(prefillParam);
@@ -178,9 +185,14 @@ function computeInitialState(prefillParam: string | null): InitialState {
 export default function AddApartmentFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [initial] = useState(() => computeInitialState(searchParams.get("prefill")));
+  const [initial] = useState(() =>
+    computeInitialState(searchParams.get("prefill"), searchParams.get("manual"))
+  );
   const [step, setStep] = useState<Step>(initial.step);
-  const [urlInput, setUrlInput] = useState("");
+  // Arrivée depuis la home avec une URL déjà collée (?url=...) : pré-remplie
+  // et l'analyse se lance automatiquement, pour ne pas faire recoller l'URL.
+  const [urlInput, setUrlInput] = useState(() => searchParams.get("url") ?? "");
+  const autoAnalyseTriggered = useRef(false);
   const [analysing, setAnalysing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [procPhase, setProcPhase] = useState<ProcPhase>("creating");
@@ -239,7 +251,29 @@ export default function AddApartmentFlow() {
     }
   }
 
+  // Arrivée depuis la home avec ?url=... : l'utilisateur a déjà collé et
+  // validé l'URL une fois, inutile de lui faire recliquer sur "Analyser" ici.
+  useEffect(() => {
+    if (!autoAnalyseTriggered.current && step === "url" && searchParams.get("url")) {
+      autoAnalyseTriggered.current = true;
+      handleAnalyse();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSubmit() {
+    // Le prix est la seule donnée dont tout le reste dépend (budget total,
+    // rendement, cash-flow) : sans lui, l'analyse serait vide de sens. On
+    // bloque ici, avant même d'afficher l'écran de traitement, pour un
+    // retour immédiat plutôt qu'un aller-retour serveur.
+    if (form.prix == null) {
+      setBanner({
+        tone: "warning",
+        text: "Le prix d'achat est obligatoire — renseigne-le pour continuer.",
+      });
+      return;
+    }
+
     setSaving(true);
     setStep("processing");
     setProcPhase("creating");
@@ -254,7 +288,8 @@ export default function AddApartmentFlow() {
       });
       if (!res.ok) {
         const err = await res.json();
-        setBanner({ tone: "warning", text: err.error ?? "Échec de l'enregistrement." });
+        const detail = Array.isArray(err.issues) ? err.issues[0]?.message : undefined;
+        setBanner({ tone: "warning", text: detail ?? err.error ?? "Échec de l'enregistrement." });
         setStep("review");
         setSaving(false);
         return;
@@ -299,7 +334,7 @@ export default function AddApartmentFlow() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <Link
         href="/"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 transition-colors hover:text-accent-600"
@@ -319,59 +354,28 @@ export default function AddApartmentFlow() {
       </div>
 
       {step === "url" && (
-        <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm">
-          <div className="relative overflow-hidden bg-gradient-to-br from-accent-50 via-white to-white p-6 sm:p-8">
-            <LucideMark className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 text-accent-600 opacity-[0.07]" />
-            <span className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-accent-100/70 blur-3xl" />
-            <div className="relative flex items-start gap-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-600 text-white shadow-sm shadow-accent-200">
-                <Link2 className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold text-ink-900">
-                  Colle l&apos;URL d&apos;une annonce
-                </h2>
-                <p className="mt-0.5 text-sm text-ink-500">
-                  Leboncoin, SeLoger, PAP ou Orpi — les champs détectés seront pré-remplis, à
-                  vérifier avant d&apos;enregistrer.
-                </p>
-              </div>
-            </div>
-
-            <div className="relative mt-5 flex flex-col gap-2.5 sm:flex-row">
-              <input
-                type="url"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://www.leboncoin.fr/ad/..."
-                className="flex-1 rounded-lg border border-ink-300 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-sm transition-colors focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
-              />
+        <UrlHeroCard
+          value={urlInput}
+          onChange={setUrlInput}
+          onSubmit={handleAnalyse}
+          loading={analysing}
+          footer={
+            <>
               <button
-                onClick={handleAnalyse}
-                disabled={analysing}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-50"
+                onClick={() => setStep("review")}
+                className="text-sm font-medium text-ink-600 underline decoration-ink-300 underline-offset-2 transition-colors hover:text-ink-900"
               >
-                {analysing && <Loader2 className="h-4 w-4 animate-spin" />}
-                {analysing ? "Analyse en cours…" : "Analyser"}
+                Ou saisir directement à la main, sans URL
               </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 border-t border-ink-100 bg-ink-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-            <button
-              onClick={() => setStep("review")}
-              className="text-sm font-medium text-ink-600 underline decoration-ink-300 underline-offset-2 transition-colors hover:text-ink-900"
-            >
-              Ou saisir directement à la main, sans URL
-            </button>
-            <Link
-              href="/bookmarklet"
-              className="text-sm font-medium text-accent-600 transition-colors hover:text-accent-800"
-            >
-              Site protégé contre le scraping ? Utilise le bookmarklet →
-            </Link>
-          </div>
-        </div>
+              <Link
+                href="/bookmarklet"
+                className="text-sm font-medium text-accent-600 transition-colors hover:text-accent-800"
+              >
+                Site protégé contre le scraping ? Utilise le bookmarklet →
+              </Link>
+            </>
+          }
+        />
       )}
 
       {step === "review" && (
@@ -443,7 +447,20 @@ export default function AddApartmentFlow() {
 
                 <Subsection title="Achat" accent="bg-ink-400">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <NumberField label="Prix" value={form.prix} onChange={(v) => set("prix", v)} suffix="€" hint={extrait("prix") && <ExtractedBadge />} />
+                    <NumberField
+                      label="Prix"
+                      value={form.prix}
+                      onChange={(v) => set("prix", v)}
+                      suffix="€"
+                      hint={
+                        <>
+                          <span className="text-red-500" title="Obligatoire">
+                            *
+                          </span>
+                          {extrait("prix") && <ExtractedBadge />}
+                        </>
+                      }
+                    />
                     <NumberField
                       label="Travaux"
                       value={form.travaux}
