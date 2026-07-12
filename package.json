@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@google/genai": "^2.10.0",
     "@supabase/supabase-js": "^2.110.2",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",

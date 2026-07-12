@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { generateGeminiText, getGeminiApiKey } from "./gemini";
 
 export interface RentEstimationInput {
   ville: string;
@@ -14,18 +14,14 @@ export interface RentEstimationResult {
   justification: string;
 }
 
-let client: GoogleGenAI | null = null;
-function getClient(): GoogleGenAI {
-  if (!client) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "GEMINI_API_KEY manquant : voir .env.local.example pour activer l'estimation de loyer (clé gratuite sur aistudio.google.com/apikey)."
-      );
-    }
-    client = new GoogleGenAI({ apiKey });
+function requireApiKey(): string {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY manquant : voir .env.local.example pour activer l'estimation de loyer (clé gratuite sur aistudio.google.com/apikey)."
+    );
   }
-  return client;
+  return apiKey;
 }
 
 function buildSecteur(input: RentEstimationInput): string {
@@ -60,15 +56,9 @@ Réponds UNIQUEMENT avec un objet JSON strict, sans texte avant ni après, de la
 
 Si tu ne trouves vraiment aucune donnée exploitable pour ce secteur, réponds avec {"loyer_mensuel_eur": null, "justification": "<explication>"}.`;
 
-  const response = await getClient().models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-    },
-  });
+  const text = await generateGeminiText({ apiKey: requireApiKey(), model, prompt, googleSearch: true });
 
-  const parsed = extractJson(response.text ?? "");
+  const parsed = extractJson(text);
 
   return {
     loyer: typeof parsed?.loyer_mensuel_eur === "number" ? parsed.loyer_mensuel_eur : null,

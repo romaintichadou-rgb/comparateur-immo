@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { generateGeminiText, getGeminiApiKey } from "@/lib/gemini";
 import type { AnalyseIA, BlocAnalyse, BlocKey } from "./types";
 
 /**
@@ -13,14 +13,6 @@ import type { AnalyseIA, BlocAnalyse, BlocKey } from "./types";
  * le rate-limit Gemini free tier — plus rapide et moins coûteux.
  */
 
-let client: GoogleGenAI | null = null;
-function getClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  if (!client) client = new GoogleGenAI({ apiKey });
-  return client;
-}
-
 /** Statut de la génération de narration, remonté à l'UI (non stocké). */
 export type NarrationStatus = "ok" | "quota" | "unavailable" | "error";
 
@@ -34,7 +26,7 @@ export async function narrateAll(
   analyse: AnalyseIA,
   localisation?: { quartier: string; ville: string }
 ): Promise<Narrations> {
-  if (!getClient()) return { blocs: {}, synthese: "", status: "unavailable" };
+  if (!getGeminiApiKey()) return { blocs: {}, synthese: "", status: "unavailable" };
 
   const blocsDispo = (Object.values(analyse.blocs) as BlocAnalyse[]).filter(
     (b) => b.disponible && b.faits.length > 0
@@ -98,15 +90,14 @@ RÈGLES ABSOLUES :
 
 /** Génération de texte avec un retry après délai (rate-limit ponctuel). */
 async function generateText(prompt: string): Promise<{ text: string; status: NarrationStatus }> {
-  const ai = getClient();
-  if (!ai) return { text: "", status: "unavailable" };
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return { text: "", status: "unavailable" };
   const model = process.env.GEMINI_ANALYSE_MODEL || process.env.GEMINI_RENT_MODEL || "gemini-2.5-flash";
 
   let status: NarrationStatus = "error";
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await ai.models.generateContent({ model, contents: prompt });
-      const text = (response.text ?? "").trim();
+      const text = (await generateGeminiText({ apiKey, model, prompt })).trim();
       if (text) return { text, status: "ok" };
     } catch (e) {
       // Quota / rate-limit Gemini (429) : cas à signaler discrètement à l'UI.

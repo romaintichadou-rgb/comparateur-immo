@@ -37,9 +37,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ apartment: computeDerived(updated) });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    // Ne jamais renvoyer un message d'erreur brut (SDK Gemini, JSON d'erreur
+    // Google...) tel quel au client : loggé côté serveur pour le debug, mais
+    // seul un message clair et actionnable est montré à l'utilisateur. Le
+    // message "clé manquante" de rentEstimation.ts reste tel quel (déjà
+    // clair et actionnable), tout le reste est uniformisé.
+    console.error("estimate-rent failed:", err);
+    const message =
+      err instanceof Error && err.message.includes("GEMINI_API_KEY manquant")
+        ? err.message
+        : "Estimation du loyer indisponible pour le moment (clé Gemini invalide, quota atteint, ou service momentanément indisponible). Vérifie GEMINI_API_KEY dans .env.local, ou réessaie plus tard.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
