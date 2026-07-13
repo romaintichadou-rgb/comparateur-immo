@@ -9,7 +9,12 @@ import { buildBlocPotentiel } from "./blocs/potentiel";
 import { buildBlocQuartier } from "./blocs/quartier";
 import { buildBlocSimulation } from "./blocs/simulation";
 import { fetchDvf } from "./sources/dvf";
-import { fetchCommodites } from "./sources/osm";
+import { fetchOsmBundle } from "./sources/osm";
+import { fetchLoyerReference } from "./sources/loyers";
+import { fetchDpe } from "./sources/ademe";
+import { fetchGeorisques } from "./sources/georisques";
+import { fetchDelinquance, parentPLM } from "./sources/delinquance";
+import { fetchRevenuMedian, fetchProfilCommune } from "./sources/demographie";
 import { narrateAll, type NarrationStatus } from "./narration";
 import { buildVerdicts, seuilsRendementFromSettings, withScoreGlobal } from "./scoring";
 import { ANALYSE_VERSION, type AnalyseIA } from "./types";
@@ -18,9 +23,11 @@ import { ANALYSE_VERSION, type AnalyseIA } from "./types";
  * Assemble l'Analyse IA complète d'un bien.
  *
  * Étape clé : on (re)géocode via BAN pour obtenir les coordonnées, le code
- * INSEE et surtout l'identifiant BAN (clé de jointure ADEME, non stocké). Puis
- * on construit chaque bloc à partir de données réelles. En Phase 1, seul le
- * bloc Risque est réellement calculé ; les trois autres sont marqués "à venir".
+ * INSEE et surtout l'identifiant BAN (clé de jointure ADEME, non stocké).
+ * Puis TOUTES les sources de données sont interrogées en UNE SEULE vague
+ * parallèle — la latence totale de la collecte est celle de la source la
+ * plus lente, pas la somme. Les blocs sont ensuite des fonctions pures sur
+ * ces données préchargées, et un unique appel LLM rédige les narrations.
  */
 export async function runAnalyse(
   apt: Apartment
@@ -49,28 +56,48 @@ export async function runAnalyse(
     // Géocodage best-effort : on retombe sur les coordonnées déjà stockées.
   }
 
-  // Sources partagées entre blocs : récupérées une seule fois. Les seuils de
-  // rendement (Paramètres) pilotent à la fois la note du bloc "Potentiel
-  // locatif" et le plafond rédhibitoire du score global — même source pour
-  // rester cohérent avec ce qui est affiché.
-  const [dvf, commodites, settings] = await Promise.all([
-    lat != null && lon != null ? fetchDvf({ lat, lon, surface: apt.surface_m2 }) : Promise.resolve(null),
-    lat != null && lon != null ? fetchCommodites(lat, lon) : Promise.resolve(null),
-    getSettings(),
-  ]);
+  const hasCoords = lat != null && lon != null;
+  // La jointure ADEME par identifiant BAN est exacte : sans adresse exacte
+  // saisie, le banId désigne le centroïde du quartier (un autre bâtiment) —
+  // on ne tente alors pas le DPE (voir buildBlocRisque).
+  const adresseExacte = apt.adresse.trim() !== "";
+  const parent = parentPLM(codeInsee);
+
+  const [dvf, osm, settings, loyerRef, dpeData, georisques, delinq, delinqVille, revenu, profilCommune] =
+    await Promise.all([
+      hasCoords ? fetchDvf({ lat: lat as number, lon: lon as number, surface: apt.surface_m2 }) : null,
+      hasCoords ? fetchOsmBundle(lat as number, lon as number) : null,
+      getSettings(),
+      fetchLoyerReference(codeInsee),
+      banId && adresseExacte
+        ? fetchDpe({ banId, surface: apt.surface_m2 })
+        : { records: [], meilleurMatch: null },
+      hasCoords ? fetchGeorisques({ lat: lat as number, lon: lon as number, codeInsee }) : null,
+      fetchDelinquance(codeInsee),
+      parent ? fetchDelinquance(parent) : null,
+      fetchRevenuMedian(codeInsee),
+      fetchProfilCommune(codeInsee),
+    ]);
+
+  // Les seuils de rendement (Paramètres) pilotent à la fois la note du bloc
+  // "Potentiel locatif" et le plafond rédhibitoire du score global — même
+  // source pour rester cohérent avec ce qui est affiché.
   const seuils = seuilsRendementFromSettings(settings);
   const aptComputed = computeDerived(apt);
 
-  // Les blocs sont indépendants : on les construit en parallèle. Le bloc
-  // "simulation" est purement déterministe (pas d'appel réseau) : il n'a pas
-  // besoin de faire partie du Promise.all.
-  const [prix, location, risque, potentiel, quartier] = await Promise.all([
-    buildBlocPrix(apt, dvf, precision),
-    buildBlocLocation(apt, codeInsee, seuils),
-    buildBlocRisque(apt, { lat, lon, codeInsee, banId }),
-    buildBlocPotentiel(apt, dvf, commodites, codeInsee),
-    buildBlocQuartier(codeInsee, { lat, lon }),
-  ]);
+  // Blocs : fonctions pures sur les données préchargées ci-dessus.
+  const prix = buildBlocPrix(apt, dvf, precision);
+  const location = buildBlocLocation(apt, loyerRef, seuils);
+  const risque = buildBlocRisque(apt, dpeData, georisques);
+  const potentiel = buildBlocPotentiel(apt, dvf, osm?.commodites ?? null, delinq, delinqVille);
+  const quartier = buildBlocQuartier({
+    revenu,
+    profilCommune,
+    gare: osm?.gare ?? null,
+    landuse: osm?.landuse ?? null,
+    vieQuartier: osm?.vieQuartier ?? null,
+    geoDisponible: hasCoords,
+  });
   const simulation = buildBlocSimulation(aptComputed, settings);
 
   // Rendement net réel du bien : pilote le plafond rédhibitoire et les verdicts.

@@ -18,11 +18,11 @@ const SRC_DVF: Source = {
   url: "https://app.dvf.etalab.gouv.fr/",
 };
 
-export async function buildBlocPrix(
+export function buildBlocPrix(
   apt: Apartment,
   dvf: DvfData | null,
   precision: PrecisionLocalisation | null
-): Promise<BlocAnalyse> {
+): BlocAnalyse {
   const faits: Fait[] = [];
   const sources: Source[] = [];
   const donneesManquantes: string[] = [];

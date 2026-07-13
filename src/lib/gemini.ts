@@ -49,11 +49,20 @@ export async function generateGeminiText(params: {
   prompt: string;
   /** Active l'outil de recherche Google (grounding) pour cet appel. */
   googleSearch?: boolean;
+  /**
+   * Budget de "thinking" (tokens de raisonnement interne, facturés comme de
+   * l'output). Les modèles 2.5 l'activent par défaut avec un budget
+   * dynamique, ce qui rallonge et renchérit chaque appel : on le fixe
+   * explicitement — 0 pour les tâches de rédaction pure (narration), un
+   * petit budget pour celles qui demandent un calcul (estimation de loyer).
+   */
+  thinkingBudget?: number;
 }): Promise<string> {
-  const { apiKey, model, prompt, googleSearch } = params;
+  const { apiKey, model, prompt, googleSearch, thinkingBudget = 0 } = params;
 
   const body: Record<string, unknown> = {
     contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { thinkingConfig: { thinkingBudget } },
   };
   if (googleSearch) {
     body.tools = [{ google_search: {} }];

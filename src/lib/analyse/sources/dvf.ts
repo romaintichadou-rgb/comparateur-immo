@@ -10,6 +10,8 @@
  * des médianes de prix/m², robustes aux valeurs aberrantes. Aucune estimation.
  */
 
+import { memoAsync } from "./memo";
+
 const BASE = "https://apidf-preprod.cerema.fr/dvf_opendata/geomutations/";
 const RAYON_M = 500;
 const MAX_PAGES = 4; // borne par fenêtre (500 mutations/page)
@@ -44,7 +46,15 @@ interface Feature {
   properties: { valeurfonc?: string; sbati?: string };
 }
 
-export async function fetchDvf(params: {
+export const fetchDvf = memoAsync(
+  fetchDvfRaw,
+  (p) => `${p.lat.toFixed(4)},${p.lon.toFixed(4)},${p.surface ?? ""}`,
+  // Ne cache que si des ventes ont réellement été trouvées : un résultat
+  // vide peut venir d'un échec réseau et doit rester retentable.
+  (r) => r.nbVentesTotal > 0 || r.medianeRecente != null
+);
+
+async function fetchDvfRaw(params: {
   lat: number;
   lon: number;
   surface: number | null;

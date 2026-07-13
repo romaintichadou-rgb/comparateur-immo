@@ -1,6 +1,6 @@
 import type { Apartment } from "@/lib/types";
-import { fetchGeorisques } from "../sources/georisques";
-import { fetchDpe } from "../sources/ademe";
+import type { GeorisquesData } from "../sources/georisques";
+import type { DpeData } from "../sources/ademe";
 import { clampNote } from "../scoring";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } from "../types";
 
@@ -33,24 +33,21 @@ const DPE_PENALITE: Record<string, number> = {
   G: 2, F: 1.5, E: 0.75, D: 0.25, C: 0, B: 0, A: 0,
 };
 
-export async function buildBlocRisque(
+export function buildBlocRisque(
   apt: Apartment,
-  geo: { lat: number | null; lon: number | null; codeInsee: string; banId: string }
-): Promise<BlocAnalyse> {
+  // dpeData n'est renseigné (fetch ADEME dans run.ts) que si l'adresse
+  // exacte est connue : la jointure par identifiant BAN est EXACTE, et sans
+  // adresse le géocodage retombe sur le centroïde du quartier — le DPE
+  // trouvé serait celui d'un AUTRE bâtiment, présenté à tort comme celui du
+  // bien. georisques est null si le bien n'est pas géolocalisé.
+  dpeData: DpeData,
+  gr: GeorisquesData | null
+): BlocAnalyse {
   const faits: Fait[] = [];
   const sources: Source[] = [];
   const penalites: number[] = [];
 
-  // --- ADEME : DPE réel + cohérence + loi climat ---
-  // Jointure ADEME par identifiant BAN = jointure EXACTE : sans adresse exacte
-  // saisie, le géocodage retombe sur le centroïde du quartier/ville, dont le
-  // banId correspond à un immeuble arbitraire — appeler fetchDpe renverrait
-  // alors le DPE réel d'un AUTRE bâtiment, présenté à tort comme celui du bien.
   const adresseExacte = apt.adresse.trim() !== "";
-  const dpeData =
-    geo.banId && adresseExacte
-      ? await fetchDpe({ banId: geo.banId, surface: apt.surface_m2 })
-      : { records: [], meilleurMatch: null };
 
   // Étiquettes de référence : les valeurs officielles ADEME si trouvées, sinon
   // les valeurs saisies (déclaratives) faute de mieux.
@@ -119,8 +116,7 @@ export async function buildBlocRisque(
   }
 
   // --- Géorisques : aléas naturels ---
-  if (geo.lat != null && geo.lon != null) {
-    const gr = await fetchGeorisques({ lat: geo.lat, lon: geo.lon, codeInsee: geo.codeInsee });
+  if (gr) {
     let usedGeorisques = false;
 
     if (gr.argiles) {

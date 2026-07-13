@@ -65,9 +65,24 @@ async function findAppartementResource(annee: number): Promise<string | null> {
   return null;
 }
 
-export async function fetchLoyerReference(codeInsee: string): Promise<LoyerReference | null> {
-  if (!codeInsee) return null;
+// Le CSV fait ~5 Mo pour la France entière : on ne le télécharge et parse
+// qu'UNE fois par process, indexé par code INSEE — les analyses suivantes
+// (autre bien, relance) lisent la table en mémoire. La promesse est mise en
+// cache (et pas seulement le résultat) pour dédupliquer des analyses
+// concurrentes ; elle est invalidée en cas d'échec pour permettre un retry.
+let cachedTable: Promise<{ annee: number; parCommune: Map<string, LoyerReference> } | null> | null = null;
 
+function loadTable(): Promise<{ annee: number; parCommune: Map<string, LoyerReference> } | null> {
+  if (!cachedTable) {
+    cachedTable = doLoadTable().then((table) => {
+      if (!table) cachedTable = null; // échec → pas de cache, retry possible
+      return table;
+    });
+  }
+  return cachedTable;
+}
+
+async function doLoadTable(): Promise<{ annee: number; parCommune: Map<string, LoyerReference> } | null> {
   const resource = await resolveResource();
   if (!resource) return null;
 
@@ -86,24 +101,29 @@ export async function fetchLoyerReference(codeInsee: string): Promise<LoyerRefer
 
   // Colonnes : id_zone;INSEE_C;LIBGEO;EPCI;DEP;REG;loypredm2;lwr.IPm2;upr.IPm2;
   //            TYPPRED;nbobs_com;nbobs_mail;R2_adj  (séparateur ";", décimale ",")
+  const parCommune = new Map<string, LoyerReference>();
   const lines = text.split("\n");
   for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.includes(`;"${codeInsee}";`)) continue; // filtre rapide avant split
-    const cols = line.split(";").map((c) => c.replace(/^"|"$/g, ""));
-    if (cols[1] !== codeInsee) continue;
-
+    const cols = lines[i].split(";").map((c) => c.replace(/^"|"$/g, ""));
+    const insee = cols[1];
+    if (!insee) continue;
     const loyerM2 = num(cols[6]);
-    if (loyerM2 == null) return null;
-    return {
+    if (loyerM2 == null) continue;
+    parCommune.set(insee, {
       loyerM2: round1(loyerM2),
       min: round1(num(cols[7]) ?? loyerM2),
       max: round1(num(cols[8]) ?? loyerM2),
       nbObs: Math.round(num(cols[10]) ?? 0),
       annee: resource.annee,
-    };
+    });
   }
-  return null;
+  return { annee: resource.annee, parCommune };
+}
+
+export async function fetchLoyerReference(codeInsee: string): Promise<LoyerReference | null> {
+  if (!codeInsee) return null;
+  const table = await loadTable();
+  return table?.parCommune.get(codeInsee) ?? null;
 }
 
 async function fetchJson(url: string, timeoutMs = 12000): Promise<{ data?: unknown[] } | null> {

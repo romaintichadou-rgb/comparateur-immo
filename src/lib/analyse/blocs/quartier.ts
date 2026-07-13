@@ -1,5 +1,5 @@
-import { fetchRevenuMedian, fetchProfilCommune } from "../sources/demographie";
-import { fetchGareProche, fetchLanduse, fetchVieQuartier } from "../sources/osm";
+import type { RevenuCommune, ProfilCommune } from "../sources/demographie";
+import type { GareInfo, LanduseInfo, VieQuartierInfo } from "../sources/osm";
 import { BLOC_LABELS, type BlocAnalyse, type Fait, type Source } from "../types";
 
 /**
@@ -29,21 +29,19 @@ const SRC_COMMUNE: Source = {
 };
 const SRC_OSM: Source = { label: "OpenStreetMap", url: "https://www.openstreetmap.org/" };
 
-export async function buildBlocQuartier(
-  codeInsee: string,
-  geo: { lat: number | null; lon: number | null }
-): Promise<BlocAnalyse> {
+export function buildBlocQuartier(data: {
+  revenu: RevenuCommune | null;
+  profilCommune: ProfilCommune | null;
+  gare: GareInfo | null;
+  landuse: LanduseInfo | null;
+  vieQuartier: VieQuartierInfo | null;
+  /** false = bien non géolocalisé : les données OSM n'ont pas pu être interrogées. */
+  geoDisponible: boolean;
+}): BlocAnalyse {
+  const { revenu, profilCommune, gare, landuse, vieQuartier, geoDisponible } = data;
   const faits: Fait[] = [];
   const sources: Source[] = [];
   const donneesManquantes: string[] = [];
-
-  const [revenu, profilCommune, gare, landuse, vieQuartier] = await Promise.all([
-    codeInsee ? fetchRevenuMedian(codeInsee) : Promise.resolve(null),
-    codeInsee ? fetchProfilCommune(codeInsee) : Promise.resolve(null),
-    geo.lat != null && geo.lon != null ? fetchGareProche(geo.lat, geo.lon) : Promise.resolve(null),
-    geo.lat != null && geo.lon != null ? fetchLanduse(geo.lat, geo.lon) : Promise.resolve(null),
-    geo.lat != null && geo.lon != null ? fetchVieQuartier(geo.lat, geo.lon) : Promise.resolve(null),
-  ]);
 
   // --- Standing du secteur : revenu médian ---
   if (revenu) {
@@ -87,7 +85,7 @@ export async function buildBlocQuartier(
       source: SRC_OSM.label,
       gravite: gare.distanceKm <= 2 ? "positif" : gare.distanceKm <= 8 ? "info" : "attention",
     });
-  } else if (geo.lat != null) {
+  } else if (geoDisponible) {
     donneesManquantes.push("gare ferroviaire à proximité");
   }
 
@@ -106,7 +104,7 @@ export async function buildBlocQuartier(
       source: SRC_OSM.label,
       gravite: "info",
     });
-  } else if (geo.lat != null) {
+  } else if (geoDisponible) {
     donneesManquantes.push("occupation du sol (OpenStreetMap)");
   }
 
@@ -167,11 +165,11 @@ export async function buildBlocQuartier(
       source: SRC_OSM.label,
       gravite: vieQuartier.sante > 0 ? "info" : "attention",
     });
-  } else if (geo.lat != null) {
+  } else if (geoDisponible) {
     donneesManquantes.push("vie de quartier, espaces verts et équipements (OpenStreetMap)");
   }
 
-  if (geo.lat == null) {
+  if (!geoDisponible) {
     donneesManquantes.push("accessibilité, caractère et vie de quartier (bien non géolocalisé)");
   }
 

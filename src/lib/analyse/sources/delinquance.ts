@@ -6,6 +6,8 @@
  * Paris/Lyon/Marseille, de comparer l'arrondissement à la moyenne de la ville.
  */
 
+import { memoAsync } from "./memo";
+
 const RID = "44ef4323-1097-48d5-8719-3c544b55d294";
 const BASE = `https://tabular-api.data.gouv.fr/api/resources/${RID}/data/`;
 
@@ -31,7 +33,13 @@ interface Row {
   insee_pop?: number;
 }
 
-export async function fetchDelinquance(codeInsee: string): Promise<DelinquanceData | null> {
+export const fetchDelinquance = memoAsync(
+  fetchDelinquanceRaw,
+  (codeInsee) => codeInsee,
+  (r) => r != null
+);
+
+async function fetchDelinquanceRaw(codeInsee: string): Promise<DelinquanceData | null> {
   if (!codeInsee) return null;
 
   // Tri décroissant par année + page_size borné (l'API plafonne au-delà de

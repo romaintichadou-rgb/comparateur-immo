@@ -1,7 +1,7 @@
 import type { Apartment } from "@/lib/types";
 import type { DvfData } from "../sources/dvf";
 import type { Commodites } from "../sources/osm";
-import { fetchDelinquance, parentPLM } from "../sources/delinquance";
+import type { DelinquanceData } from "../sources/delinquance";
 import { clampNote } from "../scoring";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } from "../types";
 
@@ -32,12 +32,13 @@ const INDIC_CLES = [
   "Violences physiques hors cadre familial",
 ];
 
-export async function buildBlocPotentiel(
+export function buildBlocPotentiel(
   apt: Apartment,
   dvf: DvfData | null,
   commodites: Commodites | null,
-  codeInsee: string
-): Promise<BlocAnalyse> {
+  delinq: DelinquanceData | null,
+  delinqVille: DelinquanceData | null
+): BlocAnalyse {
   const faits: Fait[] = [];
   const sources: Source[] = [];
   const sousNotes: number[] = [];
@@ -76,12 +77,6 @@ export async function buildBlocPotentiel(
   }
 
   // --- Sécurité (SSMSI), comparée à la ville pour Paris/Lyon/Marseille ---
-  const parent = parentPLM(codeInsee);
-  const [delinq, delinqVille] = await Promise.all([
-    fetchDelinquance(codeInsee),
-    parent ? fetchDelinquance(parent) : Promise.resolve(null),
-  ]);
-
   if (delinq) {
     sources.push(SRC_SSMSI);
     const cles = delinq.indicateurs

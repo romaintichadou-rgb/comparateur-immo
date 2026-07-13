@@ -1,4 +1,5 @@
 import { parentPLM } from "./delinquance";
+import { memoAsync } from "./memo";
 
 /**
  * Sources de faits réels : deux jeux de données data.gouv.fr (API tabulaire),
@@ -26,7 +27,13 @@ export interface RevenuCommune {
   medianeDisponible: number; // €/an par unité de consommation
 }
 
-export async function fetchRevenuMedian(codeInsee: string): Promise<RevenuCommune | null> {
+export const fetchRevenuMedian = memoAsync(
+  fetchRevenuMedianRaw,
+  (codeInsee) => codeInsee,
+  (r) => r != null
+);
+
+async function fetchRevenuMedianRaw(codeInsee: string): Promise<RevenuCommune | null> {
   if (!codeInsee) return null;
   const url =
     `https://tabular-api.data.gouv.fr/api/resources/${RID_REVENU}/data/` +
@@ -45,7 +52,13 @@ export interface ProfilCommune {
   typologie: string; // ex. "Grands centres urbains", "Rural autonome peu dense"
 }
 
-export async function fetchProfilCommune(codeInsee: string): Promise<ProfilCommune | null> {
+export const fetchProfilCommune = memoAsync(
+  fetchProfilCommuneRaw,
+  (codeInsee) => codeInsee,
+  (r) => r != null
+);
+
+async function fetchProfilCommuneRaw(codeInsee: string): Promise<ProfilCommune | null> {
   const codeParent = parentPLM(codeInsee) ?? codeInsee;
   if (!codeParent) return null;
   const url = `https://tabular-api.data.gouv.fr/api/resources/${RID_COMMUNE}/data/?code_insee__exact=${encodeURIComponent(codeParent)}`;

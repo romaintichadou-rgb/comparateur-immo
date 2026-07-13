@@ -1,7 +1,7 @@
 import type { Apartment } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
 import { formatPercent } from "@/lib/format";
-import { fetchLoyerReference } from "../sources/loyers";
+import type { LoyerReference } from "../sources/loyers";
 import {
   clampNote,
   rendementNetTone,
@@ -30,15 +30,13 @@ const SRC_LOYERS: Source = {
 // à la Carte des loyers, qui est en HC. Ordre de grandeur usuel, affiché.
 const PROVISION_CHARGES_M2 = 2.5;
 
-export async function buildBlocLocation(
+export function buildBlocLocation(
   apt: Apartment,
-  codeInsee: string,
+  loyerRef: LoyerReference | null,
   seuils: RendementSeuils = SEUILS_RENDEMENT_DEFAUT
-): Promise<BlocAnalyse> {
+): BlocAnalyse {
   const faits: Fait[] = [];
   const sources: Source[] = [];
-
-  const loyerRef = codeInsee ? await fetchLoyerReference(codeInsee) : null;
 
   const derived = computeDerived(apt);
   const rendementNet = derived.rendement_net; // fraction, basé sur le loyer du bien

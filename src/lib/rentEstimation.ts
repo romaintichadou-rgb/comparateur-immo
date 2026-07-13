@@ -56,7 +56,16 @@ Réponds UNIQUEMENT avec un objet JSON strict, sans texte avant ni après, de la
 
 Si tu ne trouves vraiment aucune donnée exploitable pour ce secteur, réponds avec {"loyer_mensuel_eur": null, "justification": "<explication>"}.`;
 
-  const text = await generateGeminiText({ apiKey: requireApiKey(), model, prompt, googleSearch: true });
+  // Petit budget de thinking (pas 0) : l'estimation demande un vrai calcul
+  // (€/m² trouvé × surface + provision de charges) où le raisonnement réduit
+  // nettement les erreurs d'arithmétique, sans exploser la latence.
+  const text = await generateGeminiText({
+    apiKey: requireApiKey(),
+    model,
+    prompt,
+    googleSearch: true,
+    thinkingBudget: 512,
+  });
 
   const parsed = extractJson(text);
 
