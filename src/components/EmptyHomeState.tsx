@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LineChart, LinkIcon } from "lucide-react";
-import { LucideMark } from "@/components/Navbar";
+import { AppMark } from "@/components/Navbar";
 import UrlHeroCard from "@/components/UrlHeroCard";
 
 /**
@@ -30,7 +30,7 @@ export default function EmptyHomeState() {
       <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
         <span className="absolute inset-0 rounded-full bg-accent-100/70 blur-xl" />
         <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg shadow-accent-100 ring-1 ring-ink-200">
-          <LucideMark className="h-9 w-9 text-accent-600" />
+          <AppMark className="h-9 w-9 text-accent-600" />
         </span>
       </div>
       <h1 className="mt-6 font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">

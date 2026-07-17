@@ -1,5 +1,5 @@
 /**
- * Bookmarklet "Importer dans Lucide". S'exécute dans le
+ * Bookmarklet "Importer dans Immoscore". S'exécute dans le
  * navigateur de l'utilisateur, sur une page d'annonce déjà chargée
  * normalement (aucune requête automatisée vers le site source) : il lit les
  * données déjà présentes dans le DOM/JSON embarqué et les transmet à l'app

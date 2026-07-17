@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Link2, Loader2 } from "lucide-react";
-import { LucideMark } from "@/components/Navbar";
+import { AppMark } from "@/components/Navbar";
 
 /**
  * Bloc "Coller l'URL d'une annonce" — dégradé + filigrane de marque, point
@@ -30,7 +30,7 @@ export default function UrlHeroCard({
   return (
     <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm">
       <div className="relative overflow-hidden bg-gradient-to-br from-accent-50 via-white to-white p-6 sm:p-8">
-        <LucideMark className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 text-accent-600 opacity-[0.07]" />
+        <AppMark className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 text-accent-600 opacity-[0.07]" />
         <span className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-accent-100/70 blur-3xl" />
         <div className="relative flex items-start gap-4">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-600 text-white shadow-sm shadow-accent-200">

@@ -140,7 +140,7 @@ interface InitialState {
   banner: Banner;
 }
 
-// Prise en charge du bookmarklet "Importer dans Lucide" : les
+// Prise en charge du bookmarklet "Importer dans Immoscore" : les
 // données lues dans la page (déjà chargée par le navigateur de
 // l'utilisateur, hors de toute détection anti-bot) arrivent en query param
 // au premier rendu — pas besoin d'effect, juste un état initial dérivé.

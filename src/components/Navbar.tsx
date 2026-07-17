@@ -9,8 +9,13 @@ const NAV_LINKS = [
   { href: "/parametres", label: "Profil investisseur", icon: SlidersHorizontal },
 ];
 
-/** Anneau de score de l'app, laissé ouvert — la marque Lucide. */
-export function LucideMark({ className }: { className?: string }) {
+/**
+ * Marque graphique de l'app : anneau de score laissé ouvert (écho du
+ * ScoreGauge). Volontairement non affichée dans la navbar (wordmark seul),
+ * mais réutilisée ailleurs — état vide de la home, filigrane de l'étape URL.
+ * Nom neutre (pas lié au nom de marque) pour survivre à un changement de nom.
+ */
+export function AppMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
       <circle
@@ -41,17 +46,33 @@ export function LucideMark({ className }: { className?: string }) {
   );
 }
 
+/**
+ * Wordmark « Immoscore » : la partie « score » en accent de marque, pour
+ * signer visuellement le produit maintenant que le logo est retiré de la
+ * navbar. Découpe dérivée de APP_NAME, sans coder le nom en dur ici.
+ */
+function Wordmark() {
+  const split = APP_NAME.toLowerCase().indexOf("score");
+  const head = split > 0 ? APP_NAME.slice(0, split) : APP_NAME;
+  const tail = split > 0 ? APP_NAME.slice(split) : "";
+  return (
+    <span className="font-wordmark text-xl font-semibold tracking-tight text-ink-900">
+      {head}
+      {tail && <span className="text-accent-600">{tail}</span>}
+    </span>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-ink-200/80 bg-white">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 text-ink-900">
-          <LucideMark className="h-7 w-7 text-accent-600" />
-          <span className="font-display text-lg italic font-semibold tracking-tight">{APP_NAME}</span>
+    <header className="border-b border-ink-200/70 bg-white/95 backdrop-blur-sm">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+        <Link href="/" className="transition-opacity hover:opacity-80" aria-label={`${APP_NAME} — accueil`}>
+          <Wordmark />
         </Link>
-        <nav className="flex items-center gap-1 text-sm sm:gap-2">
+        <nav className="flex items-center gap-1.5 text-sm sm:gap-2.5">
           {NAV_LINKS.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
             return (
@@ -59,8 +80,10 @@ export default function Navbar() {
                 key={href}
                 href={href}
                 title={label}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors sm:px-3 ${
-                  active ? "bg-accent-50 text-accent-700" : "text-ink-500 hover:bg-ink-100 hover:text-ink-900"
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 font-medium transition-colors sm:px-3 ${
+                  active
+                    ? "bg-accent-50 text-accent-700"
+                    : "text-ink-500 hover:bg-ink-100 hover:text-ink-900"
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -70,7 +93,7 @@ export default function Navbar() {
           })}
           <Link
             href="/appartements/nouveau"
-            className="inline-flex items-center rounded-lg bg-accent-600 px-3.5 py-1.5 font-medium text-white shadow-sm transition-colors hover:bg-accent-700"
+            className="inline-flex items-center rounded-lg bg-accent-600 px-3.5 py-2 font-medium text-white shadow-sm transition-colors hover:bg-accent-700"
           >
             Ajouter un bien
           </Link>

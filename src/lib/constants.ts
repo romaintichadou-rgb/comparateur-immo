@@ -1,1 +1,1 @@
-export const APP_NAME = "Lucide";
+export const APP_NAME = "Immoscore";

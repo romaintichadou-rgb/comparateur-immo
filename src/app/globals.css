@@ -11,6 +11,7 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
   --font-display: var(--font-display);
+  --font-wordmark: var(--font-wordmark);
 
   /* Bruyère — neutre teinté par l'accent, remplace la gamme slate. */
   --color-ink-50: #fafafd;
