@@ -30,10 +30,11 @@ const geistMono = Geist_Mono({
 });
 
 // Wordmark « Immoscore » de la navbar uniquement — géométrique ronde (Outfit).
+// Deux graisses seulement : regular pour "Immo", bold pour "score" (voir Navbar.tsx).
 const outfit = Outfit({
   variable: "--font-wordmark",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -53,7 +54,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-ink-50 text-ink-900">
         <Navbar />
-        <main className="flex-1 overflow-x-hidden">
+        {/* overflow-x-clip (et non -hidden) : empêche le débordement horizontal
+            sans faire de <main> un conteneur de défilement — sinon `position:
+            sticky` des descendants (colonne latérale du formulaire, carte de
+            l'accueil) se calerait sur <main> qui ne défile pas, et ne
+            fonctionnerait jamais. */}
+        <main className="flex-1 overflow-x-clip">
           <RendementDetailProvider>{children}</RendementDetailProvider>
         </main>
       </body>

@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Banknote,
-  Check,
   CheckCircle2,
   Home,
   Info,
@@ -19,6 +18,7 @@ import {
   DEFAULT_HYPOTHESE_GESTION_PCT,
   DPE_GES_VALEURS,
   ETATS_BIEN,
+  isImmeuble,
   PLATEFORMES,
   TYPES_BIEN,
   type ApartmentInput,
@@ -34,6 +34,7 @@ import {
   TextField,
 } from "@/components/form/Fields";
 import UrlHeroCard from "@/components/UrlHeroCard";
+import ProcessingStepsList from "@/components/ProcessingStepsList";
 
 function emptyInput(): ApartmentInput {
   return {
@@ -53,6 +54,7 @@ function emptyInput(): ApartmentInput {
     surface_m2: null,
     nb_pieces: null,
     nb_chambres: null,
+    nb_lots: null,
     etage: "",
     ascenseur: null,
     annee_construction: null,
@@ -63,7 +65,9 @@ function emptyInput(): ApartmentInput {
     frais_notaire_estimes: null,
     travaux: null,
     charges_copro_annuelles: null,
+    charges_justification: "",
     taxe_fonciere: null,
+    taxe_fonciere_justification: "",
     assurance_annuelle: null,
     loyer_retenu: null,
     loyer_justification: "",
@@ -75,6 +79,7 @@ function emptyInput(): ApartmentInput {
     contact_telephone: "",
     contact_email: "",
     champs_manuels: [],
+    champs_estimes_ia: [],
     simulation_inputs: null,
   };
 }
@@ -83,12 +88,17 @@ type Step = "url" | "review" | "processing";
 type Banner = { tone: "info" | "warning" | "success"; text: string } | null;
 
 // Étapes du traitement post-création, jouées en séquence sur l'écran de
-// transition (l'estimation du loyer doit précéder l'analyse : le rendement en
-// dépend). L'ordre du tableau = l'ordre d'exécution.
-type ProcPhase = "creating" | "renting" | "analysing";
+// transition (l'estimation du loyer et des charges doit précéder l'analyse :
+// le rendement en dépend). L'ordre du tableau = l'ordre d'exécution. Loyer et
+// charges restent deux appels Gemini distincts (pas fusionnés en un seul) :
+// exécutés en séquence (pas en parallèle), ils ne créent aucun risque de
+// rate-limit, et rester séparés permet de les réestimer indépendamment
+// depuis la fiche (voir ApartmentDetail.tsx) sans dupliquer un appel combiné.
+type ProcPhase = "creating" | "renting" | "charging" | "analysing";
 const PROC_STEPS: { key: ProcPhase; label: string; detail: string }[] = [
   { key: "creating", label: "Enregistrement du bien", detail: "Géolocalisation (BAN) et sauvegarde de la fiche." },
   { key: "renting", label: "Estimation du loyer de marché", detail: "Loyer de référence du secteur via IA et données publiques." },
+  { key: "charging", label: "Estimation des charges annuelles", detail: "Charges de copropriété (ou d'exploitation) et taxe foncière via IA." },
   { key: "analysing", label: "Analyse IA complète", detail: "Prix (DVF), risques (ADEME, Géorisques), potentiel du quartier." },
 ];
 
@@ -315,6 +325,19 @@ export default function AddApartmentFlow() {
       // non bloquant : le loyer pourra être réestimé depuis la fiche.
     }
 
+    // 2bis) Estimation des charges annuelles (best-effort) — même logique que
+    //    le loyer : appel Gemini séquentiel distinct (voir PROC_STEPS).
+    setProcPhase("charging");
+    try {
+      await fetch("/api/estimate-charges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apartmentId }),
+      });
+    } catch {
+      // non bloquant : les charges pourront être réestimées depuis la fiche.
+    }
+
     // 3) Analyse IA complète (best-effort) — relançable depuis la fiche.
     setProcPhase("analysing");
     try {
@@ -385,7 +408,7 @@ export default function AddApartmentFlow() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
             {/* Colonne principale */}
             <div className="min-w-0 space-y-6">
-              <section className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm sm:p-8">
+              <section className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
                 <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
                   <SectionIcon icon={Home} />
                   Description du bien
@@ -408,7 +431,21 @@ export default function AddApartmentFlow() {
                     onChange={(v) => set("type_bien", v)}
                     options={TYPES_BIEN}
                   />
-                  <NumberField label="Surface" value={form.surface_m2} onChange={(v) => set("surface_m2", v)} suffix="m²" hint={extrait("surface_m2") && <ExtractedBadge />} />
+                  {isImmeuble(form.type_bien) && (
+                    <NumberField
+                      label="Nombre de lots"
+                      value={form.nb_lots}
+                      onChange={(v) => set("nb_lots", v)}
+                      hint={<span className="text-xs font-normal text-ink-400">logements de l&apos;immeuble</span>}
+                    />
+                  )}
+                  <NumberField
+                    label={isImmeuble(form.type_bien) ? "Surface totale" : "Surface"}
+                    value={form.surface_m2}
+                    onChange={(v) => set("surface_m2", v)}
+                    suffix="m²"
+                    hint={extrait("surface_m2") && <ExtractedBadge />}
+                  />
                   <NumberField label="Nb pièces" value={form.nb_pieces} onChange={(v) => set("nb_pieces", v)} hint={extrait("nb_pieces") && <ExtractedBadge />} />
                   <NumberField label="Nb chambres" value={form.nb_chambres} onChange={(v) => set("nb_chambres", v)} hint={extrait("nb_chambres") && <ExtractedBadge />} />
                   <TextField label="Étage" value={form.etage} onChange={(v) => set("etage", v)} hint={extrait("etage") && <ExtractedBadge />} />
@@ -431,7 +468,7 @@ export default function AddApartmentFlow() {
                 <TextAreaField label="Description" value={form.description} onChange={(v) => set("description", v)} />
               </section>
 
-              <section className="space-y-8 rounded-2xl border border-ink-200 bg-white p-6 shadow-sm sm:p-8">
+              <section className="space-y-8 rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
                 <div>
                   <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
                     <SectionIcon icon={Banknote} />
@@ -473,7 +510,11 @@ export default function AddApartmentFlow() {
                 <Subsection title="Charges annuelles" accent="bg-amber-400">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <NumberField
-                      label="Charges copro annuelles (laisser vide = estimées)"
+                      label={
+                        isImmeuble(form.type_bien)
+                          ? "Charges d'exploitation annuelles (laisser vide = estimées)"
+                          : "Charges copro annuelles (laisser vide = estimées)"
+                      }
                       value={form.charges_copro_annuelles}
                       onChange={(v) => set("charges_copro_annuelles", v)}
                       suffix="€/an"
@@ -490,9 +531,13 @@ export default function AddApartmentFlow() {
               </section>
             </div>
 
-            {/* Colonne latérale */}
-            <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-              <div className="rounded-2xl border border-ink-200 bg-white p-5 shadow-sm">
+            {/* Colonne latérale — sticky à partir de lg (2 colonnes) pour que
+                le contact et surtout le CTA "Enregistrer" restent visibles au
+                défilement. `top-20` dégage la hauteur de la navbar sticky
+                (~67px). Sur mobile (1 colonne), la section reste simplement en
+                bas, non figée. */}
+            <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+              <div className="rounded-2xl border border-ink-200 bg-white p-5">
                 <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
                   <SectionIcon icon={User} size="sm" />
                   Contact
@@ -520,7 +565,7 @@ export default function AddApartmentFlow() {
               <button
                 onClick={handleSubmit}
                 disabled={saving}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-5 w-5 animate-spin" />}
                 {saving ? "Enregistrement..." : "Enregistrer"}
@@ -594,8 +639,6 @@ function Subsection({
  * de l'utilisateur : à la fin, redirection automatique vers la fiche du bien.
  */
 function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
-  const currentIndex = PROC_STEPS.findIndex((s) => s.key === procPhase);
-
   return (
     <div className="flex min-h-[calc(100vh-120px)] items-center justify-center px-4 py-10">
       <div className="w-full max-w-lg text-center">
@@ -636,41 +679,9 @@ function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
         </p>
 
         {/* Étapes */}
-        <ol className="mx-auto mt-8 max-w-md space-y-3 text-left">
-          {PROC_STEPS.map((s, i) => {
-            const state = i < currentIndex ? "done" : i === currentIndex ? "active" : "pending";
-            return (
-              <li
-                key={s.key}
-                className={`flex items-start gap-3 rounded-lg border p-3 transition ${
-                  state === "active"
-                    ? "border-accent-200 bg-accent-50/60"
-                    : "border-ink-200 bg-white"
-                }`}
-              >
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
-                  {state === "done" ? (
-                    <Check className="h-5 w-5 text-emerald-500" />
-                  ) : state === "active" ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-accent-600" />
-                  ) : (
-                    <span className="h-2.5 w-2.5 rounded-full bg-ink-300" />
-                  )}
-                </span>
-                <span>
-                  <span
-                    className={`block text-sm font-medium ${
-                      state === "pending" ? "text-ink-400" : "text-ink-800"
-                    }`}
-                  >
-                    {s.label}
-                  </span>
-                  <span className="block text-xs text-ink-400">{s.detail}</span>
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="mt-8">
+          <ProcessingStepsList steps={PROC_STEPS} currentKey={procPhase} />
+        </div>
       </div>
     </div>
   );

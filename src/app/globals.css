@@ -37,7 +37,9 @@
   --color-accent-800: #262052;
   --color-accent-900: #1a1638;
 
-  /* Argile — signal et actions destructives, jamais décoratif. */
+  /* Argile — accent secondaire défini mais non utilisé actuellement dans
+     l'UI. Les actions destructives utilisent `red-*` (Tailwind), pas cette
+     gamme — voir AGENTS.md. */
   --color-signal-50: #f7eee8;
   --color-signal-100: #eedcce;
   --color-signal-300: #d9926e;
@@ -49,6 +51,18 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Trame technique subtile (direction "tech, géométrique/dense") : grille fine
+   qui s'estompe vers les bords, réservée aux fonds décoratifs (hero, écrans
+   vides) — jamais sur du texte ou une zone de lecture dense. */
+.bg-tech-grid {
+  background-image:
+    linear-gradient(to right, var(--color-ink-200) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-ink-200) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 40%, transparent 80%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 40%, transparent 80%);
 }
 
 /* Popup carte "carte de bien" : image plein cadre, coins arrondis, sans le

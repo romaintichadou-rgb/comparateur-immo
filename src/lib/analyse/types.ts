@@ -57,6 +57,10 @@ export interface Fait {
   perimetre?: string; // base de comparaison (ex. "rayon 500 m", "arrondissement")
   source: string; // label de la source (doit correspondre à un Source.label)
   gravite?: FaitGravite;
+  // true si `value` vient d'une estimation IA (recherche web + Gemini), pas
+  // d'une donnée vérifiée — affiche le badge "Estimation IA" dans FaitRow
+  // (voir buildBlocLocation pour le loyer retenu).
+  estimeParIA?: boolean;
 }
 
 /** Métrique mise en avant sous forme de carte (ex. rendement brut / net). */

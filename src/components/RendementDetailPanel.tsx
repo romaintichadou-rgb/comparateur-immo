@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import { rendementNetTone, type RendementSeuils, type RendementTone } from "@/lib/analyse/scoring";
+import { isAiEstimated } from "@/lib/estimates";
+import { AiEstimatedBadge } from "@/components/form/Fields";
 
 // Doit rester synchronisé avec les classes `duration-300` ci-dessous
 // (Tailwind ne supporte pas les classes générées dynamiquement).
@@ -180,9 +182,21 @@ export default function RendementDetailPanel({
                     Revenu net annuel
                   </h3>
                   <ul className="divide-y divide-ink-100 text-sm">
-                    <Row label="Loyer annuel" value={loyerAnnuel} />
-                    <Row label="Charges copro annuelles" value={-chargesCopro} />
-                    <Row label="Taxe foncière" value={-taxeFonciere} />
+                    <Row
+                      label="Loyer annuel"
+                      value={loyerAnnuel}
+                      badge={isAiEstimated(apt, "loyer_retenu") && <AiEstimatedBadge />}
+                    />
+                    <Row
+                      label="Charges copro annuelles"
+                      value={-chargesCopro}
+                      badge={isAiEstimated(apt, "charges_copro_annuelles") && <AiEstimatedBadge />}
+                    />
+                    <Row
+                      label="Taxe foncière"
+                      value={-taxeFonciere}
+                      badge={isAiEstimated(apt, "taxe_fonciere") && <AiEstimatedBadge />}
+                    />
                     <Row label="Assurance" value={-assurance} />
                     <Row
                       label={`Frais de gestion (${apt.hypothese_gestion_pct} % du loyer)`}
@@ -228,15 +242,16 @@ function ResultTile({
   );
 }
 
-function Row({ label, value }: { label: string; value: number }) {
+function Row({ label, value, badge }: { label: string; value: number; badge?: ReactNode }) {
   const negative = value < 0;
   return (
     <li className="flex items-center justify-between gap-3 py-1.5">
-      <span className="text-ink-600">
+      <span className="flex items-center gap-1.5 text-ink-600">
         <span className="mr-1.5 inline-block w-3 text-center font-semibold text-ink-400">
           {negative ? "−" : "+"}
         </span>
         {label}
+        {badge}
       </span>
       <span className="shrink-0 font-medium text-ink-800">{formatEuros(Math.abs(value))}</span>
     </li>

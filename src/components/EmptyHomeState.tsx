@@ -3,9 +3,25 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LineChart, LinkIcon } from "lucide-react";
 import { AppMark } from "@/components/Navbar";
 import UrlHeroCard from "@/components/UrlHeroCard";
+
+// Le parcours réel de bout en bout — la numérotation encode une vraie
+// séquence (coller → calculer → comparer), pas une décoration.
+const STEPS = [
+  {
+    title: "Colle une annonce",
+    desc: "Une URL Leboncoin, SeLoger, PAP ou Orpi — ou saisis les infos à la main.",
+  },
+  {
+    title: "L'IA fait le calcul",
+    desc: "Loyer estimé, rendement, quartier et risques analysés automatiquement.",
+  },
+  {
+    title: "Compare et décide",
+    desc: "Un score global par bien, côte à côte, pour trancher sans tableur.",
+  },
+];
 
 /**
  * Écran d'accueil affiché uniquement quand aucun bien n'est encore suivi
@@ -26,10 +42,16 @@ export default function EmptyHomeState() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-20">
+    <div className="relative mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-20">
+      {/* Grille "tech" purement décorative, en fond : le masque radial de
+          .bg-tech-grid s'applique à tout l'élément et à ses enfants — la poser
+          en calque absolu isolé évite qu'elle n'estompe le contenu (titre,
+          carte URL, étapes) vers le bas. */}
+      <div className="bg-tech-grid pointer-events-none absolute inset-x-0 top-0 h-72" aria-hidden="true" />
+      <div className="relative">
       <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
         <span className="absolute inset-0 rounded-full bg-accent-100/70 blur-xl" />
-        <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg shadow-accent-100 ring-1 ring-ink-200">
+        <span className="relative flex h-16 w-16 items-center justify-center rounded-md border border-ink-200 bg-white shadow-lg shadow-accent-100">
           <AppMark className="h-9 w-9 text-accent-600" />
         </span>
       </div>
@@ -65,15 +87,20 @@ export default function EmptyHomeState() {
         />
       </div>
 
-      <div className="mt-8 flex flex-col items-center gap-2 text-xs text-ink-400 sm:flex-row sm:justify-center sm:gap-6">
-        <span className="flex items-center gap-1.5">
-          <LinkIcon className="h-3.5 w-3.5" />
-          Champs pré-remplis, à vérifier avant d&apos;enregistrer
-        </span>
-        <span className="flex items-center gap-1.5">
-          <LineChart className="h-3.5 w-3.5" />
-          Rendement, risques et potentiel du quartier calculés automatiquement
-        </span>
+      <div className="mt-10 grid gap-3 text-left sm:grid-cols-3 sm:gap-4">
+        {STEPS.map((step, i) => (
+          <div
+            key={step.title}
+            className="rounded-lg border border-ink-200 bg-white/70 p-4"
+          >
+            <span className="font-mono text-xs font-semibold tracking-wide text-accent-600">
+              0{i + 1}
+            </span>
+            <h3 className="mt-2 text-sm font-semibold text-ink-900">{step.title}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-ink-500">{step.desc}</p>
+          </div>
+        ))}
+      </div>
       </div>
     </div>
   );

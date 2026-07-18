@@ -14,8 +14,8 @@ import {
   type AnneeSimulation,
   type SimulationInputs,
 } from "@/lib/simulation";
-import { NumberField, SelectField } from "@/components/form/Fields";
-import { RENDEMENT_HOVER_RING } from "@/lib/analyse/scoring";
+import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
+import { isAiEstimated } from "@/lib/estimates";
 
 /**
  * Onglet "Simulation financière" : cash-flow mensuel réel en LMNP réel,
@@ -142,7 +142,7 @@ export default function SimulationFinanciere({
 
   if (!result) {
     return (
-      <div className="rounded-xl border border-ink-200 bg-white p-10 text-center shadow-sm">
+      <div className="rounded-xl border border-ink-200 bg-white p-10 text-center">
         <Calculator className="mx-auto h-8 w-8 text-ink-300" />
         <h2 className="mt-3 text-lg font-semibold text-ink-900">Simulation financière</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
@@ -187,6 +187,7 @@ export default function SimulationFinanciere({
           sub="après impôt LMNP"
           value={`${signe(cfAn1)} €/mois`}
           tone={cashflowTone(cfAn1, cashflowSeuils)}
+          emphase
         />
         <ResultCard
           label={`Cash-flow mensuel moyen — ${inputs.dureeAnnees} ans`}
@@ -199,7 +200,7 @@ export default function SimulationFinanciere({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Simulateur de crédit */}
-        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
             <Landmark className="h-4 w-4 text-ink-400" />
             Crédit immobilier
@@ -252,13 +253,18 @@ export default function SimulationFinanciere({
         </section>
 
         {/* Détail mensuel année 1 — la "participation mensuelle" */}
-        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
             <Banknote className="h-4 w-4 text-ink-400" />
             Détail mensuel — année 1
           </h3>
           <ul className="divide-y divide-ink-100 text-sm">
-            <WaterfallRow label="Loyer (CC)" value={apartment.loyer_retenu ?? 0} plus />
+            <WaterfallRow
+              label="Loyer (CC)"
+              value={apartment.loyer_retenu ?? 0}
+              plus
+              badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
+            />
             <WaterfallRow label="Mensualité de crédit (assurance incl.)" value={-result.mensualiteTotale} />
             <WaterfallRow
               label="Charges (copro, taxe foncière, assurance, gestion)"
@@ -279,7 +285,7 @@ export default function SimulationFinanciere({
       </div>
 
       {/* Fiscalité LMNP */}
-      <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+      <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <ReceiptText className="h-4 w-4 text-ink-400" />
           Fiscalité — LMNP au réel
@@ -318,7 +324,7 @@ export default function SimulationFinanciere({
       </section>
 
       {/* Tableau année par année */}
-      <section className="rounded-xl border border-ink-200 bg-white shadow-sm">
+      <section className="rounded-xl border border-ink-200 bg-white">
         <h3 className="flex items-center gap-2 p-5 pb-3 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Calculator className="h-4 w-4 text-ink-400" />
           Cash-flow année par année
@@ -396,7 +402,7 @@ export default function SimulationFinanciere({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         {/* Financement du projet */}
-        <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-4 shadow-sm">
+        <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
             <PieChart className="h-4 w-4 text-ink-400" />
             Financement du projet
@@ -408,7 +414,7 @@ export default function SimulationFinanciere({
         </section>
 
         {/* Évolution du patrimoine */}
-        <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+        <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
             <TrendingUp className="h-4 w-4 text-ink-400" />
             Évolution du patrimoine
@@ -703,32 +709,56 @@ export function ResultCard({
   emphase?: boolean;
   onClick?: () => void;
 }) {
-  const tones = {
-    neutral: "bg-ink-50 text-ink-900",
-    positif: "bg-emerald-50 text-emerald-800",
-    attention: "bg-amber-50 text-amber-800",
-    alerte: "bg-red-50 text-red-700",
-  } as const;
-  const labelTones = {
-    neutral: "text-ink-500",
-    positif: "text-emerald-700",
-    attention: "text-amber-700",
+  // Couleur de la valeur = le ton, partout (contexte comme verdict). Tons
+  // profonds alignés sur le panneau de détail du rendement (RendementDetailPanel)
+  // pour rester cohérents dans toute l'app.
+  const valueTones = {
+    neutral: "text-ink-900",
+    positif: "text-emerald-800",
+    attention: "text-amber-800",
     alerte: "text-red-700",
   } as const;
-  const rings = {
-    neutral: "ring-ink-200",
-    positif: "ring-emerald-200",
-    attention: "ring-amber-200",
-    alerte: "ring-red-200",
+
+  // Conteneur : tuiles de contexte en fond transparent (seul le contour les
+  // délimite sur le fond de page) ; la tuile-verdict (emphase) prend le ton en
+  // aplat franc + bordure assortie. Aucun ombrage sur ces tuiles.
+  const emphaseBg = {
+    neutral: "border-ink-300 bg-ink-100/70",
+    positif: "border-emerald-300 bg-emerald-100/70",
+    attention: "border-amber-300 bg-amber-100/70",
+    alerte: "border-red-300 bg-red-100/70",
   } as const;
+  const base = emphase ? emphaseBg[tone] : "border-ink-200 bg-transparent";
+
+  // Survol (uniquement si la tuile est cliquable) : on intensifie fond +
+  // bordure pour signaler l'interactivité, sans ombre.
+  // Tuile-verdict (fond déjà teinté) : le survol densifie juste l'aplat
+  // (-100/70 → -100 plein) et fonce la bordure d'un cran. Pas de saut à -200.
+  const hoverEmphase = {
+    neutral: "hover:border-ink-400 hover:bg-ink-100",
+    positif: "hover:border-emerald-400 hover:bg-emerald-100",
+    attention: "hover:border-amber-400 hover:bg-amber-100",
+    alerte: "hover:border-red-400 hover:bg-red-100",
+  } as const;
+  // Tuile de contexte (fond transparent) : un fond neutre (ink) au survol se
+  // confondrait avec le fond de page. On « fait surface » en blanc pour le ton
+  // neutre ; les tons colorés reçoivent un voile -50 léger.
+  const hoverContext = {
+    neutral: "hover:border-ink-300 hover:bg-white",
+    positif: "hover:border-emerald-300 hover:bg-emerald-50",
+    attention: "hover:border-amber-300 hover:bg-amber-50",
+    alerte: "hover:border-red-300 hover:bg-red-50",
+  } as const;
+  const hover = emphase ? hoverEmphase[tone] : hoverContext[tone];
+
   const content = (
     <>
-      <p className={`text-xs font-medium ${labelTones[tone]}`}>{label}</p>
-      <p className="mt-1 font-mono text-2xl font-semibold">{value}</p>
-      <p className={`mt-0.5 text-[11px] ${labelTones[tone]} opacity-80`}>{sub}</p>
+      <p className="text-xs font-medium text-ink-500">{label}</p>
+      <p className={`mt-1 font-mono text-2xl font-semibold ${valueTones[tone]}`}>{value}</p>
+      <p className="mt-0.5 text-[11px] text-ink-400">{sub}</p>
     </>
   );
-  const className = `rounded-xl p-5 ${tones[tone]} ${emphase ? `ring-2 ring-inset ${rings[tone]}` : ""}`;
+  const className = `rounded-xl border-2 p-5 ${base}`;
 
   if (onClick) {
     return (
@@ -736,7 +766,7 @@ export function ResultCard({
         type="button"
         onClick={onClick}
         title="Voir le détail du calcul"
-        className={`w-full text-left transition ${RENDEMENT_HOVER_RING[tone]} ${className}`}
+        className={`w-full cursor-pointer text-left transition-colors ${className} ${hover}`}
       >
         {content}
       </button>
@@ -746,12 +776,23 @@ export function ResultCard({
   return <div className={className}>{content}</div>;
 }
 
-function WaterfallRow({ label, value, plus = false }: { label: string; value: number; plus?: boolean }) {
+function WaterfallRow({
+  label,
+  value,
+  plus = false,
+  badge,
+}: {
+  label: string;
+  value: number;
+  plus?: boolean;
+  badge?: ReactNode;
+}) {
   return (
     <li className="flex items-center justify-between py-2">
-      <span className="text-ink-600">
+      <span className="flex items-center gap-1.5 text-ink-600">
         <span className="mr-1.5 inline-block w-3 text-center font-semibold text-ink-400">{plus ? "+" : "−"}</span>
         {label}
+        {badge}
       </span>
       <span className="font-medium text-ink-800">{euros(Math.abs(value))} €</span>
     </li>

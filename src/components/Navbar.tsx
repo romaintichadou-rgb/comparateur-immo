@@ -2,12 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SlidersHorizontal } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
 
-const NAV_LINKS = [
-  { href: "/parametres", label: "Profil investisseur", icon: SlidersHorizontal },
-];
+const NAV_LINKS = [{ href: "/parametres", label: "Profil investisseur" }];
 
 /**
  * Marque graphique de l'app : anneau de score laissé ouvert (écho du
@@ -47,18 +44,19 @@ export function AppMark({ className }: { className?: string }) {
 }
 
 /**
- * Wordmark « Immoscore » : la partie « score » en accent de marque, pour
- * signer visuellement le produit maintenant que le logo est retiré de la
- * navbar. Découpe dérivée de APP_NAME, sans coder le nom en dur ici.
+ * Wordmark « Immoscore » : "Immo" en regular, "score" en bold + accent de
+ * marque — les deux signaux (graisse et couleur) cumulés pour signer
+ * visuellement le produit maintenant que le logo est retiré de la navbar.
+ * Découpe dérivée de APP_NAME, sans coder le nom en dur ici.
  */
 function Wordmark() {
   const split = APP_NAME.toLowerCase().indexOf("score");
   const head = split > 0 ? APP_NAME.slice(0, split) : APP_NAME;
   const tail = split > 0 ? APP_NAME.slice(split) : "";
   return (
-    <span className="font-wordmark text-xl font-semibold tracking-tight text-ink-900">
-      {head}
-      {tail && <span className="text-accent-600">{tail}</span>}
+    <span className="font-wordmark text-xl tracking-tight text-ink-900">
+      <span className="font-normal">{head}</span>
+      {tail && <span className="font-bold text-accent-600">{tail}</span>}
     </span>
   );
 }
@@ -67,33 +65,37 @@ export default function Navbar() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-ink-200/70 bg-white/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-40 border-b border-ink-200/70 bg-white/80 backdrop-blur-md">
+      <div className="h-[3px] w-full bg-gradient-to-r from-accent-600 via-accent-400 to-accent-600" />
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="transition-opacity hover:opacity-80" aria-label={`${APP_NAME} — accueil`}>
           <Wordmark />
         </Link>
-        <nav className="flex items-center gap-1.5 text-sm sm:gap-2.5">
-          {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+        <nav className="flex items-center gap-1 text-sm sm:gap-2">
+          {NAV_LINKS.map(({ href, label }) => {
             const active = pathname === href;
             return (
               <Link
                 key={href}
                 href={href}
-                title={label}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 font-medium transition-colors sm:px-3 ${
+                aria-current={active ? "page" : undefined}
+                className={`relative rounded-md px-3 py-2 font-medium transition-colors ${
                   active
-                    ? "bg-accent-50 text-accent-700"
-                    : "text-ink-500 hover:bg-ink-100 hover:text-ink-900"
+                    ? "text-accent-700"
+                    : "text-ink-500 hover:bg-accent-50 hover:text-accent-700"
                 }`}
               >
-                <Icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{label}</span>
+                {label}
+                {active && (
+                  <span className="absolute inset-x-3 -bottom-[7px] hidden h-0.5 rounded-full bg-accent-600 sm:block" />
+                )}
               </Link>
             );
           })}
+          <span className="mx-1 hidden h-5 w-px bg-ink-200 sm:block" aria-hidden="true" />
           <Link
             href="/appartements/nouveau"
-            className="inline-flex items-center rounded-lg bg-accent-600 px-3.5 py-2 font-medium text-white shadow-sm transition-colors hover:bg-accent-700"
+            className="inline-flex items-center rounded-md bg-accent-600 px-3.5 py-2 font-medium text-white ring-1 ring-inset ring-accent-700/20 transition-colors hover:bg-accent-700"
           >
             Ajouter un bien
           </Link>

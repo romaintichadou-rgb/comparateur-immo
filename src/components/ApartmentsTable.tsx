@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
-import { formatApartmentTitle, formatEuros, formatPercent, formatSurface } from "@/lib/format";
-import { RENDEMENT_HOVER_RING, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
-import { formatNote, noteHex } from "@/components/AnalyseIA";
+import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
+import { rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import { formatNote } from "@/components/AnalyseIA";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
+import { useDeleteApartment } from "@/components/useDeleteApartment";
 
 const RENDEMENT_TEXT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
   neutral: "text-ink-700",
@@ -16,19 +17,30 @@ const RENDEMENT_TEXT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> 
   alerte: "text-red-600",
 };
 
+// Dégradé du panneau verdict : transparent au niveau du prix, pleinement
+// teinté au niveau du rendement — même logique de tons que RENDEMENT_TEXT_CLASS.
+const RENDEMENT_GRADIENT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
+  neutral: "",
+  positif: "bg-gradient-to-r from-transparent to-emerald-50",
+  attention: "bg-gradient-to-r from-transparent to-amber-50",
+  alerte: "bg-gradient-to-r from-transparent to-red-50",
+};
+
+// Score IA : mêmes seuils que noteHex/noteColorClasses (AnalyseIA.tsx), mais
+// exprimés en classes Tailwind pour piloter fond + rail + anneau d'un bloc.
+function scoreToneClasses(score: number | null) {
+  if (score == null) return { bg: "bg-ink-50", rail: "border-ink-200", text: "text-ink-400", stroke: "stroke-ink-300" };
+  if (score >= 8) return { bg: "bg-emerald-50", rail: "border-emerald-400", text: "text-emerald-700", stroke: "stroke-emerald-500" };
+  if (score >= 5) return { bg: "bg-amber-50", rail: "border-amber-400", text: "text-amber-700", stroke: "stroke-amber-500" };
+  return { bg: "bg-red-50", rail: "border-red-400", text: "text-red-700", stroke: "stroke-red-500" };
+}
+
 export type SortKey =
   | "rendement_net"
   | "rendement_brut"
   | "prix"
   | "prix_m2"
   | "surface_m2";
-
-export const STATUT_STYLES: Record<string, string> = {
-  "à visiter": "bg-blue-50 text-blue-700",
-  visité: "bg-violet-50 text-violet-700",
-  abandonné: "bg-ink-100 text-ink-500",
-  acheté: "bg-emerald-50 text-emerald-700",
-};
 
 /** Même logique de tri utilisée par la table (desktop) et la liste de cartes
  * (mobile), pour ne jamais les laisser diverger. */
@@ -56,151 +68,157 @@ export default function ApartmentsTable({
   seuilsRendement: RendementSeuils;
 }) {
   const router = useRouter();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
   const { open: openRendementDetail } = useRendementDetail();
+  const { requestDelete, deletingId, dialog } = useDeleteApartment(() => router.refresh());
 
   const sorted = sortApartments(apartments, sortKey);
 
-  async function handleDelete(e: React.MouseEvent, apt: ApartmentWithComputed) {
-    e.preventDefault();
-    e.stopPropagation();
-    const label = formatApartmentTitle(apt);
-    if (!window.confirm(`Supprimer définitivement "${label}" ? Cette action est irréversible.`)) {
-      return;
-    }
-    setDeletingId(apt.id);
-    try {
-      const res = await fetch(`/api/apartments/${apt.id}`, { method: "DELETE" });
-      if (res.ok) {
-        router.refresh();
-      } else {
-        setDeletingId(null);
-      }
-    } catch {
-      setDeletingId(null);
-    }
+  // Retour visuel immédiat au clic : la navigation vers la fiche déclenche un
+  // aller-retour serveur (données Supabase). Sans feedback, la ligne semblait
+  // inerte le temps du chargement. On marque la ligne cliquée « en cours » dès
+  // le clic, et startTransition garde l'état actif jusqu'à l'arrivée de la page.
+  function goToApartment(id: string) {
+    setNavigatingId(id);
+    startTransition(() => router.push(`/appartements/${id}`));
   }
 
   return (
-    <div className="hidden overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-sm sm:block">
-      <table className="w-full min-w-[900px] text-sm">
+    <>
+    <div className="hidden overflow-x-auto rounded-lg border border-ink-200 bg-white sm:block">
+      <table className="w-full min-w-[720px] text-sm">
         <thead>
-          <tr className="border-b border-ink-200 bg-ink-50/80 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
-            <th className="px-4 py-3.5">Bien</th>
-            <th className="px-4 py-3.5">Secteur</th>
-            <th className="px-4 py-3.5 text-right">Prix</th>
-            <th className="px-4 py-3.5 text-right">Surface</th>
-            <th className="px-4 py-3.5 text-right">Loyer estimé</th>
-            <th className="px-4 py-3.5 text-right">Rendement net</th>
-            <th className="px-4 py-3.5 text-center">Score IA</th>
-            <th className="px-4 py-3.5">Statut</th>
-            <th className="px-2 py-3.5" aria-label="Actions" />
+          <tr className="border-b border-ink-200 bg-ink-50/80 font-mono text-[11px] font-medium uppercase tracking-wide text-ink-500">
+            <th className="px-5 py-3 text-left">Bien</th>
+            <th className="w-[150px] px-5 py-3 text-center">Prix</th>
+            <th className="w-[170px] px-5 py-3 text-center">Rendement net</th>
+            <th className="w-[160px] px-5 py-3 text-center">Score IA</th>
           </tr>
         </thead>
         <tbody>
-          {sorted.map((apt) => (
-            <tr
-              key={apt.id}
-              onClick={() => router.push(`/appartements/${apt.id}`)}
-              className={`group cursor-pointer border-b border-ink-100 transition-colors last:border-0 hover:bg-accent-50/40 ${
-                deletingId === apt.id ? "opacity-40" : ""
-              }`}
-            >
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-ink-100 ring-1 ring-inset ring-ink-900/5">
-                    {apt.photo_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={apt.photo_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-xs text-ink-400">
-                        —
-                      </div>
-                    )}
+          {sorted.map((apt) => {
+            const tone = rendementNetTone(apt.rendement_net, seuilsRendement);
+            const score = apt.analyse_ia?.score_global ?? null;
+            const scoreTone = scoreToneClasses(score);
+            return (
+              <tr
+                key={apt.id}
+                onClick={() => goToApartment(apt.id)}
+                className={`group cursor-pointer border-b border-ink-100 transition-colors last:border-0 hover:bg-accent-50/40 ${
+                  navigatingId === apt.id ? "bg-accent-50/60" : ""
+                } ${deletingId === apt.id ? "opacity-40" : ""}`}
+              >
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-ink-100 ring-1 ring-inset ring-ink-900/5">
+                      {apt.photo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={apt.photo_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-ink-400">
+                          —
+                        </div>
+                      )}
+                      {navigatingId === apt.id && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                          <Loader2 className="h-5 w-5 animate-spin text-accent-600" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="max-w-[220px]">
+                      <p className="truncate font-medium text-ink-900">
+                        {formatApartmentTitle(apt)}
+                      </p>
+                      <p className="truncate text-xs text-ink-500">
+                        {[apt.quartier, apt.ville].filter(Boolean).join(", ") || apt.adresse || apt.plateforme}
+                      </p>
+                    </div>
                   </div>
-                  <div className="max-w-[220px]">
-                    <p className="truncate font-medium text-ink-900">
-                      {formatApartmentTitle(apt)}
-                    </p>
-                    {apt.adresse ? (
-                      <p className="truncate text-xs text-ink-500">{apt.adresse}</p>
-                    ) : (
-                      <p className="truncate text-xs text-ink-400">{apt.plateforme}</p>
-                    )}
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-ink-600">
-                {[apt.quartier, apt.ville].filter(Boolean).join(", ") || "—"}
-              </td>
-              <td className="px-4 py-3 text-right">
-                <p className="font-mono font-medium text-ink-900">{formatEuros(apt.prix)}</p>
-                {apt.prix_m2 != null && (
-                  <p className="font-mono text-xs text-ink-400">{formatEuros(apt.prix_m2)}/m²</p>
-                )}
-              </td>
-              <td className="px-4 py-3 text-right font-mono">{formatSurface(apt.surface_m2)}</td>
-              <td className="px-4 py-3 text-right font-mono">{formatEuros(apt.loyer_retenu)}</td>
-              <td className="px-4 py-3 text-right">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openRendementDetail(apt, seuilsRendement);
-                  }}
-                  title="Voir le détail du calcul"
-                  className={`-mx-1.5 -my-0.5 rounded-md px-1.5 py-0.5 font-mono font-semibold transition-colors ${RENDEMENT_HOVER_RING[rendementNetTone(apt.rendement_net, seuilsRendement)]} ${RENDEMENT_TEXT_CLASS[rendementNetTone(apt.rendement_net, seuilsRendement)]}`}
-                >
-                  {formatPercent(apt.rendement_net)}
-                </button>
-              </td>
-              <td className="px-4 py-3 text-center">
-                <ScoreBadge score={apt.analyse_ia?.score_global ?? null} />
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
-                    STATUT_STYLES[apt.statut] ?? "bg-ink-100 text-ink-600"
-                  }`}
-                >
-                  {apt.statut}
-                </span>
-              </td>
-              <td className="px-2 py-3 text-right">
-                <button
-                  onClick={(e) => handleDelete(e, apt)}
-                  disabled={deletingId === apt.id}
-                  title="Supprimer ce bien"
-                  aria-label="Supprimer ce bien"
-                  className="rounded-md p-1.5 text-ink-300 opacity-0 transition-colors hover:bg-signal-50 hover:text-signal-600 focus:opacity-100 disabled:opacity-50 group-hover:opacity-100"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-5 py-3 text-center leading-tight">
+                  <p className="font-mono text-base font-semibold text-ink-900">{formatEuros(apt.prix)}</p>
+                  {apt.prix_m2 != null && (
+                    <p className="mt-0.5 font-mono text-xs text-ink-400">{formatEuros(apt.prix_m2)}/m²</p>
+                  )}
+                </td>
+                <td className={`px-5 py-3 text-center ${RENDEMENT_GRADIENT_CLASS[tone]}`}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openRendementDetail(apt, seuilsRendement);
+                    }}
+                    title="Voir le détail du calcul"
+                    className={`font-mono text-base font-bold transition hover:underline hover:decoration-dotted hover:underline-offset-2 ${RENDEMENT_TEXT_CLASS[tone]}`}
+                  >
+                    {formatPercent(apt.rendement_net)}
+                  </button>
+                </td>
+                {/* Cellule verdict : fond teinté selon le score, rail de couleur
+                    sur l'extrémité droite (border-r), et la suppression logée
+                    ici même — plus de colonne blanche dédiée à droite. */}
+                <td className={`relative border-r-[3px] py-3 pl-5 pr-4 ${scoreTone.bg} ${scoreTone.rail}`}>
+                  <ScoreRing score={score} />
+                  <button
+                    onClick={(e) => requestDelete(e, apt)}
+                    disabled={deletingId === apt.id}
+                    title="Supprimer ce bien"
+                    aria-label="Supprimer ce bien"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-ink-400 opacity-0 transition-colors hover:bg-white/70 hover:text-red-600 focus:opacity-100 disabled:opacity-50 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
+    {dialog}
+    </>
   );
 }
 
-export function ScoreBadge({ score }: { score: number | null }) {
-  if (score == null) {
-    return <span className="text-xs text-ink-400" title="Analyse IA non générée">—</span>;
-  }
-  const color = noteHex(score);
+const RING_RADIUS = 17;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+export function ScoreRing({ score }: { score: number | null }) {
+  const tone = scoreToneClasses(score);
+  const filled = score == null ? 0 : Math.max(0, Math.min(1, score / 10));
+  const offset = RING_CIRCUMFERENCE * (1 - filled);
   return (
-    <span
-      className="inline-flex items-center justify-center rounded-full px-2 py-1 font-mono text-xs font-semibold"
-      style={{ backgroundColor: `${color}1a`, color }}
-      title="Score global — Analyse IA"
+    <svg
+      width="40"
+      height="40"
+      viewBox="0 0 40 40"
+      className="mx-auto"
+      role="img"
+      aria-label={score == null ? "Analyse IA non générée" : `Score global ${formatNote(score)} sur 10`}
     >
-      {formatNote(score)}/10
-    </span>
+      <circle cx="20" cy="20" r={RING_RADIUS} fill="none" strokeWidth="4" className="stroke-ink-200" />
+      {score != null && (
+        <circle
+          cx="20"
+          cy="20"
+          r={RING_RADIUS}
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={offset}
+          transform="rotate(-90 20 20)"
+          className={tone.stroke}
+        />
+      )}
+      <text x="20" y="24" textAnchor="middle" className={`font-mono text-[11px] font-bold ${tone.text}`}>
+        {score == null ? "—" : formatNote(score)}
+      </text>
+    </svg>
   );
 }

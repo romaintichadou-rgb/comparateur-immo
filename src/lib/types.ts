@@ -37,8 +37,22 @@ export const TYPES_BIEN = [
   "Duplex",
   "Loft",
   "Maison",
+  "Immeuble",
   "Autre",
 ] as const;
+
+/**
+ * Un immeuble (de rapport) casse les hypothèses "un seul logement" du reste
+ * du modèle : le loyer est le TOTAL de tous les lots (pas surface × €/m² d'un
+ * logement), il n'y a pas de copropriété (on possède tout l'immeuble), et sa
+ * vente en bloc se compare mal aux ventes d'appartements au détail. Ce
+ * prédicat centralise le test pour que loyer estimé, charges, assurance et
+ * analyse IA s'adaptent au même endroit. Comparaison insensible à la casse et
+ * aux espaces pour tolérer une valeur saisie/importée non normalisée.
+ */
+export function isImmeuble(typeBien: string | null | undefined): boolean {
+  return (typeBien ?? "").trim().toLowerCase() === "immeuble";
+}
 
 export const ETATS_BIEN = [
   "Neuf",
@@ -90,6 +104,10 @@ export interface Apartment {
   surface_m2: number | null;
   nb_pieces: number | null;
   nb_chambres: number | null;
+  // Nombre de lots/logements — pertinent uniquement pour un Immeuble (voir
+  // isImmeuble). Guide l'estimation du loyer total et l'assurance, et permet
+  // d'afficher un loyer/lot. null pour un logement unique.
+  nb_lots: number | null;
   etage: string;
   ascenseur: boolean | null;
   annee_construction: number | null;
@@ -108,7 +126,9 @@ export interface Apartment {
 
   // Financier — charges annuelles
   charges_copro_annuelles: number | null;
+  charges_justification: string;
   taxe_fonciere: number | null;
+  taxe_fonciere_justification: string;
   assurance_annuelle: number | null;
   hypothese_gestion_pct: number;
 
@@ -125,6 +145,15 @@ export interface Apartment {
   // Suivi des champs modifiés manuellement (désactive le badge "estimé"
   // et empêche toute réestimation automatique future de ce champ).
   champs_manuels: ChampEstimable[];
+
+  // Champs dont la valeur actuelle vient d'une estimation IA (recherche web
+  // + Gemini), PAS de la formule déterministe locale de estimates.ts. Tant
+  // qu'un champ est ici (et pas dans champs_manuels), applyLiveEstimates ne
+  // le recalcule plus en direct — sinon la formule déterministe écraserait
+  // silencieusement la valeur IA à la prochaine lecture. Un champ peut
+  // sortir de cette liste uniquement via une nouvelle estimation IA ou une
+  // édition manuelle (qui bascule alors dans champs_manuels).
+  champs_estimes_ia: ChampEstimable[];
 
   // Analyse IA (blocs de scores + faits réels + narration). Écrite uniquement
   // par la route /api/analyse/[id], jamais via les formulaires. null tant
@@ -158,6 +187,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     surface_m2: null,
     nb_pieces: null,
     nb_chambres: null,
+    nb_lots: null,
     etage: "",
     ascenseur: null,
     annee_construction: null,
@@ -168,7 +198,9 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     frais_notaire_estimes: null,
     travaux: null,
     charges_copro_annuelles: null,
+    charges_justification: "",
     taxe_fonciere: null,
+    taxe_fonciere_justification: "",
     assurance_annuelle: null,
     loyer_retenu: null,
     loyer_justification: "",
@@ -180,6 +212,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     contact_telephone: "",
     contact_email: "",
     champs_manuels: [],
+    champs_estimes_ia: [],
     analyse_ia: null,
     simulation_inputs: null,
   };
@@ -206,6 +239,7 @@ const apartmentBaseFields = {
   surface_m2: z.number().nullable(),
   nb_pieces: z.number().nullable(),
   nb_chambres: z.number().nullable(),
+  nb_lots: z.number().nullable(),
   etage: z.string(),
   ascenseur: z.boolean().nullable(),
   annee_construction: z.number().nullable(),
@@ -216,7 +250,9 @@ const apartmentBaseFields = {
   frais_notaire_estimes: z.number().nullable(),
   travaux: z.number().nullable(),
   charges_copro_annuelles: z.number().nullable(),
+  charges_justification: z.string(),
   taxe_fonciere: z.number().nullable(),
+  taxe_fonciere_justification: z.string(),
   assurance_annuelle: z.number().nullable(),
   loyer_retenu: z.number().nullable(),
   loyer_justification: z.string(),
@@ -228,6 +264,7 @@ const apartmentBaseFields = {
   contact_telephone: z.string(),
   contact_email: z.string(),
   champs_manuels: z.array(z.enum(CHAMPS_ESTIMABLES)),
+  champs_estimes_ia: z.array(z.enum(CHAMPS_ESTIMABLES)),
   simulation_inputs: simulationInputsSchema.nullable(),
 };
 
@@ -261,6 +298,7 @@ export const apartmentInputSchema = z
     surface_m2: data.surface_m2 ?? null,
     nb_pieces: data.nb_pieces ?? null,
     nb_chambres: data.nb_chambres ?? null,
+    nb_lots: data.nb_lots ?? null,
     etage: data.etage ?? "",
     ascenseur: data.ascenseur ?? null,
     annee_construction: data.annee_construction ?? null,
@@ -271,7 +309,9 @@ export const apartmentInputSchema = z
     frais_notaire_estimes: data.frais_notaire_estimes ?? null,
     travaux: data.travaux ?? null,
     charges_copro_annuelles: data.charges_copro_annuelles ?? null,
+    charges_justification: data.charges_justification ?? "",
     taxe_fonciere: data.taxe_fonciere ?? null,
+    taxe_fonciere_justification: data.taxe_fonciere_justification ?? "",
     assurance_annuelle: data.assurance_annuelle ?? null,
     loyer_retenu: data.loyer_retenu ?? null,
     loyer_justification: data.loyer_justification ?? "",
@@ -283,6 +323,7 @@ export const apartmentInputSchema = z
     contact_telephone: data.contact_telephone ?? "",
     contact_email: data.contact_email ?? "",
     champs_manuels: data.champs_manuels ?? [],
+    champs_estimes_ia: data.champs_estimes_ia ?? [],
     simulation_inputs: data.simulation_inputs ?? null,
   }));
 

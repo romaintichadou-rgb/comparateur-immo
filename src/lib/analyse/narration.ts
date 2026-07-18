@@ -24,7 +24,8 @@ export interface Narrations {
 
 export async function narrateAll(
   analyse: AnalyseIA,
-  localisation?: { quartier: string; ville: string }
+  localisation?: { quartier: string; ville: string },
+  contexteBien?: string
 ): Promise<Narrations> {
   if (!getGeminiApiKey()) return { blocs: {}, synthese: "", status: "unavailable" };
 
@@ -60,7 +61,7 @@ export async function narrateAll(
 CONTEXTE IMPORTANT : les chiffres bruts (prix/m², rendement, cash-flow, notes...) sont DÉJÀ AFFICHÉS à l'écran juste au-dessus de tes textes. Re-citer un chiffre sans en tirer une conclusion est donc inutile et interdit. Ta valeur ajoutée : l'INTERPRÉTATION — ce que ces chiffres impliquent, ce qu'un œil expérimenté y lit, ce qu'il faut faire ensuite.
 
 Note globale pondérée : ${analyse.score_global}/10.
-${nomQuartier ? `\nLOCALISATION DU BIEN : ${nomQuartier}\n` : ""}
+${nomQuartier ? `\nLOCALISATION DU BIEN : ${nomQuartier}\n` : ""}${contexteBien ? `\n${contexteBien}\n` : ""}
 VERDICTS PRIORITAIRES (points rédhibitoires / de vigilance) :
 ${verdictsTexte}
 

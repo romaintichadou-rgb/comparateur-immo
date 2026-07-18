@@ -45,7 +45,7 @@ export default function BookmarkletView() {
             href="#"
             onClick={(e) => e.preventDefault()}
             draggable
-            className="cursor-move select-none rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm"
+            className="cursor-move select-none rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white"
           >
             📥 Importer dans {APP_NAME}
           </a>

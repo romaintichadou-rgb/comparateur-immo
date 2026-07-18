@@ -7,6 +7,7 @@ import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, V
 import { RENDEMENT_HOVER_RING, SEUILS_RENDEMENT_DEFAUT, type RendementSeuils } from "@/lib/analyse/scoring";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { formatDateTime } from "@/lib/format";
+import { AiEstimatedBadge } from "@/components/form/Fields";
 
 // Les seuls BlocHighlight aujourd'hui affichés (bloc "location") sont les
 // deux rendements — on les rend cliquables en les identifiant par leur
@@ -141,7 +142,7 @@ export default function AnalyseIA({
   // État initial : aucune analyse encore lancée.
   if (!analyse) {
     return (
-      <div className="rounded-xl border border-ink-200 bg-white p-10 text-center shadow-sm">
+      <div className="rounded-xl border border-ink-200 bg-white p-10 text-center">
         <Sparkles className="mx-auto h-8 w-8 text-accent-500" />
         <h2 className="mt-3 text-lg font-semibold text-ink-900">Analyse IA</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
@@ -152,7 +153,7 @@ export default function AnalyseIA({
         <button
           onClick={lancer}
           disabled={loading}
-          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-70"
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-70"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {loading ? "Analyse en cours…" : "Lancer l'analyse"}
@@ -178,7 +179,7 @@ export default function AnalyseIA({
   return (
     <div className="space-y-6">
       {/* Score global + synthèse */}
-      <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
         {/* Barre de progression indéterminée pendant l'analyse */}
         {loading && <div className="h-1 w-full animate-pulse bg-accent-500" />}
 
@@ -334,7 +335,7 @@ function BlocCard({
   const isQuartier = bloc.cle === "quartier";
 
   return (
-    <section className="flex flex-col rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+    <section className="flex flex-col rounded-xl border border-ink-200 bg-white p-5">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Icon className="h-4 w-4 text-ink-400" />
@@ -531,13 +532,14 @@ function FaitRow({ fait }: { fait: Fait }) {
       <div className="flex min-w-0 flex-1 gap-2">
         <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-ink-800">
+          <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-ink-800">
             {fait.label}
             {fait.perimetre && (
-              <span className="ml-1.5 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-400">
+              <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-400">
                 {fait.perimetre}
               </span>
             )}
+            {fait.estimeParIA && <AiEstimatedBadge />}
           </p>
           {fait.detail && <p className="text-xs leading-snug text-ink-500">{fait.detail}</p>}
         </div>

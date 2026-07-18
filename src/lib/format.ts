@@ -16,11 +16,6 @@ export function formatPercent(value: number | null | undefined): string {
   }).format(value);
 }
 
-export function formatSurface(value: number | null | undefined): string {
-  if (value == null) return "—";
-  return `${new Intl.NumberFormat("fr-FR").format(value)} m²`;
-}
-
 export function formatNumber(value: number | null | undefined): string {
   if (value == null) return "—";
   return new Intl.NumberFormat("fr-FR").format(value);

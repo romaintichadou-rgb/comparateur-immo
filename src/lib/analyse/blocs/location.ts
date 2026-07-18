@@ -1,5 +1,6 @@
-import type { Apartment } from "@/lib/types";
+import { isImmeuble, type Apartment } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
+import { isAiEstimated } from "@/lib/estimates";
 import { formatPercent } from "@/lib/format";
 import type { LoyerReference } from "../sources/loyers";
 import {
@@ -38,6 +39,12 @@ export function buildBlocLocation(
   const faits: Fait[] = [];
   const sources: Source[] = [];
 
+  // Immeuble : loyer_retenu est le TOTAL de tous les lots, et loyerBienM2CC est
+  // donc un €/m² MOYEN sur l'ensemble de l'immeuble. Comparé au loyer médian
+  // d'un logement unique (Carte des loyers), il ressort légitimement plus haut
+  // quand l'immeuble compte de petits logements (qui se louent plus cher au m²).
+  // On assouplit donc la détection "loyer optimiste" et on l'explicite.
+  const immeuble = isImmeuble(apt.type_bien);
   const derived = computeDerived(apt);
   const rendementNet = derived.rendement_net; // fraction, basé sur le loyer du bien
   const rendementBrut = derived.rendement_brut;
@@ -51,11 +58,10 @@ export function buildBlocLocation(
 
   const donneesManquantes: string[] = [];
   let loyerOptimiste = false;
-  // Loyer encore en mode "estimé" (jamais repris à la main) : dans les faits,
-  // ça signifie presque toujours une estimation IA (recherche web + Gemini,
-  // voir estimateRent()) plutôt qu'une donnée déterministe — à ne jamais
-  // traiter avec la même confiance qu'un loyer vérifié par l'utilisateur.
-  const loyerNonVerifie = !apt.champs_manuels.includes("loyer_retenu");
+  // Loyer dont la valeur actuelle vient d'une estimation IA (recherche web +
+  // Gemini, voir estimateRent()) plutôt que d'une donnée vérifiée par
+  // l'utilisateur — à ne jamais traiter avec la même confiance.
+  const loyerNonVerifie = isAiEstimated(apt, "loyer_retenu");
 
   // --- 1) Loyer du bien (CC), en valeur mensuelle réelle ---
   if (apt.loyer_retenu != null) {
@@ -67,18 +73,24 @@ export function buildBlocLocation(
     // optimiste ne doit pas passer inaperçu simplement parce qu'il reste
     // dans la fourchette.
     if (loyerRef && loyerBienM2CC != null) {
-      const auDessusMax = loyerBienM2CC > loyerRef.max + PROVISION_CHARGES_M2;
-      const optimisteEtNonVerifie = loyerNonVerifie && ecart != null && ecart > 0.1;
+      // Pour un immeuble, on relève les seuils : dépasser le max (ou la médiane)
+      // d'un logement unique est attendu, pas un signal d'excès en soi.
+      const seuilMax = immeuble ? (loyerRef.max + PROVISION_CHARGES_M2) * 1.25 : loyerRef.max + PROVISION_CHARGES_M2;
+      const seuilEcart = immeuble ? 0.3 : 0.1;
+      const auDessusMax = loyerBienM2CC > seuilMax;
+      const optimisteEtNonVerifie = loyerNonVerifie && ecart != null && ecart > seuilEcart;
       loyerOptimiste = auDessusMax || optimisteEtNonVerifie;
     }
+    // "estimation IA non vérifiée" n'est plus répété ici en texte : le badge
+    // visuel estimeParIA (voir FaitRow) porte déjà cette information.
     const suffixeDetail = [
+      immeuble ? "total immeuble · €/m² moyen tous lots" : null,
       loyerOptimiste ? "optimiste" : null,
-      loyerNonVerifie ? "estimation IA non vérifiée" : null,
     ]
       .filter(Boolean)
       .join(" · ");
     faits.push({
-      label: "Loyer du bien (CC)",
+      label: immeuble ? "Loyer total de l'immeuble (CC)" : "Loyer du bien (CC)",
       value: apt.loyer_retenu.toLocaleString("fr-FR"),
       unit: "€/mois CC",
       detail:
@@ -87,6 +99,7 @@ export function buildBlocLocation(
           : suffixeDetail || undefined,
       source: SRC_LOYERS.label,
       gravite: ecart == null ? (loyerNonVerifie ? "attention" : "info") : loyerOptimiste ? "attention" : ecart <= 0.05 ? "positif" : "info",
+      estimeParIA: loyerNonVerifie,
     });
   } else {
     donneesManquantes.push("loyer du bien");
@@ -99,10 +112,13 @@ export function buildBlocLocation(
     const min = Math.round((loyerRef.min + PROVISION_CHARGES_M2) * surface);
     const max = Math.round((loyerRef.max + PROVISION_CHARGES_M2) * surface);
     faits.push({
-      label: "Loyer de marché médian",
+      // Pour un immeuble, ce médian applique le €/m² d'UN logement à la surface
+      // TOTALE : c'est le loyer "si l'immeuble était un seul appartement", un
+      // plancher — le total réel est supérieur grâce à la découpe en lots.
+      label: immeuble ? "Loyer de marché à surface équivalente" : "Loyer de marché médian",
       value: median.toLocaleString("fr-FR"),
       unit: "€/mois CC",
-      detail: `fourchette ${min.toLocaleString("fr-FR")} – ${max.toLocaleString("fr-FR")} €/mois · ${loyerRef.nbObs.toLocaleString("fr-FR")} annonces · ${loyerRef.annee}`,
+      detail: `${immeuble ? "surface totale en logement unique · " : ""}fourchette ${min.toLocaleString("fr-FR")} – ${max.toLocaleString("fr-FR")} €/mois · ${loyerRef.nbObs.toLocaleString("fr-FR")} annonces · ${loyerRef.annee}`,
       perimetre: "arrondissement",
       source: SRC_LOYERS.label,
       gravite: "info",

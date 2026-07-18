@@ -23,7 +23,7 @@ function FieldShell({
 }
 
 const inputClass =
-  "rounded-md border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900 shadow-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500";
+  "rounded-md border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500";
 
 export function TextField({
   label,

@@ -1,5 +1,6 @@
-import type { Apartment, PrecisionLocalisation } from "@/lib/types";
+import { isImmeuble, type Apartment, type PrecisionLocalisation } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
+import { lotsEffectifs } from "@/lib/estimates";
 import { geocodeApartmentLocation } from "@/lib/geocoding";
 import { getSettings } from "@/lib/db";
 import { buildBlocRisque } from "./blocs/risque";
@@ -118,7 +119,18 @@ export async function runAnalyse(
   const scored = withScoreGlobal(analyse, rendementNet, seuils);
   scored.verdicts = buildVerdicts(scored.blocs, rendementNet, seuils);
 
-  const narr = await narrateAll(scored, { quartier: apt.quartier, ville: apt.ville });
+  // Contexte du type de bien pour la narration : un immeuble de rapport
+  // change la lecture (loyer = total des lots, prix comparé à des ventes
+  // d'appartements avec décote de bloc, pas de copropriété).
+  const contexteBien = isImmeuble(apt.type_bien)
+    ? `TYPE DE BIEN : Immeuble de rapport${
+        apt.nb_lots != null && apt.nb_lots > 0
+          ? ` de ${apt.nb_lots} lots`
+          : ` (~${lotsEffectifs(apt.nb_lots, apt.surface_m2)} lots estimés)`
+      } — le loyer affiché est le TOTAL de tous les logements (pas un loyer unique) ; le prix/m² est comparé à des ventes d'appartements au détail, or un immeuble se vend en bloc avec décote (10-20 %) ; il n'y a pas de copropriété, les charges sont celles d'exploitation de l'immeuble entier. Parle de "cet immeuble", jamais de "cet appartement".`
+    : undefined;
+
+  const narr = await narrateAll(scored, { quartier: apt.quartier, ville: apt.ville }, contexteBien);
   prix.narration = narr.blocs.prix ?? "";
   location.narration = narr.blocs.location ?? "";
   risque.narration = narr.blocs.risque ?? "";

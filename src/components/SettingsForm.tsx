@@ -86,7 +86,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         <button
           onClick={handleSave}
           disabled={saving || !rendementValide || !cashflowValide}
-          className="rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-700 disabled:opacity-50"
+          className="rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50"
         >
           {saving ? "Enregistrement..." : "Enregistrer"}
         </button>
@@ -125,7 +125,7 @@ function SeuilCard({
   valide: boolean;
 }) {
   return (
-    <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 shadow-sm">
+    <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
       <div>
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Icon className="h-4 w-4 text-ink-400" />
