@@ -182,7 +182,7 @@ export default function SimulationFinanciere({
       )}
 
       {/* Résultat principal : le cash-flow mensuel concret */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div id="sim-cashflow" className="grid scroll-mt-24 grid-cols-1 gap-3 sm:grid-cols-3">
         <ResultCard
           label="Mensualité de crédit"
           sub="assurance incluse"

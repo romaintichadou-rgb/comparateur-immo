@@ -91,6 +91,12 @@ export default function HomeView({
               </option>
             ))}
           </select>
+          <Link
+            href="/appartements/nouveau"
+            className="inline-flex items-center rounded-md bg-accent-600 px-4 py-2 font-medium text-white transition-colors hover:bg-accent-700"
+          >
+            Ajouter un bien
+          </Link>
         </div>
       </div>
 

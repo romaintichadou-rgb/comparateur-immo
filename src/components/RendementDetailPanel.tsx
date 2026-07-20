@@ -136,7 +136,7 @@ export default function RendementDetailPanel({
           </button>
         </div>
 
-        <div className="flex-1 overflow-hidden px-6 py-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
           {donneesInsuffisantes ? (
             <p className="text-sm text-ink-500">
               Renseigne le prix d&apos;achat et le loyer pour voir le détail du calcul.
@@ -164,9 +164,9 @@ export default function RendementDetailPanel({
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
-                <section className="space-y-1.5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+              <div className="space-y-4">
+                <section className="rounded-xl border border-ink-200 p-4 sm:p-5">
+                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
                     Budget total de l&apos;opération
                   </h3>
                   <ul className="divide-y divide-ink-100 text-sm">
@@ -177,8 +177,8 @@ export default function RendementDetailPanel({
                   </ul>
                 </section>
 
-                <section className="space-y-1.5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+                <section className="rounded-xl border border-ink-200 p-4 sm:p-5">
+                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
                     Revenu net annuel
                   </h3>
                   <ul className="divide-y divide-ink-100 text-sm">
@@ -239,9 +239,9 @@ function ResultTile({
   return (
     <div className={`rounded-xl p-4 ${t.wrap}`}>
       <p className={`text-xs font-medium ${t.label}`}>{label}</p>
-      <p className={`mt-1 text-3xl font-bold ${t.value}`}>{value}</p>
+      <p className={`mt-1 font-mono text-3xl font-bold tabular-nums ${t.value}`}>{value}</p>
       <p className={`mt-1.5 text-[11px] ${t.label}`}>{formule}</p>
-      <p className={`text-[11px] font-medium ${t.value} opacity-70`}>{calcul}</p>
+      <p className={`font-mono text-[11px] font-medium tabular-nums ${t.value} opacity-70`}>{calcul}</p>
     </div>
   );
 }
@@ -249,24 +249,28 @@ function ResultTile({
 function Row({ label, value, badge }: { label: string; value: number; badge?: ReactNode }) {
   const negative = value < 0;
   return (
-    <li className="flex items-center justify-between gap-3 py-1.5">
-      <span className="flex items-center gap-1.5 text-ink-600">
-        <span className="mr-1.5 inline-block w-3 text-center font-semibold text-ink-400">
+    <li className="flex items-baseline justify-between gap-3 py-2">
+      <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
+        <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">
           {negative ? "−" : "+"}
         </span>
-        {label}
-        {badge}
+        <span>{label}</span>
+        {badge && <span className="shrink-0 self-center">{badge}</span>}
       </span>
-      <span className="shrink-0 font-medium text-ink-800">{formatEuros(Math.abs(value))}</span>
+      <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">
+        {formatEuros(Math.abs(value))}
+      </span>
     </li>
   );
 }
 
 function TotalRow({ label, value }: { label: string; value: number }) {
   return (
-    <li className="flex items-center justify-between gap-3 py-2">
+    <li className="flex items-baseline justify-between gap-3 py-2">
       <span className="font-semibold text-ink-900">{label}</span>
-      <span className="shrink-0 text-base font-bold text-ink-900">{formatEuros(value)}</span>
+      <span className="shrink-0 font-mono text-base font-bold tabular-nums text-ink-900">
+        {formatEuros(value)}
+      </span>
     </li>
   );
 }

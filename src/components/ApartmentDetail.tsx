@@ -57,6 +57,7 @@ import {
   TextField,
 } from "@/components/form/Fields";
 import AnalyseIA from "@/components/AnalyseIA";
+import SyntheseView from "@/components/SyntheseView";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
 import { rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import type { AppSettings } from "@/lib/settings";
@@ -118,7 +119,7 @@ function DisplayValue({
               type="button"
               onClick={onEstimate}
               disabled={estimating}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-accent-500 transition-colors hover:bg-accent-50 hover:text-accent-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50"
             >
               {estimating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
               Estimer avec IA
@@ -170,9 +171,10 @@ function EditableValue({
   );
 }
 
-type Tab = "ia" | "donnees" | "financiere" | "simulation";
+type Tab = "synthese" | "ia" | "donnees" | "financiere" | "simulation";
 
 const TABS: { key: Tab; label: string }[] = [
+  { key: "synthese", label: "Synthèse" },
   { key: "ia", label: "Analyse IA" },
   { key: "donnees", label: "Description du bien" },
   { key: "financiere", label: "Détails de l'opération" },
@@ -315,9 +317,22 @@ export default function ApartmentDetail({
   const spEdit = searchParams.get("edit") === "1";
   const resolvedSpTab = TABS.some((t) => t.key === spTab) ? (spTab as Tab) : null;
 
-  const resolvedInitialTab = TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : "ia";
+  const resolvedInitialTab = TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : "synthese";
   const [activeTab, setActiveTab] = useState<Tab>(resolvedSpTab ?? resolvedInitialTab);
   const [editingDesc, setEditingDesc] = useState((resolvedSpTab ?? resolvedInitialTab) === "donnees" && (spEdit || !!initialEdit));
+
+  // Depuis la Synthèse, un CTA de carte renvoie vers l'onglet ET la section
+  // concernée (ancre) : on change d'onglet, puis on scrolle vers l'id une fois
+  // le nouveau contenu monté (d'où l'effet, pas un scroll synchrone).
+  const [pendingScroll, setPendingScroll] = useState<string | null>(null);
+  const goToSection = useCallback(
+    (tab: Tab, anchor?: string) => {
+      setActiveTab(tab);
+      router.push(`/appartements/${apt.id}?tab=${tab}`, { scroll: false });
+      setPendingScroll(anchor ?? null);
+    },
+    [router, apt.id]
+  );
 
   useEffect(() => {
     if (resolvedSpTab) {
@@ -325,6 +340,43 @@ export default function ApartmentDetail({
       if (resolvedSpTab === "donnees" && spEdit) setEditingDesc(true);
     }
   }, [resolvedSpTab, spEdit]);
+
+  useEffect(() => {
+    if (!pendingScroll) return;
+    // L'onglet cible (ex. Analyse IA) est lourd : son contenu n'est pas monté
+    // au moment où l'effet s'exécute. On sonde image par image jusqu'à ce que
+    // l'ancre apparaisse, puis on scrolle. Comme la navigation (router.push) et
+    // le montage tardif peuvent remettre le scroll à zéro APRÈS notre premier
+    // scroll, on repasse deux fois de plus (250 ms, 650 ms) pour verrouiller la
+    // position. pendingScroll n'est vidé qu'à la dernière passe (sinon le
+    // cleanup annulerait les timers de rattrapage).
+    const anchor = pendingScroll;
+    let raf = 0;
+    let frames = 0;
+    const timers: number[] = [];
+    const scrollToAnchor = () =>
+      document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const attempt = () => {
+      if (document.getElementById(anchor)) {
+        scrollToAnchor();
+        timers.push(window.setTimeout(scrollToAnchor, 250));
+        timers.push(
+          window.setTimeout(() => {
+            scrollToAnchor();
+            setPendingScroll(null);
+          }, 650)
+        );
+        return;
+      }
+      if (frames++ < 60) raf = requestAnimationFrame(attempt);
+      else setPendingScroll(null);
+    };
+    raf = requestAnimationFrame(attempt);
+    return () => {
+      cancelAnimationFrame(raf);
+      timers.forEach(clearTimeout);
+    };
+  }, [pendingScroll, activeTab]);
 
   const value = <K extends keyof ApartmentWithComputed>(
     patch: ApartmentPatch,
@@ -787,6 +839,19 @@ export default function ApartmentDetail({
         </nav>
       </div>
 
+      {activeTab === "synthese" && (
+        analysisPending ? (
+          <SyntheseSkeleton />
+        ) : (
+          <SyntheseView
+            apartment={apt}
+            seuilsRendement={seuilsRendement}
+            onGoTab={goToSection}
+            onRelancer={handleRelancerAnalyse}
+          />
+        )
+      )}
+
       {activeTab === "ia" && (
         analysisPending ? (
           <AnalyseIASkeleton />
@@ -798,7 +863,7 @@ export default function ApartmentDetail({
       {activeTab === "financiere" && (
         <div className="space-y-6">
           {/* Résultat principal : la rentabilité au premier coup d'œil */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div id="fin-resultats" className="grid scroll-mt-24 grid-cols-1 gap-3 sm:grid-cols-3">
             <ResultCard
               label="Budget total de l'opération"
               sub="achat + notaire + travaux"
@@ -837,7 +902,7 @@ export default function ApartmentDetail({
             </div>
           )}
 
-          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+          <section id="fin-achat" className="space-y-4 scroll-mt-24 rounded-xl border border-ink-200 bg-white p-5">
                 <div className="flex items-center justify-between">
                   <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
                     <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Banknote className="h-3.5 w-3.5" /></span>
@@ -895,11 +960,8 @@ export default function ApartmentDetail({
                     <ReadOnlyField label="Travaux" value={apt.travaux != null ? formatEuros(apt.travaux) : "—"} />
                     <ReadOnlyField
                       label="Frais de notaire"
-                      value={
-                        fraisNotaireLive == null
-                          ? "—"
-                          : `${formatEuros(fraisNotaireLive)}${!fraisNotaireManuel ? " · estimé" : ""}`
-                      }
+                      value={fraisNotaireLive == null ? "—" : formatEuros(fraisNotaireLive)}
+                      badge={!fraisNotaireManuel && fraisNotaireLive != null && <EstimatedBadge />}
                     />
                     <ReadOnlyField label="Budget total (calculé)" value={formatEuros(live.budget_total)} />
                     <ReadOnlyField label="Prix / m² — achat + travaux (calculé)" value={formatEuros(live.prix_m2)} />
@@ -1357,13 +1419,48 @@ function PendingFieldLabel({ label }: { label: string }) {
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function ReadOnlyField({
+  label,
+  value,
+  badge,
+}: {
+  label: string;
+  value: string;
+  badge?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1 text-sm">
-      <span className="font-medium text-ink-700">{label}</span>
+      <span className="flex items-center gap-2 font-medium text-ink-700">
+        {label}
+        {badge}
+      </span>
       <div className="rounded-md border border-dashed border-ink-200 bg-ink-50 px-3 py-2 text-ink-500">
         {value}
       </div>
+    </div>
+  );
+}
+
+function SyntheseSkeleton() {
+  return (
+    <div className="space-y-4">
+      {/* Hero verdict — même structure que SyntheseView */}
+      <section className="rounded-xl border border-ink-200 bg-white p-6 sm:p-8">
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-3 w-48 rounded" />
+            <Skeleton className="h-9 w-64 rounded" />
+            <Skeleton className="h-4 w-80 max-w-full rounded" />
+          </div>
+          <Skeleton className="h-16 w-20 shrink-0 rounded-lg" />
+        </div>
+      </section>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-32 rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-14 rounded-xl" />
     </div>
   );
 }

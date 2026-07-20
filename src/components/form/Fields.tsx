@@ -242,7 +242,7 @@ export function ExtractedBadge() {
 export function AiEstimatedBadge() {
   return (
     <span
-      className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-red-700"
+      className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700"
       title="Estimation par IA (recherche web), non vérifiée — à confirmer avant de s'y fier"
     >
       Estimation IA

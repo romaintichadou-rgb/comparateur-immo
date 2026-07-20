@@ -90,7 +90,7 @@ function syntheseCourte(analyse: { score_global: number | null; verdicts: Verdic
 }
 
 /** Rend un texte en interprétant le gras markdown **…** en <strong>. */
-function renderBold(text: string): ReactNode {
+export function renderBold(text: string): ReactNode {
   return text.split(/\*\*(.+?)\*\*/g).map((seg, i) =>
     i % 2 === 1 ? (
       <strong key={i} className="font-semibold text-ink-900">
@@ -317,7 +317,10 @@ function BlocCard({
   const isQuartier = bloc.cle === "quartier";
 
   return (
-    <section className="flex flex-col rounded-xl border border-ink-200 bg-white p-5">
+    <section
+      id={`bloc-${bloc.cle}`}
+      className="flex scroll-mt-24 flex-col rounded-xl border border-ink-200 bg-white p-5"
+    >
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Icon className="h-3.5 w-3.5" /></span>

@@ -92,13 +92,6 @@ export default function Navbar() {
               </Link>
             );
           })}
-          <span className="mx-1 hidden h-5 w-px bg-ink-200 sm:block" aria-hidden="true" />
-          <Link
-            href="/appartements/nouveau"
-            className="inline-flex items-center rounded-md bg-accent-600 px-3.5 py-2 font-medium text-white ring-1 ring-inset ring-accent-700/20 transition-colors hover:bg-accent-700"
-          >
-            Ajouter un bien
-          </Link>
         </nav>
       </div>
     </header>

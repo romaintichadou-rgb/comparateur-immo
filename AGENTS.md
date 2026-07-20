@@ -209,7 +209,7 @@ la TF est calculée **sans appel IA** :
 - Quand estimée seule (`field: "taxe_fonciere"`), aucun appel Gemini
 - Quand estimée avec les charges (`runRecalc`), le prompt IA ne demande que
   les charges copro (économie de tokens)
-- Le badge affiche "ESTIMATION IA" (rouge) comme les autres — choix UX
+- Le badge affiche "ESTIMATION IA" (ambre) comme les autres — choix UX
   volontaire pour l'homogénéité, même si le calcul est déterministe
 - La justification est générée localement (taux, source DGFiP)
 
@@ -460,10 +460,16 @@ charges copro, taxe foncière, assurance, frais de gestion.
 
 Composant `DisplayValue` : valeur affichée en gros (`text-2xl font-semibold`)
 non éditable, avec :
-- **Badge** : `AiEstimatedBadge` (rouge) pour les estimations IA/déterministes,
+- **Badge** : `AiEstimatedBadge` (ambre) pour les estimations IA/déterministes,
   `ManualBadge` (gris) pour les valeurs saisies manuellement, rien si null.
+  Le badge `EstimatedBadge` "Estimé" (ambre également) reste utilisé sur un seul
+  champ : les frais de notaire (formule déterministe). Décision produit assumée :
+  `AiEstimatedBadge` et `EstimatedBadge` partagent la MÊME teinte ambre — ne pas
+  les redifférencier par la couleur. En mode Display, ce badge se place à côté du
+  label (voir `ReadOnlyField` avec prop `badge`), jamais collé dans la valeur.
 - **Bouton "Modifier"** (icône crayon, hover accent) : passe en mode Edit.
-- **Bouton "Estimer avec IA"** (icône sparkle, accent) : relance l'estimation
+- **Bouton "Estimer avec IA"** (icône sparkle, **ambre** — `text-amber-600`) :
+  relance l'estimation
   pour ce champ uniquement. Présent sur loyer, charges copro, TF, assurance.
   Absent sur frais de gestion (paramètre utilisateur, pas un champ estimé).
 - La justification IA est visible sous la valeur.
@@ -509,3 +515,85 @@ La vacance locative s'applique comme facteur multiplicatif
 `(1 - vacanceLocativePct / 100)` sur les loyers annuels dans la boucle
 année par année (`simulation.ts`). Cela cascade automatiquement sur les
 frais de gestion (% du loyer), le résultat imposable, et le cash-flow.
+
+# Onglet "Synthèse" — écran de décision d'achat
+
+L'onglet **"Synthèse"** (`src/components/SyntheseView.tsx`) est le **premier
+onglet et l'onglet par défaut** de la fiche bien (voir `TABS` et
+`resolvedInitialTab` dans `ApartmentDetail.tsx`). Objectif produit : trancher
+« dois-je acheter ce bien ? » en un coup d'œil, sans détail. Tout le détail
+vit dans les autres onglets, vers lesquels des liens discrets renvoient.
+
+- **Aucune donnée nouvelle, aucun appel API** : tout dérive de l'analyse
+  stockée (`apt.analyse_ia` : `score_global`, `verdicts`, bloc `prix`), des
+  champs calculés (`rendement_net`, `prix_m2`) et de la simulation client
+  (`simulate(apt, apt.simulation_inputs ?? defaultInputs())` → cash-flow an 1).
+- **États dégradés** : pas d'analyse / `score_global == null` → invitation à
+  lancer l'analyse (ou à saisir le prix si manquant, comme ailleurs).
+
+## Verdict (décision franche à 3 niveaux)
+
+`Achète` / `Achète — si tu négocies` / `Passe ton chemin`, dérivé des signaux
+existants (jamais recalculé) :
+- **passe** si un verdict `alerte` existe OU `score < 5` ;
+- **achète** si `score >= 7` ET aucun verdict `attention` ET pas de surcote
+  (`ecartPct <= 5`) — GO volontairement exigeant ;
+- **négocie** sinon.
+
+Le dégradé tonal de la carte (repris de la home : `from-white to-{emerald|
+amber|red}-50`) porte le verdict avant la lecture. La `raison` est un verbatim
+concret et actionnable (dire *quoi* + *quoi faire*), pas une tournure abstraite.
+Un **chip discret** « Analysé le … » près du titre porte la fraîcheur ; le
+**radar des 5 blocs notés** (Prix, Locatif, Risques, Potentiel, Simulation) +
+le lien « Analyse complète → » vivent en **pied de la carte verdict** (zone
+« analyse »), volontairement subordonnés. Pas de divider entre la raison et le
+radar (l'espacement suffit).
+
+## Les 4 chiffres du "comité"
+
+Cartes `MetricCard` (Geist Mono, `tabular-nums`) : Cash-flow mensuel, Rendement
+net, **Prix vs marché** (l'écart DVF ; libellé et sous-titre explicitent qu'il
+s'agit du PRIX D'ACHAT vs médiane DVF — ne pas revenir à « Écart au marché »
+seul, trop ambigu), DPE.
+
+- **Slot toujours rempli** : si l'écart DVF manque (aucun comparable), la 3e
+  carte bascule sur « Prix au m² » (toujours calculable) — jamais de tiret.
+- **Tonalité cash-flow calibrée** : `< CASHFLOW_ROUGE_SEUIL` (−200 €/mois) =
+  rouge (alerte), négatif léger = ambre, positif = vert.
+- **Emphase "pourquoi"** : sur négocie/passe uniquement, la/les métrique(s) qui
+  ont motivé le verdict sont teintées (rouge/ambre) + tag (`Rédhibitoire` en
+  passe, `À négocier` en négocie). Sur un GO franc : aucune emphase.
+- **CTA ancré en bas à droite** (`mt-auto self-end`) : les liens s'alignent
+  entre cartes malgré des sous-titres de longueurs différentes. Le soulignement
+  ne porte que sur le libellé, pas sur la flèche « → ».
+
+## Navigation vers la bonne section (ancres)
+
+Chaque CTA renvoie vers l'onglet **ET** la section concernée. `onGoTab(tab,
+anchor?)` est implémenté par `goToSection` dans `ApartmentDetail.tsx` : change
+d'onglet, `router.push(?tab=…, {scroll:false})`, puis scrolle vers l'`id` via
+un effet qui **attend le montage** du contenu (l'onglet Analyse IA est lourd →
+polling `requestAnimationFrame`) et **repasse à 250/650 ms** pour verrouiller la
+position malgré un reset de scroll post-navigation. Ne pas remplacer par un
+`setTimeout` fixe (le montage tardif casse l'ancrage).
+
+Ancres cibles (avec `scroll-mt-24` pour passer sous la navbar sticky) :
+
+| CTA | Onglet | Ancre (`id`) | Fichier de l'ancre |
+|---|---|---|---|
+| Cash-flow | Simulation financière | `sim-cashflow` | `SimulationFinanciere.tsx` |
+| Rendement net | Détails de l'opération | `fin-resultats` | `ApartmentDetail.tsx` |
+| Prix vs marché | Analyse IA | `bloc-prix` | `AnalyseIA.tsx` (`BlocCard`) |
+| Prix au m² (fallback) | Détails de l'opération | `fin-achat` | `ApartmentDetail.tsx` |
+| DPE | Analyse IA | `bloc-risque` | `AnalyseIA.tsx` (`BlocCard`) |
+
+`BlocCard` porte `id={`bloc-${bloc.cle}`}` — toute nouvelle ancre vers un bloc
+d'analyse suit ce schéma. `renderBold` (gras markdown `**…**`) est exporté
+depuis `AnalyseIA.tsx` pour être réutilisé.
+
+# Point d'entrée "Ajouter un bien"
+
+Le CTA « Ajouter un bien » (`/appartements/nouveau`) n'est **plus dans la
+navbar** : il est sur la home (`HomeView.tsx`), à droite de la dropdown de tri.
+L'état vide (`EmptyHomeState.tsx`) garde ses propres points d'entrée. La navbar
+ne contient donc que les liens de navigation + le wordmark.
