@@ -6,7 +6,7 @@ import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import { rendementNetTone, type RendementSeuils, type RendementTone } from "@/lib/analyse/scoring";
 import { isAiEstimated } from "@/lib/estimates";
-import { AiEstimatedBadge } from "@/components/form/Fields";
+import { AiEstimatedBadge, EstimatedBadge } from "@/components/form/Fields";
 
 // Doit rester synchronisé avec les classes `duration-300` ci-dessous
 // (Tailwind ne supporte pas les classes générées dynamiquement).
@@ -195,9 +195,13 @@ export default function RendementDetailPanel({
                     <Row
                       label="Taxe foncière"
                       value={-taxeFonciere}
-                      badge={isAiEstimated(apt, "taxe_fonciere") && <AiEstimatedBadge />}
+                      badge={isAiEstimated(apt, "taxe_fonciere") ? <AiEstimatedBadge /> : !apt.champs_manuels.includes("taxe_fonciere") && taxeFonciere > 0 && <EstimatedBadge />}
                     />
-                    <Row label="Assurance" value={-assurance} />
+                    <Row
+                      label="Assurance"
+                      value={-assurance}
+                      badge={isAiEstimated(apt, "assurance_annuelle") && <AiEstimatedBadge />}
+                    />
                     <Row
                       label={`Frais de gestion (${apt.hypothese_gestion_pct} % du loyer)`}
                       value={-fraisGestion}

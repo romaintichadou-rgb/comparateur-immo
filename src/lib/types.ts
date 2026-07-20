@@ -11,6 +11,7 @@ const simulationInputsSchema = z.object({
   revalorisationBienPct: z.number().nullable(),
   revalorisationLoyerPct: z.number().nullable(),
   indexationChargesPct: z.number().nullable(),
+  vacanceLocativePct: z.number().nullable().optional().transform((v) => v ?? null),
 });
 
 export const PLATEFORMES = [
@@ -132,6 +133,10 @@ export interface Apartment {
   assurance_annuelle: number | null;
   hypothese_gestion_pct: number;
 
+  // Quote-part terrain (% du prix non amortissable en LMNP).
+  // null = automatique selon la zone (urbain 10%, périurbain 15%, rural 20%).
+  quote_part_terrain_pct: number | null;
+
   // Notes
   notes: string;
   score_coup_de_coeur: number | null;
@@ -205,6 +210,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     loyer_retenu: null,
     loyer_justification: "",
     hypothese_gestion_pct: DEFAULT_HYPOTHESE_GESTION_PCT,
+    quote_part_terrain_pct: null,
     notes: "",
     score_coup_de_coeur: null,
     photo_url: "",
@@ -257,6 +263,7 @@ const apartmentBaseFields = {
   loyer_retenu: z.number().nullable(),
   loyer_justification: z.string(),
   hypothese_gestion_pct: z.number(),
+  quote_part_terrain_pct: z.number().nullable(),
   notes: z.string(),
   score_coup_de_coeur: z.number().min(1).max(5).nullable(),
   photo_url: z.string(),
@@ -316,6 +323,7 @@ export const apartmentInputSchema = z
     loyer_retenu: data.loyer_retenu ?? null,
     loyer_justification: data.loyer_justification ?? "",
     hypothese_gestion_pct: data.hypothese_gestion_pct ?? DEFAULT_HYPOTHESE_GESTION_PCT,
+    quote_part_terrain_pct: data.quote_part_terrain_pct ?? null,
     notes: data.notes ?? "",
     score_coup_de_coeur: data.score_coup_de_coeur ?? null,
     photo_url: data.photo_url ?? "",

@@ -83,3 +83,57 @@ body {
   color: white;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
+
+/* ---------- Chargement / recalcul en arrière-plan ---------- */
+
+/* Skeleton "shimmer" : un reflet clair balaie la barre de gauche à droite.
+   Plus lisible qu'un simple fondu d'opacité pour signaler un chargement en
+   cours (base ink-200, reflet quasi-blanc). */
+@keyframes skeleton-shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -150% 0; }
+}
+.skeleton-shimmer {
+  background-color: var(--color-ink-200);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.7) 45%,
+    rgba(255, 255, 255, 0.7) 55%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Barre de progression indéterminée (bannière de recalcul) : un segment accent
+   glisse en boucle. Le mouvement — pas le texte — est le vrai signal "ça
+   travaille". Le segment fait toute la largeur du rail, réduit et déplacé par
+   transform. */
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-100%) scaleX(0.4); }
+  50% { transform: translateX(25%) scaleX(0.6); }
+  100% { transform: translateX(120%) scaleX(0.4); }
+}
+.progress-indeterminate {
+  transform-origin: left center;
+  animation: progress-indeterminate 1.3s ease-in-out infinite;
+}
+
+/* Slide-in de la bannière à l'apparition. */
+@keyframes banner-slide-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-banner-in {
+  animation: banner-slide-down 0.25s ease-out;
+}
+
+/* Accessibilité : on coupe les animations décoratives si l'utilisateur le
+   demande (le skeleton reste un aplat neutre, la barre un segment figé). */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer { background-image: none; animation: none; }
+  .progress-indeterminate { animation: none; transform: scaleX(0.6); }
+  .animate-banner-in { animation: none; }
+}

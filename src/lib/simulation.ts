@@ -1,4 +1,5 @@
 import type { ApartmentWithComputed } from "./types";
+import { defaultQuotePartTerrain } from "./taxeFonciereData";
 
 /**
  * Simulation financière complète d'un investissement locatif en LMNP réel
@@ -34,12 +35,12 @@ export interface SimulationInputs {
   revalorisationLoyerPct: number | null;
   /** Indexation annuelle des charges de copro + taxe foncière, en %. null = désactivée (figées en euros courants). */
   indexationChargesPct: number | null;
+  /** Vacance locative, en % du loyer annuel (ex. 5 = 1 mois vide sur 20). null = désactivée (occupation 100 %). */
+  vacanceLocativePct: number | null;
 }
 
 /** Hypothèses LMNP réel (calées sur le simulateur de référence). */
 export const LMNP = {
-  /** Part du prix amortissable (bâti) — 10 % de foncier non amortissable. */
-  partBati: 0.9,
   /** Amortissement du bâti : 2,5 %/an (40 ans). */
   tauxBati: 0.025,
   /** Amortissement des travaux : 6,67 %/an (15 ans). */
@@ -110,6 +111,8 @@ export interface SimulationResult {
   chargesMensuelles: number;
   /** Impôt mensuel moyen année 1. */
   impotMensuelAn1: number;
+  /** Quote-part terrain effective utilisée (%, ex. 15 = 15 % terrain). */
+  quotePartTerrainPct: number;
   /** Apport personnel = montant total de l'opération − montant emprunté. */
   apport: number;
   /** Financement de l'opération sur toute la durée simulée (pour le camembert). */
@@ -121,6 +124,7 @@ export interface SimulationResult {
 export const REVALORISATION_BIEN_DEFAUT_PCT = 1;
 export const REVALORISATION_LOYER_DEFAUT_PCT = 1;
 export const INDEXATION_CHARGES_DEFAUT_PCT = 2;
+export const VACANCE_LOCATIVE_DEFAUT_PCT = 5;
 
 export function defaultInputs(): SimulationInputs {
   return {
@@ -134,6 +138,7 @@ export function defaultInputs(): SimulationInputs {
     revalorisationBienPct: null,
     revalorisationLoyerPct: null,
     indexationChargesPct: null,
+    vacanceLocativePct: null,
   };
 }
 
@@ -177,10 +182,16 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
   const loyersAnnuelsAn1 = loyerMensuel * 12;
   const tauxRevaloLoyer = (inputs.revalorisationLoyerPct ?? 0) / 100;
   const tauxIndexationCharges = (inputs.indexationChargesPct ?? 0) / 100;
+  const tauxOccupation = 1 - (inputs.vacanceLocativePct ?? 0) / 100;
   const chargesIndexablesAn1 = (apt.charges_copro_annuelles ?? 0) + (apt.taxe_fonciere ?? 0);
 
+  // Quote-part terrain : valeur saisie par l'utilisateur, ou défaut intelligent
+  // selon la zone (urbain 10%, périurbain 15%, rural 20%).
+  const terrainPct = apt.quote_part_terrain_pct ?? defaultQuotePartTerrain(apt.code_postal);
+  const partBati = 1 - terrainPct / 100;
+
   // Amortissements LMNP réel annuels théoriques.
-  const amortBati = (apt.prix ?? 0) * LMNP.partBati * LMNP.tauxBati;
+  const amortBati = (apt.prix ?? 0) * partBati * LMNP.tauxBati;
   const amortTravaux = (apt.travaux ?? 0) * LMNP.tauxTravaux;
   const amortNotaire = (apt.frais_notaire_estimes ?? 0) * LMNP.tauxNotaire;
 
@@ -213,7 +224,7 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
 
     // Loyer et frais de gestion (qui en sont un pourcentage) revalorisés
     // année après année.
-    const loyersAnnuels = loyersAnnuelsAn1 * Math.pow(1 + tauxRevaloLoyer, a - 1);
+    const loyersAnnuels = loyersAnnuelsAn1 * Math.pow(1 + tauxRevaloLoyer, a - 1) * tauxOccupation;
     const gestionAnnuelle = loyersAnnuels * (apt.hypothese_gestion_pct / 100);
     const chargesIndexables = chargesIndexablesAn1 * Math.pow(1 + tauxIndexationCharges, a - 1);
     const chargesExploitation = chargesIndexables + (apt.assurance_annuelle ?? 0) + gestionAnnuelle;
@@ -304,5 +315,6 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
     amortissements: { bati: amortBati, travaux: amortTravaux, notaire: amortNotaire },
     chargesMensuelles: chargesExploitationAn1 / 12,
     impotMensuelAn1: an1.impot / 12,
+    quotePartTerrainPct: terrainPct,
   };
 }

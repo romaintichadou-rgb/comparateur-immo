@@ -7,7 +7,7 @@ function FieldShell({
   hint,
   children,
 }: {
-  label: string;
+  label: ReactNode;
   hint?: ReactNode;
   children: ReactNode;
 }) {
@@ -33,7 +33,7 @@ export function TextField({
   hint,
   placeholder,
 }: {
-  label: string;
+  label: ReactNode;
   value: string;
   onChange: (v: string) => void;
   onBlur?: () => void;
@@ -214,6 +214,14 @@ export function EstimatedBadge() {
   return (
     <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700">
       Estimé
+    </span>
+  );
+}
+
+export function ManualBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-500">
+      Manuel
     </span>
   );
 }

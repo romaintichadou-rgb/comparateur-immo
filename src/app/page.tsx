@@ -4,6 +4,8 @@ import { seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import HomeView from "@/components/HomeView";
 import SetupNotice from "@/components/SetupNotice";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   let apartments;
   let seuils;

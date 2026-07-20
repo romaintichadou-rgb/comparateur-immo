@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createApartment, listApartments } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
-import { apartmentInputSchema, type ChampEstimable } from "@/lib/types";
+import { apartmentInputSchema, isImmeuble, type ChampEstimable } from "@/lib/types";
 import {
   estimateAssurance,
   estimateChargesCopro,
   estimateFraisNotaire,
-  estimateTaxeFonciere,
 } from "@/lib/estimates";
+import { estimateTaxeFonciereCommune } from "@/lib/taxeFonciereCommune";
 import { geocodeApartmentLocation } from "@/lib/geocoding";
 
 export async function GET() {
@@ -54,10 +55,12 @@ export async function POST(req: NextRequest) {
     const fraisNotaire =
       input.frais_notaire_estimes ??
       estimateFraisNotaire(input.prix, input.etat_bien);
-    const taxeFonciere =
-      input.taxe_fonciere ?? estimateTaxeFonciere(input.surface_m2);
-    const chargesCopro = input.charges_copro_annuelles ?? estimateChargesCopro(input.surface_m2);
-    const assuranceAnnuelle = input.assurance_annuelle ?? estimateAssurance();
+    const chargesCopro = input.charges_copro_annuelles ?? estimateChargesCopro(
+      input.surface_m2, isImmeuble(input.type_bien), input.code_postal,
+    );
+    const assuranceAnnuelle = input.assurance_annuelle ?? estimateAssurance(
+      isImmeuble(input.type_bien), input.nb_lots, input.surface_m2, input.type_bien,
+    );
 
     let latitude = input.latitude;
     let longitude = input.longitude;
@@ -80,6 +83,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // TF estimée APRÈS géocodage pour bénéficier du taux communal réel
+    const taxeFonciere = input.taxe_fonciere ?? estimateTaxeFonciereCommune(
+      input.surface_m2, codeInsee, input.code_postal, input.prix,
+    );
+
     const apartment = await createApartment({
       ...input,
       frais_notaire_estimes: fraisNotaire,
@@ -93,6 +101,7 @@ export async function POST(req: NextRequest) {
       champs_manuels: champsManuelsAtCreation,
     });
 
+    revalidatePath("/");
     return NextResponse.json(
       { apartment: computeDerived(apartment) },
       { status: 201 }

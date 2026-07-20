@@ -126,6 +126,80 @@ export async function fetchLoyerReference(codeInsee: string): Promise<LoyerRefer
   return table?.parCommune.get(codeInsee) ?? null;
 }
 
+const RAYON_LOCAL = 500;
+
+/**
+ * Loyer de référence « local » dans un rayon de ~500 m autour du bien.
+ * On reverse-géocode 5 points (centre + 4 cardinaux à 500 m) via la BAN
+ * pour identifier les communes/arrondissements traversés, puis on calcule
+ * une moyenne pondérée par nombre d'observations des loyers ANIL.
+ * Si une seule commune ressort (cas courant hors PLM), le résultat est
+ * identique à fetchLoyerReference. Retourne aussi le nombre de communes
+ * agrégées pour adapter le libellé UI.
+ */
+export async function fetchLoyerReferenceLocal(
+  lat: number,
+  lon: number,
+  fallbackCodeInsee: string
+): Promise<{ ref: LoyerReference; nbCommunes: number } | null> {
+  const dLat = RAYON_LOCAL / 111000;
+  const dLon = RAYON_LOCAL / (111000 * Math.cos((lat * Math.PI) / 180));
+
+  const points: [number, number][] = [
+    [lat, lon],
+    [lat + dLat, lon],
+    [lat - dLat, lon],
+    [lat, lon + dLon],
+    [lat, lon - dLon],
+  ];
+
+  const codes = await Promise.all(points.map(([la, lo]) => reverseGeoCodeInsee(la, lo)));
+  const uniqueCodes = [...new Set(codes.filter((c): c is string => c != null))];
+  if (uniqueCodes.length === 0 && fallbackCodeInsee) uniqueCodes.push(fallbackCodeInsee);
+
+  const table = await loadTable();
+  if (!table) return null;
+
+  const refs = uniqueCodes
+    .map((code) => table.parCommune.get(code))
+    .filter((r): r is LoyerReference => r != null);
+
+  if (refs.length === 0) return null;
+  if (refs.length === 1) return { ref: refs[0], nbCommunes: 1 };
+
+  const totalObs = refs.reduce((s, r) => s + r.nbObs, 0);
+  return {
+    ref: {
+      loyerM2: round1(refs.reduce((s, r) => s + r.loyerM2 * r.nbObs, 0) / totalObs),
+      min: round1(Math.min(...refs.map((r) => r.min))),
+      max: round1(Math.max(...refs.map((r) => r.max))),
+      nbObs: totalObs,
+      annee: refs[0].annee,
+    },
+    nbCommunes: refs.length,
+  };
+}
+
+async function reverseGeoCodeInsee(lat: number, lon: number): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(
+      `https://api-adresse.data.gouv.fr/reverse/?lon=${lon}&lat=${lat}&limit=1`,
+      { signal: controller.signal, headers: { "User-Agent": "comparateur-locatif-perso/1.0" } }
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      features?: Array<{ properties?: { citycode?: string } }>;
+    };
+    return data.features?.[0]?.properties?.citycode ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchJson(url: string, timeoutMs = 12000): Promise<{ data?: unknown[] } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

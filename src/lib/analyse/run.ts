@@ -11,7 +11,7 @@ import { buildBlocQuartier } from "./blocs/quartier";
 import { buildBlocSimulation } from "./blocs/simulation";
 import { fetchDvf } from "./sources/dvf";
 import { fetchOsmBundle } from "./sources/osm";
-import { fetchLoyerReference } from "./sources/loyers";
+import { fetchLoyerReference, fetchLoyerReferenceLocal } from "./sources/loyers";
 import { fetchDpe } from "./sources/ademe";
 import { fetchGeorisques } from "./sources/georisques";
 import { fetchDelinquance, parentPLM } from "./sources/delinquance";
@@ -64,12 +64,14 @@ export async function runAnalyse(
   const adresseExacte = apt.adresse.trim() !== "";
   const parent = parentPLM(codeInsee);
 
-  const [dvf, osm, settings, loyerRef, dpeData, georisques, delinq, delinqVille, revenu, profilCommune] =
+  const [dvf, osm, settings, loyerRefResult, dpeData, georisques, delinq, delinqVille, revenu, profilCommune] =
     await Promise.all([
       hasCoords ? fetchDvf({ lat: lat as number, lon: lon as number, surface: apt.surface_m2 }) : null,
       hasCoords ? fetchOsmBundle(lat as number, lon as number) : null,
       getSettings(),
-      fetchLoyerReference(codeInsee),
+      adresseExacte && hasCoords
+        ? fetchLoyerReferenceLocal(lat as number, lon as number, codeInsee)
+        : fetchLoyerReference(codeInsee).then((ref) => (ref ? { ref, nbCommunes: 0 } : null)),
       banId && adresseExacte
         ? fetchDpe({ banId, surface: apt.surface_m2 })
         : { records: [], meilleurMatch: null },
@@ -79,6 +81,8 @@ export async function runAnalyse(
       fetchRevenuMedian(codeInsee),
       fetchProfilCommune(codeInsee),
     ]);
+  const loyerRef = loyerRefResult?.ref ?? null;
+  const loyerPerimetre: "rayon500" | "arrondissement" = adresseExacte && hasCoords ? "rayon500" : "arrondissement";
 
   // Les seuils de rendement (Paramètres) pilotent à la fois la note du bloc
   // "Potentiel locatif" et le plafond rédhibitoire du score global — même
@@ -88,9 +92,9 @@ export async function runAnalyse(
 
   // Blocs : fonctions pures sur les données préchargées ci-dessus.
   const prix = buildBlocPrix(apt, dvf, precision);
-  const location = buildBlocLocation(apt, loyerRef, seuils);
+  const location = buildBlocLocation(apt, loyerRef, seuils, loyerPerimetre);
   const risque = buildBlocRisque(apt, dpeData, georisques);
-  const potentiel = buildBlocPotentiel(apt, dvf, osm?.commodites ?? null, delinq, delinqVille);
+  const potentiel = buildBlocPotentiel(apt, dvf, osm?.commodites ?? null, delinq, delinqVille, precision);
   const quartier = buildBlocQuartier({
     revenu,
     profilCommune,

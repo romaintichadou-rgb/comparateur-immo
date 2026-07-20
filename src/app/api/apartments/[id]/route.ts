@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { deleteApartment, getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import {
@@ -101,6 +102,7 @@ export async function PATCH(
       champs_manuels: champsManuels,
     });
 
+    revalidatePath("/");
     return NextResponse.json({ apartment: computeDerived(updated) });
   } catch (err) {
     return NextResponse.json(
@@ -117,6 +119,7 @@ export async function DELETE(
   const { id } = await params;
   try {
     await deleteApartment(id);
+    revalidatePath("/");
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(

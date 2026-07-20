@@ -57,12 +57,16 @@ export async function generateGeminiText(params: {
    * petit budget pour celles qui demandent un calcul (estimation de loyer).
    */
   thinkingBudget?: number;
+  temperature?: number;
 }): Promise<string> {
-  const { apiKey, model, prompt, googleSearch, thinkingBudget = 0 } = params;
+  const { apiKey, model, prompt, googleSearch, thinkingBudget = 0, temperature } = params;
+
+  const generationConfig: Record<string, unknown> = { thinkingConfig: { thinkingBudget } };
+  if (temperature != null) generationConfig.temperature = temperature;
 
   const body: Record<string, unknown> = {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { thinkingConfig: { thinkingBudget } },
+    generationConfig,
   };
   if (googleSearch) {
     body.tools = [{ google_search: {} }];

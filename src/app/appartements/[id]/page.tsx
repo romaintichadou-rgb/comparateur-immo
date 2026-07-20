@@ -6,8 +6,10 @@ import SetupNotice from "@/components/SetupNotice";
 
 export default async function ApartmentPage({
   params,
+  searchParams,
 }: PageProps<"/appartements/[id]">) {
   const { id } = await params;
+  const sp = await searchParams;
 
   let apartment;
   let settings;
@@ -20,5 +22,16 @@ export default async function ApartmentPage({
   }
 
   if (!apartment) notFound();
-  return <ApartmentDetail apartment={computeDerived(apartment)} settings={settings} />;
+
+  const initialTab = typeof sp?.tab === "string" ? sp.tab : undefined;
+  const initialEdit = sp?.edit === "1";
+
+  return (
+    <ApartmentDetail
+      apartment={computeDerived(apartment)}
+      settings={settings}
+      initialTab={initialTab}
+      initialEdit={initialEdit}
+    />
+  );
 }

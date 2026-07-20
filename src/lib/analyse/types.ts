@@ -27,11 +27,20 @@ export const BLOC_LABELS: Record<BlocKey, string> = {
 // notés. "quartier" est purement informatif : poids 0, jamais noté, jamais
 // compté dans la moyenne (computeScoreGlobal filtre déjà sur note != null).
 export const BLOC_POIDS: Record<BlocKey, number> = {
-  prix: 0.25,
+  prix: 0.3,
   location: 0.2,
   risque: 0.15,
   potentiel: 0.15,
-  simulation: 0.25,
+  simulation: 0.2,
+  quartier: 0,
+};
+
+export const BLOC_POIDS_SANS_PRIX: Record<BlocKey, number> = {
+  prix: 0,
+  location: 0.35,
+  risque: 0.15,
+  potentiel: 0.15,
+  simulation: 0.35,
   quartier: 0,
 };
 
@@ -90,6 +99,8 @@ export interface BlocAnalyse {
   donneesManquantes?: string[];
   /** Message affiché quand disponible = false ou note = null. */
   messageIndisponible?: string;
+  /** Invitation à l'action (ex. "ajoute l'adresse"), avec lien discret. */
+  invite?: { text: string; href: string; linkLabel: string };
 }
 
 export type VerdictNiveau = "alerte" | "attention" | "positif";

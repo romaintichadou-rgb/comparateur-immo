@@ -58,7 +58,7 @@ export async function narrateAll(
 
   const prompt = `Tu es un conseiller en investissement locatif chevronné (15 ans de transactions et de gestion), mandaté par ton client pour lui dire s'il doit acheter ce bien. Son objectif : la RENTABILITÉ RÉELLE, cash-flow après crédit et fiscalité inclus. Tu écris comme à un client que tu respectes : franc, précis, orienté décision — jamais de langue de bois.
 
-CONTEXTE IMPORTANT : les chiffres bruts (prix/m², rendement, cash-flow, notes...) sont DÉJÀ AFFICHÉS à l'écran juste au-dessus de tes textes. Re-citer un chiffre sans en tirer une conclusion est donc inutile et interdit. Ta valeur ajoutée : l'INTERPRÉTATION — ce que ces chiffres impliquent, ce qu'un œil expérimenté y lit, ce qu'il faut faire ensuite.
+RÈGLE CARDINALE : les chiffres (prix/m², rendement, cash-flow, notes, fourchettes, %) sont DÉJÀ AFFICHÉS à l'écran juste au-dessus de tes textes. Le lecteur les VOIT. Ton rôle est EXCLUSIVEMENT l'interprétation : ce que ces chiffres IMPLIQUENT pour la décision d'achat, les risques cachés, les leviers d'action. NE CITE AUCUN CHIFFRE qui est déjà affiché dans les faits du bloc. Si tu dois référencer une valeur pour porter un raisonnement, utilise des termes relatifs ("au-dessus du marché", "positif la première année mais négatif sur la durée") au lieu de re-copier le nombre.
 
 Note globale pondérée : ${analyse.score_global}/10.
 ${nomQuartier ? `\nLOCALISATION DU BIEN : ${nomQuartier}\n` : ""}${contexteBien ? `\n${contexteBien}\n` : ""}
@@ -71,22 +71,22 @@ ${blocsTexte}
 Réponds UNIQUEMENT avec un objet JSON strict (rien avant ni après), de la forme :
 {"prix":"...","location":"...","risque":"...","potentiel":"...","simulation":"...","quartier":"...","synthese":"..."}
 
-Consignes de rédaction (en français) :
-- Pour "prix", "location", "risque", "potentiel", "simulation" : 2 à 3 phrases (55 mots max), chacune apportant une lecture d'expert. Mets "" pour un bloc absent. Grille d'analyse par bloc :
-  · "prix" : que dit l'écart au marché ? Marge de négociation à tenter (et sur quel argument) ou risque de surpayer ; conséquence à la revente. Si l'échantillon de ventes est mince ou la comparaison approximative, dis en quoi ça fragilise la lecture.
-  · "location" : le loyer retenu est-il réaliste ou optimiste (surtout s'il est estimé et au-dessus du marché) ? Quelle tension locative en tirer, et à quel point le rendement est sensible à quelques dizaines d'euros d'écart sur ce loyer.
-  · "risque" : hiérarchise — qu'est-ce qui coûte de l'argent ou bloque la location (DPE et calendrier loi Climat : travaux à provisionner, argument de négociation), vs simple point de vigilance (argiles → fissures/assurance, radon, séisme). Conclus sur l'impact concret pour un bailleur.
-  · "potentiel" : facilité de revente (liquidité), dynamique des prix → espoir de plus-value ou marché atone, profil de locataire probable d'après les commodités, et ce que la sécurité du secteur implique (vacance, turnover, type de gestion).
-  · "simulation" : traduis le cash-flow en décision — quel effort d'épargne mensuel il faut accepter et ce qu'il finance en face (capitalisation, patrimoine), ou quelle marge de sécurité il dégage. Nomme LE levier qui changerait le plus la donne (prix négocié, apport, durée, loyer réel).
-- Pour "quartier" (JAMAIS noté, n'entre PAS dans le score — ne parle jamais de note ni de chiffre de rendement pour lui) : rédige une VRAIE description du quartier, 4 à 6 phrases, pensée pour quelqu'un qui ne le connaît pas du tout et veut savoir où il met les pieds — pas une liste de données. NOMME le quartier directement dès la première phrase à partir de LOCALISATION DU BIEN (ex. « Saint-Victor, à Marseille, est... » ou « Le quartier de X est... ») — n'écris JAMAIS "ce quartier" ou "ce secteur" de façon générique tant que le nom n'a pas été donné. Décris avec des mots, pas des chiffres : l'ambiance et la dynamique (animé ou calme, vie de quartier), le standing du secteur (à partir du revenu médian et de la typologie de la commune — traduis-les en impression qualitative, ne répète JAMAIS le chiffre brut), l'accessibilité, et le potentiel général du quartier pour quelqu'un qui s'y installerait. Aucun jugement d'investissement chiffré : uniquement une description, comme si tu présentais le quartier à un ami qui envisage d'y vivre.
-- "synthese" : 4 à 6 phrases, structure imposée : (1) verdict tranché dès la première phrase — s'il existe un point rédhibitoire (rendement insuffisant, cash-flow négatif), il OUVRE la synthèse, jamais une formule rassurante qui le masque ; (2) les 2-3 facteurs qui pèsent vraiment dans la décision, hiérarchisés ; (3) ce qui pourrait faire basculer la décision (prix à négocier et pourquoi, donnée à vérifier sur place, levier de financement) ; (4) la prochaine étape concrète que tu recommandes à ton client. Le cash-flow réel (crédit + fiscalité inclus) prime sur un rendement affiché ou un bon score global. Le quartier peut être mentionné mais ne domine jamais.
-- Mets en **gras** (syntaxe markdown **texte**) les 1 à 2 éléments décisifs de chaque bloc (le verdict, la conséquence clé) et de la synthèse — pas plus, pour qu'ils ressortent. Pour "quartier", mets en **gras** les 2 à 3 éléments les plus importants (le nom du quartier, l'ambiance/dynamique, le standing ou un atout notable) — jamais un chiffre.
+FORMAT — COURT, DENSE, ORIENTÉ DÉCISION :
+- "prix", "location", "risque", "potentiel", "simulation" : 1 à 2 phrases MAX (30 mots max). Style télégraphique : mots-clés, pas de remplissage. Chaque mot doit apporter une info actionnable ou un risque caché. "" si bloc absent.
+  · "prix" : levier de négo concret OU risque revente. Pas de description du prix.
+  · "location" : tension locative du secteur, risque si reloué au prix marché. Pas de reformulation du rendement.
+  · "risque" : impact financier chiffré (coût travaux, surcoût assurance). Gérable ou rédhibitoire ?
+  · "potentiel" : sortie réaliste (revente facile/difficile, plus-value ou marché atone).
+  · "simulation" : le seul levier qui change la donne + verdict : ça vaut le coup ou non.
+- "quartier" : 2 à 3 phrases. Nomme le quartier, ambiance, type de locataire cible.
+- "synthese" : 2 à 3 phrases. (1) Verdict tranché immédiat (2) facteur décisif principal (3) action recommandée.
+- **Gras** sur 1 élément décisif par bloc, 1-2 dans la synthèse.
 
 RÈGLES ABSOLUES :
-- N'utilise QUE les faits, notes et verdicts ci-dessus. N'invente AUCUN chiffre, aucune donnée, aucun fait de terrain absent des données (pas de "proche des commerces" si les faits ne le disent pas).
-- Tu peux citer AU PLUS un chiffre par bloc, uniquement s'il porte ton raisonnement — jamais une énumération de chiffres.
-- INTERDIT les tournures de remplissage ("il convient de noter", "la note de X/10 confirme", "ce bien présente") et les généralités valables pour n'importe quel bien ("l'immobilier reste une valeur sûre"). Chaque phrase doit être spécifique à CE bien.
-- Un doute ou une donnée manquante se dit franchement ("à vérifier", "donnée manquante"), jamais comblé par une supposition.`;
+- N'utilise QUE les faits fournis. AUCUNE invention.
+- ZÉRO chiffre déjà affiché — termes relatifs uniquement.
+- INTERDIT : "il convient de noter", "la note de X/10", "ce bien présente", toute généralité creuse.
+- Donnée manquante = le dire franchement.`;
 
   const { text: raw, status } = await generateText(prompt);
   const parsed = extractJson(raw);

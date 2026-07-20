@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Download, MousePointerClick } from "lucide-react";
 import { buildBookmarkletHref } from "@/lib/bookmarklet";
 import { APP_NAME } from "@/lib/constants";
 
@@ -32,7 +33,8 @@ export default function BookmarkletView() {
       </div>
 
       <div className="rounded-xl border border-ink-200 bg-white p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Download className="h-3.5 w-3.5" /></span>
           1. Installer le bookmarklet
         </h2>
         <p className="mt-2 text-sm text-ink-600">
@@ -58,7 +60,8 @@ export default function BookmarkletView() {
       </div>
 
       <div className="rounded-xl border border-ink-200 bg-white p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><MousePointerClick className="h-3.5 w-3.5" /></span>
           2. Utiliser
         </h2>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-600">
@@ -69,16 +72,16 @@ export default function BookmarkletView() {
             (description, détails...) pour lire un maximum d&apos;informations
           </li>
           <li>
-            L&apos;onglet se redirige vers le formulaire d&apos;ajout, pré-rempli avec ce qui a pu
-            être détecté — vérifie et corrige avant d&apos;enregistrer
+            Un nouvel onglet s&apos;ouvre avec le formulaire pré-rempli — vérifie et corrige
+            avant d&apos;enregistrer, ta page d&apos;annonce reste ouverte
           </li>
         </ol>
       </div>
 
       <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 text-xs text-ink-500">
         Le bookmarklet s&apos;exécute entièrement dans ton navigateur : aucune donnée n&apos;est
-        envoyée ailleurs qu&apos;à ta propre app. Il réutilise l&apos;onglet de l&apos;annonce
-        (pense à la garder ouverte dans un autre onglet si tu veux la recomparer ensuite).
+        envoyée ailleurs qu&apos;à ta propre app. Le formulaire s&apos;ouvre dans un nouvel
+        onglet, ta page d&apos;annonce reste accessible.
       </div>
     </div>
   );

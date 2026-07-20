@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, IBM_Plex_Sans, Geist_Mono, Outfit } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import { RendementDetailProvider } from "@/components/RendementDetailProvider";
+import { LoyerDetailProvider } from "@/components/LoyerDetailProvider";
 import { APP_NAME } from "@/lib/constants";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
@@ -60,7 +61,7 @@ export default function RootLayout({
             l'accueil) se calerait sur <main> qui ne défile pas, et ne
             fonctionnerait jamais. */}
         <main className="flex-1 overflow-x-clip">
-          <RendementDetailProvider>{children}</RendementDetailProvider>
+          <RendementDetailProvider><LoyerDetailProvider>{children}</LoyerDetailProvider></RendementDetailProvider>
         </main>
       </body>
     </html>

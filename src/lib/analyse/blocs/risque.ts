@@ -29,8 +29,20 @@ const LOI_CLIMAT: Record<string, string> = {
 };
 
 // Pénalités par étiquette DPE (impact sur la note de risque).
+// G/F = interdiction de louer imminente ou effective → pénalités très lourdes.
 const DPE_PENALITE: Record<string, number> = {
-  G: 2, F: 1.5, E: 0.75, D: 0.25, C: 0, B: 0, A: 0,
+  G: 5, F: 3.5, E: 1.5, D: 0.5, C: 0, B: 0, A: 0,
+};
+
+// Pénalités par étiquette GES (impact climat, plus faible que le DPE mais réel).
+const GES_PENALITE: Record<string, number> = {
+  G: 1.5, F: 1, E: 0.5, D: 0.25, C: 0, B: 0, A: 0,
+};
+
+// Plafonnement de la note risque selon l'étiquette DPE.
+// Un DPE G (interdit de location) ne peut jamais donner une bonne note risque.
+const DPE_NOTE_CAP: Record<string, number> = {
+  G: 2, F: 4,
 };
 
 export function buildBlocRisque(
@@ -45,7 +57,8 @@ export function buildBlocRisque(
 ): BlocAnalyse {
   const faits: Fait[] = [];
   const sources: Source[] = [];
-  const penalites: number[] = [];
+  let dpePenalite = 0;
+  const geoPenalites: number[] = [];
 
   const adresseExacte = apt.adresse.trim() !== "";
 
@@ -100,7 +113,11 @@ export function buildBlocRisque(
   }
 
   if (dpeRef && DPE_PENALITE[dpeRef.toUpperCase()] != null) {
-    penalites.push(DPE_PENALITE[dpeRef.toUpperCase()]);
+    dpePenalite = DPE_PENALITE[dpeRef.toUpperCase()];
+  }
+  let gesPenalite = 0;
+  if (gesRef && GES_PENALITE[gesRef.toUpperCase()] != null) {
+    gesPenalite = GES_PENALITE[gesRef.toUpperCase()];
   }
 
   // Loi climat (dérivée du DPE de référence — calendrier légal, pas une estim.)
@@ -122,7 +139,7 @@ export function buildBlocRisque(
     if (gr.argiles) {
       usedGeorisques = true;
       const c = Number(gr.argiles.code);
-      penalites.push(c >= 3 ? 1 : c === 2 ? 0.5 : 0);
+      geoPenalites.push(c >= 3 ? 1 : c === 2 ? 0.5 : 0);
       faits.push({
         label: "Retrait-gonflement des argiles",
         value: gr.argiles.libelle,
@@ -135,7 +152,7 @@ export function buildBlocRisque(
     if (gr.radon) {
       usedGeorisques = true;
       const c = Number(gr.radon.classe);
-      penalites.push(c >= 3 ? 1 : c === 2 ? 0.5 : 0);
+      geoPenalites.push(c >= 3 ? 1 : c === 2 ? 0.5 : 0);
       faits.push({
         label: "Potentiel radon",
         value: ["Faible", "Moyen", "Élevé"][c - 1] ?? `Classe ${c}`,
@@ -149,7 +166,7 @@ export function buildBlocRisque(
     if (gr.sismique) {
       usedGeorisques = true;
       const c = Number(gr.sismique.code);
-      penalites.push(c >= 5 ? 1.5 : c === 4 ? 1 : c === 3 ? 0.5 : 0);
+      geoPenalites.push(c >= 5 ? 1.5 : c === 4 ? 1 : c === 3 ? 0.5 : 0);
       faits.push({
         label: "Zonage sismique",
         value: ["Très faible", "Faible", "Modérée", "Moyenne", "Forte"][c - 1] ?? gr.sismique.libelle,
@@ -164,7 +181,7 @@ export function buildBlocRisque(
     if (gr.risquesCommune.length > 0) {
       usedGeorisques = true;
       const inondation = gr.risquesCommune.some((r) => /inondation/i.test(r));
-      if (inondation) penalites.push(0.5);
+      if (inondation) geoPenalites.push(0.5);
       faits.push({
         label: "Risques recensés sur la commune",
         value: null,
@@ -179,10 +196,18 @@ export function buildBlocRisque(
   }
 
   // --- Note déterministe ---
+  // DPE+GES pèse 80 % de la note, géorisques 20 %.
   const aDesDonnees = faits.length > 0 && (dpeRef !== "" || sources.some((s) => s.label === SRC_GEORISQUES.label));
-  const note = aDesDonnees
-    ? clampNote((5 - penalites.reduce((s, p) => s + p, 0)) * 2)
-    : null;
+  let note: number | null = null;
+  if (aDesDonnees) {
+    const energySub = Math.max(0, 5 - dpePenalite - gesPenalite);
+    const geoTotal = geoPenalites.reduce((s, p) => s + p, 0);
+    const geoSub = Math.max(0, 5 - geoTotal);
+    note = clampNote((energySub * 0.8 + geoSub * 0.2) * 2);
+
+    const cap = DPE_NOTE_CAP[dpeRef.toUpperCase()];
+    if (cap != null) note = Math.min(note, cap);
+  }
 
   return {
     cle: "risque",

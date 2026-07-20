@@ -21,16 +21,17 @@
  * d'affichage, jamais une vraie destination) : cliquer sur "tout" sans
  * discrimination ferait quitter la page avant l'extraction.
  *
- * Laisse le DOM se mettre à jour, puis lit le texte complet. La
- * redirection se fait via `location.href` (pas
- * `window.open`) : après un `setTimeout`, la plupart des navigateurs
- * bloquent l'ouverture d'un nouvel onglet comme un pop-up non désiré.
+ * Laisse le DOM se mettre à jour, puis lit le texte complet. Le
+ * `window.open` est appelé immédiatement (dans le contexte du geste
+ * utilisateur) pour éviter le blocage popup, puis la destination est
+ * renseignée après l'extraction. Fallback sur `location.href` si bloqué.
  *
  * Le code ci-dessous est volontairement écrit en ES5/syntaxe permissive
  * (var, pas de flèches) pour rester exécutable tel quel sur un maximum de
  * pages tierces sans étape de build.
  */
 const BOOKMARKLET_SOURCE = `(function(){
+var w=window.open('about:blank','_blank');
 function expandVoir(cb){
 var re=/\\b(voir|en savoir plus|afficher plus|voir plus|voir tout|voir la description|voir les d[eé]tails|d[eé]tails|tout afficher|lire la suite|num[eé]ro|d[eé]plier|montrer|plus d'infos?)\\b/i;
 function pass(){
@@ -133,7 +134,7 @@ for(var k in fr)if(d[k]===undefined)d[k]=fr[k];
 d.url=location.href;
 d.plateforme=pf;
 var enc=btoa(unescape(encodeURIComponent(JSON.stringify(d))));
-location.href='__APP_ORIGIN__/appartements/nouveau?prefill='+enc;
+var url='__APP_ORIGIN__/appartements/nouveau?prefill='+enc;if(w){w.location.href=url;}else{location.href=url;}
 }
 expandVoir(go);
 })();`;

@@ -11,10 +11,12 @@ import {
   INDEXATION_CHARGES_DEFAUT_PCT,
   REVALORISATION_BIEN_DEFAUT_PCT,
   REVALORISATION_LOYER_DEFAUT_PCT,
+  VACANCE_LOCATIVE_DEFAUT_PCT,
   type AnneeSimulation,
   type SimulationInputs,
 } from "@/lib/simulation";
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
+import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
 
 /**
@@ -33,11 +35,13 @@ function OptionalRateField({
   value,
   defaut,
   onChange,
+  suffix = "%/an",
 }: {
   label: string;
   value: number | null;
   defaut: number;
   onChange: (v: number | null) => void;
+  suffix?: string;
 }) {
   if (value == null) {
     return (
@@ -53,7 +57,7 @@ function OptionalRateField({
   }
   return (
     <div className="flex items-end gap-1">
-      <NumberField label={label} value={value} onChange={(v) => onChange(v ?? 0)} suffix="%/an" />
+      <NumberField label={label} value={value} onChange={(v) => onChange(v ?? 0)} suffix={suffix} />
       <button
         type="button"
         onClick={() => onChange(null)}
@@ -92,11 +96,14 @@ export default function SimulationFinanciere({
   apartment,
   settings,
   onSaved,
+  onPatchApartment,
 }: {
   apartment: ApartmentWithComputed;
   settings: AppSettings;
   /** Appelé après l'enregistrement des hypothèses, pour resynchroniser le bien côté parent. */
   onSaved?: (apartment: ApartmentWithComputed) => void;
+  /** Patch un champ du bien (quote-part terrain). */
+  onPatchApartment?: (patch: Partial<ApartmentWithComputed>) => void;
 }) {
   const cashflowSeuils: CashflowSeuils = {
     vert: settings.cashflowSeuilVertEuros,
@@ -202,7 +209,7 @@ export default function SimulationFinanciere({
         {/* Simulateur de crédit */}
         <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <Landmark className="h-4 w-4 text-ink-400" />
+            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Landmark className="h-3.5 w-3.5" /></span>
             Crédit immobilier
           </h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -255,7 +262,7 @@ export default function SimulationFinanciere({
         {/* Détail mensuel année 1 — la "participation mensuelle" */}
         <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <Banknote className="h-4 w-4 text-ink-400" />
+            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Banknote className="h-3.5 w-3.5" /></span>
             Détail mensuel — année 1
           </h3>
           <ul className="divide-y divide-ink-100 text-sm">
@@ -285,12 +292,13 @@ export default function SimulationFinanciere({
       </div>
 
       {/* Fiscalité LMNP */}
-      <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+      <section className="space-y-5 rounded-xl border border-ink-200 bg-white p-5">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <ReceiptText className="h-4 w-4 text-ink-400" />
+          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><ReceiptText className="h-3.5 w-3.5" /></span>
           Fiscalité — LMNP au réel
         </h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField
             label="Tranche marginale d'imposition (TMI)"
             value={String(inputs.tmiPct) as (typeof TMI_OPTIONS)[number]}
@@ -299,34 +307,55 @@ export default function SimulationFinanciere({
             allowEmpty={false}
             hint={<span className="text-xs font-normal text-ink-400">+ {LMNP.prelevementsSociauxPct} % de prélèvements sociaux</span>}
           />
-          <div className="rounded-lg bg-ink-50 px-4 py-3 text-sm sm:col-span-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-ink-400">
-              Amortissements annuels déductibles
+          <NumberField
+            label="Quote-part terrain"
+            value={result.quotePartTerrainPct}
+            onChange={(v) => onPatchApartment?.({ quote_part_terrain_pct: v })}
+            suffix="% du prix"
+            hint={
+              apartment.quote_part_terrain_pct == null ? (
+                <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
+                  auto
+                </span>
+              ) : undefined
+            }
+          />
+        </div>
+
+        <div className="rounded-lg bg-ink-50 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Amortissements annuels déductibles</p>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <AmortRow label="Bâti" amount={result.amortissements.bati} detail={`${100 - result.quotePartTerrainPct} % du prix · 40 ans`} />
+            {result.amortissements.travaux > 0 && (
+              <AmortRow label="Travaux" amount={result.amortissements.travaux} detail="15 ans" />
+            )}
+            {result.amortissements.notaire > 0 && (
+              <AmortRow label="Frais de notaire" amount={result.amortissements.notaire} detail="5 ans" />
+            )}
+          </div>
+          <p className="mt-3 text-xs font-medium text-ink-600">
+            Total : {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
+          </p>
+        </div>
+
+        <div className="flex items-start gap-3 rounded-lg border border-ink-100 bg-white px-4 py-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-300" />
+          <div className="text-xs leading-relaxed text-ink-500">
+            <p>
+              Les amortissements ne peuvent pas créer de déficit — ils sont plafonnés au résultat
+              de l&apos;année, l&apos;excédent est reporté sans limite <span className="text-ink-400">(art. 39 C)</span>.
             </p>
-            <p className="mt-1 text-ink-700">
-              Bâti {euros(result.amortissements.bati)} € <span className="text-ink-400">(90 % du prix · 40 ans)</span>
-              {result.amortissements.travaux > 0 && (
-                <> · Travaux {euros(result.amortissements.travaux)} € <span className="text-ink-400">(15 ans)</span></>
-              )}
-              {result.amortissements.notaire > 0 && (
-                <> · Notaire {euros(result.amortissements.notaire)} € <span className="text-ink-400">(5 ans)</span></>
-              )}
+            <p className="mt-1.5 font-medium text-ink-600">
+              Année 1 : résultat imposable {euros(result.annees[0].resultatImposable)} € → impôt {euros(result.annees[0].impot)} €/an
             </p>
           </div>
         </div>
-        <p className="flex items-start gap-1.5 text-xs text-ink-400">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          Au régime réel, les amortissements ne peuvent pas créer de déficit : ils sont plafonnés au
-          résultat de l&apos;année et l&apos;excédent est reporté sans limite (art. 39 C). Résultat
-          imposable année 1 : {euros(result.annees[0].resultatImposable)} € → impôt{" "}
-          {euros(result.annees[0].impot)} €/an.
-        </p>
       </section>
 
       {/* Tableau année par année */}
       <section className="rounded-xl border border-ink-200 bg-white">
         <h3 className="flex items-center gap-2 p-5 pb-3 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <Calculator className="h-4 w-4 text-ink-400" />
+          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Calculator className="h-3.5 w-3.5" /></span>
           Cash-flow année par année
         </h3>
         <div className="flex flex-wrap items-end gap-3 px-5 pb-4">
@@ -348,9 +377,16 @@ export default function SimulationFinanciere({
             defaut={INDEXATION_CHARGES_DEFAUT_PCT}
             onChange={(v) => set("indexationChargesPct", v)}
           />
+          <OptionalRateField
+            label="Vacance locative"
+            value={inputs.vacanceLocativePct}
+            defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
+            onChange={(v) => set("vacanceLocativePct", v)}
+            suffix="% du loyer"
+          />
         </div>
         <p className="px-5 pb-4 text-xs text-ink-400">
-          Par défaut, aucune revalorisation ni indexation n&apos;est supposée (hypothèse la plus
+          Par défaut, aucune revalorisation, indexation ni vacance n&apos;est supposée (hypothèse la plus
           prudente) — active-les au besoin.
         </p>
         <div className="overflow-x-auto">
@@ -396,6 +432,9 @@ export default function SimulationFinanciere({
           {inputs.indexationChargesPct != null
             ? `indexées à ${inputs.indexationChargesPct} %/an`
             : "supposées constantes (pas d'indexation)"}
+          {inputs.vacanceLocativePct != null
+            ? ` ; vacance locative ${inputs.vacanceLocativePct} %`
+            : ""}
           .
         </p>
       </section>
@@ -404,7 +443,7 @@ export default function SimulationFinanciere({
         {/* Financement du projet */}
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <PieChart className="h-4 w-4 text-ink-400" />
+            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><PieChart className="h-3.5 w-3.5" /></span>
             Financement du projet
           </h3>
           <p className="text-xs text-ink-400">
@@ -416,7 +455,7 @@ export default function SimulationFinanciere({
         {/* Évolution du patrimoine */}
         <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <TrendingUp className="h-4 w-4 text-ink-400" />
+            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><TrendingUp className="h-3.5 w-3.5" /></span>
             Évolution du patrimoine
           </h3>
           <p className="text-xs text-ink-400">
@@ -700,6 +739,7 @@ export function ResultCard({
   value,
   tone,
   emphase = false,
+  loading = false,
   onClick,
 }: {
   label: string;
@@ -707,6 +747,8 @@ export function ResultCard({
   value: string;
   tone: "neutral" | "positif" | "attention" | "alerte";
   emphase?: boolean;
+  /** Valeur en cours de recalcul en arrière-plan → barre skeleton, tuile non cliquable. */
+  loading?: boolean;
   onClick?: () => void;
 }) {
   // Couleur de la valeur = le ton, partout (contexte comme verdict). Tons
@@ -754,13 +796,19 @@ export function ResultCard({
   const content = (
     <>
       <p className="text-xs font-medium text-ink-500">{label}</p>
-      <p className={`mt-1 font-mono text-2xl font-semibold ${valueTones[tone]}`}>{value}</p>
+      {loading ? (
+        <Skeleton className="mt-2 mb-1 h-6 w-24" />
+      ) : (
+        <p className={`mt-1 font-mono text-2xl font-semibold ${valueTones[tone]}`}>{value}</p>
+      )}
       <p className="mt-0.5 text-[11px] text-ink-400">{sub}</p>
     </>
   );
   const className = `rounded-xl border-2 p-5 ${base}`;
 
-  if (onClick) {
+  // Pendant le recalcul, la tuile n'est pas cliquable (la valeur n'est pas encore
+  // à jour — ouvrir son détail afficherait des chiffres périmés).
+  if (onClick && !loading) {
     return (
       <button
         type="button"
@@ -796,6 +844,17 @@ function WaterfallRow({
       </span>
       <span className="font-medium text-ink-800">{euros(Math.abs(value))} €</span>
     </li>
+  );
+}
+
+function AmortRow({ label, amount, detail }: { label: string; amount: number; detail: string }) {
+  return (
+    <div className="flex items-baseline justify-between rounded-md bg-white/60 px-3 py-2">
+      <span className="text-sm font-medium text-ink-700">{label}</span>
+      <span className="text-right text-sm tabular-nums text-ink-800">
+        {euros(amount)} € <span className="text-xs text-ink-400">({detail})</span>
+      </span>
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { estimateRent } from "@/lib/rentEstimation";
+import { fetchLoyerReference } from "@/lib/analyse/sources/loyers";
 import type { ChampEstimable } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -24,16 +25,29 @@ export async function POST(req: NextRequest) {
     // générique déconnectée du bien (voir buildConsigneCharges).
     const chargesCoproAnnuelles = computeDerived(apartment).charges_copro_annuelles;
 
+    const loyerRef = apartment.code_insee
+      ? await fetchLoyerReference(apartment.code_insee)
+      : null;
+
     const { loyer, justification } = await estimateRent({
       ville: apartment.ville,
       quartier: apartment.quartier,
       code_postal: apartment.code_postal,
       surface_m2: apartment.surface_m2,
       nb_pieces: apartment.nb_pieces,
+      nb_chambres: apartment.nb_chambres,
       type_bien: apartment.type_bien,
       nb_lots: apartment.nb_lots,
       charges_copro_annuelles: chargesCoproAnnuelles,
-    });
+      etage: apartment.etage,
+      ascenseur: apartment.ascenseur,
+      annee_construction: apartment.annee_construction,
+      etat_bien: apartment.etat_bien,
+      dpe: apartment.dpe,
+      ges: apartment.ges,
+      travaux: apartment.travaux,
+      description: apartment.description,
+    }, loyerRef);
 
     // Ceci est l'action explicite "réestimer" : on écrase loyer_retenu même
     // s'il avait été marqué manuel, et on le (re)marque comme estimé par IA

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { AlertTriangle, Banknote, Calculator, CheckCircle2, Clock, Info, KeyRound, Loader2, MapPin, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, VerdictNiveau } from "@/lib/analyse/types";
@@ -58,36 +59,34 @@ function noteColorClasses(note: number): string {
 }
 
 export function formatNote(note: number): string {
-  return note.toFixed(1).replace(".", ",");
+  return Number.isInteger(note) ? String(note) : note.toFixed(1).replace(".", ",");
 }
 
 /**
- * Phrase synthétique d'opportunité, dérivée du score et des verdicts (100 %
- * déterministe, disponible sans LLM). Mène sur le point rédhibitoire s'il
- * existe, sinon met en avant l'atout principal.
+ * Phrase synthétique orientée décision, dérivée du score et des verdicts.
+ * Ne répète aucune note ni titre de bloc — le détail est visible en dessous.
  */
 function syntheseCourte(analyse: { score_global: number | null; verdicts: Verdict[]; blocs: Record<BlocKey, BlocAnalyse> }): string {
   const s = analyse.score_global;
-  if (s == null) return "Analyse indisponible : données insuffisantes.";
-
-  const qualifier =
-    s >= 8 ? "Belle opportunité" : s >= 6 ? "Opportunité correcte" : s >= 4 ? "Opportunité limitée" : "Opportunité faible";
+  if (s == null) return "Données insuffisantes pour évaluer cette opportunité.";
 
   const alerte = analyse.verdicts.find((v) => v.niveau === "alerte");
-  if (alerte) return `${qualifier} — ${alerte.titre.toLowerCase()}.`;
-
   const attention = analyse.verdicts.find((v) => v.niveau === "attention");
-  if (attention) return `${qualifier}, à nuancer : ${attention.titre.toLowerCase()}.`;
 
-  // L'atout principal se cherche parmi les leviers de valeur (prix, location,
-  // potentiel) — un bon score de risque = absence de problème, pas un atout.
-  const leviers = (Object.values(analyse.blocs) as BlocAnalyse[]).filter(
-    (b) => b.note != null && b.cle !== "risque"
-  );
-  const best = leviers.length ? leviers.reduce((a, b) => ((b.note as number) > (a.note as number) ? b : a)) : null;
-  return best
-    ? `${qualifier} — aucun point rédhibitoire, atout principal : ${best.titre.toLowerCase()} (${formatNote(best.note as number)}/10).`
-    : `${qualifier}.`;
+  if (s >= 8) {
+    if (alerte) return "Profil solide malgré un point de vigilance — à vérifier avant de s'engager.";
+    return "Profil d'investissement solide, les fondamentaux sont alignés.";
+  }
+  if (s >= 6) {
+    if (alerte) return "Potentiel correct mais un point bloquant pèse sur l'ensemble.";
+    if (attention) return "Correct dans l'ensemble, une marge de négociation pourrait faire basculer la décision.";
+    return "Opportunité acceptable, sans défaut majeur ni avantage marqué.";
+  }
+  if (s >= 4) {
+    if (alerte) return "Montage fragile — un ou plusieurs fondamentaux ne sont pas réunis.";
+    return "Rentabilité limitée en l'état, à creuser seulement si le prix est négociable.";
+  }
+  return "Les fondamentaux ne sont pas réunis pour cet investissement.";
 }
 
 /** Rend un texte en interprétant le gras markdown **…** en <strong>. */
@@ -107,28 +106,27 @@ export default function AnalyseIA({
   apartment,
   seuilsRendement = SEUILS_RENDEMENT_DEFAUT,
   onAnalysed,
+  onRelancer,
+  quotaNotice = false,
 }: {
   apartment: ApartmentWithComputed;
   seuilsRendement?: RendementSeuils;
   onAnalysed: (apt: ApartmentWithComputed) => void;
+  onRelancer?: () => void;
+  quotaNotice?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Avis discret : les résumés IA ont échoué (quota Gemini) alors que les
-  // données/scores, eux, ont bien été calculés.
-  const [quotaNotice, setQuotaNotice] = useState(false);
   const analyse = apartment.analyse_ia;
 
-  async function lancer() {
+  async function lancerPremiere() {
     setLoading(true);
     setError(null);
-    setQuotaNotice(false);
     try {
       const res = await fetch(`/api/analyse/${apartment.id}`, { method: "POST" });
       const data = await res.json();
       if (res.ok) {
         onAnalysed(data.apartment);
-        setQuotaNotice(data.narrationStatus === "quota");
       } else {
         setError(data.error ?? "Échec de l'analyse.");
       }
@@ -139,7 +137,6 @@ export default function AnalyseIA({
     }
   }
 
-  // État initial : aucune analyse encore lancée.
   if (!analyse) {
     return (
       <div className="rounded-xl border border-ink-200 bg-white p-10 text-center">
@@ -151,7 +148,7 @@ export default function AnalyseIA({
         </p>
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
         <button
-          onClick={lancer}
+          onClick={lancerPremiere}
           disabled={loading}
           className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-70"
         >
@@ -180,12 +177,9 @@ export default function AnalyseIA({
     <div className="space-y-6">
       {/* Score global + synthèse */}
       <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
-        {/* Barre de progression indéterminée pendant l'analyse */}
-        {loading && <div className="h-1 w-full animate-pulse bg-accent-500" />}
-
         <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-5">
-            <ScoreGauge note={analyse.score_global} loading={loading} />
+            <ScoreGauge note={analyse.score_global} />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
                 Score global · opportunité d&apos;achat
@@ -196,23 +190,15 @@ export default function AnalyseIA({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end">
-            {loading ? (
-              <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-accent-600">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Analyse en cours… (~30 s)
-              </span>
-            ) : (
-              <span className="whitespace-nowrap text-xs text-ink-400">
-                Généré le {formatDateTime(analyse.genere_le)}
-              </span>
-            )}
+            <span className="whitespace-nowrap text-xs text-ink-400">
+              Généré le {formatDateTime(analyse.genere_le)}
+            </span>
             <button
-              onClick={lancer}
-              disabled={loading}
+              onClick={onRelancer}
+              disabled={!onRelancer}
               className="inline-flex items-center gap-1.5 rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-60"
             >
-              {loading && <Loader2 className="h-3 w-3 animate-spin" />}
-              {loading ? "Analyse…" : "Relancer"}
+              Relancer
             </button>
           </div>
         </div>
@@ -242,10 +228,6 @@ export default function AnalyseIA({
           </p>
         )}
       </div>
-
-      {error && (
-        <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
-      )}
 
       {/* Blocs notés + Quartier (informatif, non noté), à côté de Risque */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -286,7 +268,7 @@ export function noteHex(note: number | null): string {
 }
 
 /** Jauge circulaire : anneau de progression proportionnel à la note /10. */
-function ScoreGauge({ note, loading = false }: { note: number | null; loading?: boolean }) {
+function ScoreGauge({ note }: { note: number | null }) {
   const size = 96;
   const stroke = 9;
   const r = (size - stroke) / 2;
@@ -295,7 +277,7 @@ function ScoreGauge({ note, loading = false }: { note: number | null; loading?: 
   const color = noteHex(note);
 
   return (
-    <div className={`relative shrink-0 ${loading ? "animate-pulse" : ""}`} style={{ width: size, height: size }}>
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e6e1f0" strokeWidth={stroke} />
         <circle
@@ -338,7 +320,7 @@ function BlocCard({
     <section className="flex flex-col rounded-xl border border-ink-200 bg-white p-5">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <Icon className="h-4 w-4 text-ink-400" />
+          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Icon className="h-3.5 w-3.5" /></span>
           {bloc.titre}
         </h3>
         {bloc.note != null ? (
@@ -349,9 +331,13 @@ function BlocCard({
           >
             <span className="font-mono">{formatNote(bloc.note)}/10</span>
           </span>
-        ) : bloc.cle === "quartier" ? (
+        ) : bloc.cle === "quartier" || (bloc.cle === "prix" && bloc.note == null && bloc.disponible) ? (
           <span className="rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-500">
             Informatif
+          </span>
+        ) : bloc.invite ? (
+          <span className="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-400">
+            —
           </span>
         ) : (
           <span className="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-400">
@@ -407,6 +393,19 @@ function BlocCard({
                 <FaitRow key={i} fait={f} />
               ))}
             </ul>
+          )}
+
+          {/* Invitation à l'action (ex. "ajoute l'adresse") */}
+          {bloc.invite && (
+            <div className="rounded-lg border border-dashed border-ink-300 bg-ink-50/50 px-4 py-3 text-sm text-ink-500">
+              {bloc.invite.text}{" "}
+              <Link
+                href={bloc.invite.href}
+                className="font-medium text-accent-600 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
+              >
+                {bloc.invite.linkLabel}
+              </Link>
+            </div>
           )}
 
           {/* Données manquantes (jamais estimées) */}

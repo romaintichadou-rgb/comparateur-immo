@@ -1,4 +1,24 @@
 import { isImmeuble, type Apartment, type ChampEstimable } from "./types";
+import { estimateTaxeFonciereLocale, getCoproEurM2 } from "./taxeFonciereData";
+
+/**
+ * Préfixe de la justification générée quand la taxe foncière vient du calcul
+ * COMMUNAL déterministe (taux DGFiP réel de la commune), par opposition au
+ * fallback départemental + IA.
+ *
+ * Sert de signal CLIENT-SAFE à applyLiveEstimates pour ne PAS recalculer (et
+ * donc écraser) une TF communale par la formule départementale : le module
+ * communal (taxeFonciereCommune.ts + 473 Ko de JSON) est server-only et ne
+ * peut pas être importé ici. Une TF communale est figée en base par
+ * /estimate-charges ; on la conserve telle quelle à la lecture.
+ *
+ * DOIT rester synchronisé avec buildTfJustificationDeterministe
+ * (chargesEstimation.ts), qui construit sa phrase à partir de cette constante —
+ * couplage volontaire et documenté (chargesEstimation.ts importe déjà
+ * ce module ; l'inverse tirerait le JSON communal dans le bundle client).
+ */
+export const TF_JUSTIF_COMMUNE_PREFIX =
+  "Basé sur le taux d'imposition réel de la commune";
 
 /**
  * Heuristiques simples pour pré-remplir les champs financiers estimés à
@@ -35,12 +55,20 @@ export function estimateFraisNotaire(
 }
 
 /**
- * Taxe foncière : pas de source fiable simple par adresse en V1.
- * Estimation grossière basée sur la surface (moyenne nationale ~15€/m²/an),
- * à corriger manuellement dès que l'utilisateur a une valeur réelle
- * (avis d'imposition, agence, etc.).
+ * Taxe foncière : estimation ajustée par département (coefficient local)
+ * et par prix du bien (proxy de la valeur locative cadastrale). Quand le
+ * code postal est fourni, utilise la table de coefficients départementaux
+ * pour réduire l'erreur d'estimation de ×5 à ×2. Le prix, quand disponible,
+ * sert de second estimateur (TF ≈ 0.8 % du prix × coeff local).
  */
-export function estimateTaxeFonciere(surfaceM2: number | null): number | null {
+export function estimateTaxeFonciere(
+  surfaceM2: number | null,
+  codePostal?: string,
+  prix?: number | null,
+): number | null {
+  if (codePostal) {
+    return estimateTaxeFonciereLocale(surfaceM2, codePostal, prix ?? null);
+  }
   if (surfaceM2 == null) return null;
   const TAUX_MOYEN_EUR_PAR_M2 = 15;
   return Math.round(surfaceM2 * TAUX_MOYEN_EUR_PAR_M2);
@@ -48,35 +76,56 @@ export function estimateTaxeFonciere(surfaceM2: number | null): number | null {
 
 /**
  * Charges annuelles récurrentes à la charge du propriétaire (hors taxe
- * foncière et assurance, comptées séparément), estimées au m² :
- *  - Logement en copropriété (~20€/m²/an) : quote-part de charges courantes de
- *    syndic, avec un plancher (un studio a des charges fixes incompressibles).
- *  - Immeuble entier (~12€/m²/an) : pas de copropriété ni de marge de syndic,
- *    mais l'entretien des parties communes et de l'enveloppe reste à la charge
- *    du seul propriétaire ; plancher plus élevé (immeuble = plusieurs lots).
- * À corriger manuellement dès que l'utilisateur a le montant réel (appel de
- * charges, syndic, comptes d'exploitation...).
+ * foncière et assurance, comptées séparément), estimées au m².
+ * Le taux €/m² est ajusté par département (proxy urbanisation via TF_EUR_M2).
  */
-export function estimateChargesCopro(surfaceM2: number | null, immeuble = false): number {
-  const EUR_PAR_M2_AN = immeuble ? 12 : 20;
+export function estimateChargesCopro(
+  surfaceM2: number | null,
+  immeuble = false,
+  codePostal?: string,
+): number {
+  const eurM2 = codePostal ? getCoproEurM2(codePostal, immeuble) : (immeuble ? 12 : 20);
   const PLANCHER_EUR_AN = immeuble ? 1500 : 800;
   if (surfaceM2 == null || surfaceM2 <= 0) return PLANCHER_EUR_AN;
-  return Math.max(PLANCHER_EUR_AN, Math.round(surfaceM2 * EUR_PAR_M2_AN));
+  return Math.max(PLANCHER_EUR_AN, Math.round(surfaceM2 * eurM2));
 }
 
 /**
- * Assurance propriétaire (PNO) : ~150€/an pour un logement unique. Un immeuble
- * assure chacun de ses lots : on multiplie par le nombre de lots (réel ou
- * estimé depuis la surface, voir lotsEffectifs).
+ * Assurance PNO (Propriétaire Non Occupant) annuelle.
+ *
+ * Tarifs calés sur les barèmes comparateurs 2024-2025 (LeLynx, Assurland) :
+ *  - Appartement : ~2.5 €/m²/an, plancher 90 € (studio), plafond 350 €
+ *  - Maison : ~3.0 €/m²/an, plancher 180 € (maison standard), plafond 450 €
+ *  - Immeuble : par lot avec économie d'échelle (-10 % par lot au-delà du 1er,
+ *    plancher 120 €/lot), car une police PNO immeuble coûte moins cher par
+ *    logement qu'autant de PNO individuelles.
+ *
+ * Le type de bien influence le taux : une maison a plus de surface exposée
+ * (toiture, jardin, clôture) qu'un appartement en copropriété.
  */
 export function estimateAssurance(
   immeuble = false,
   nbLots: number | null = null,
-  surfaceM2: number | null = null
+  surfaceM2: number | null = null,
+  typeBien?: string,
 ): number {
-  const ASSURANCE_PAR_LOT_EUR_AN = 150;
-  if (!immeuble) return ASSURANCE_PAR_LOT_EUR_AN;
-  return ASSURANCE_PAR_LOT_EUR_AN * lotsEffectifs(nbLots, surfaceM2);
+  if (immeuble) {
+    const lots = lotsEffectifs(nbLots, surfaceM2);
+    const surfaceParLot = surfaceM2 != null && surfaceM2 > 0 ? surfaceM2 / lots : 45;
+    const baseLot = Math.max(120, Math.round(surfaceParLot * 2.5));
+    // Économie d'échelle : -10% par lot au-delà du premier (plafonné à -30%)
+    const remise = Math.min(0.30, (lots - 1) * 0.10);
+    const parLot = Math.round(baseLot * (1 - remise));
+    return parLot * lots;
+  }
+
+  const isMaison = (typeBien ?? "").trim().toLowerCase() === "maison";
+  const tauxM2 = isMaison ? 3.0 : 2.5;
+  const plancher = isMaison ? 180 : 90;
+  const plafond = isMaison ? 450 : 350;
+
+  if (surfaceM2 == null || surfaceM2 <= 0) return plancher;
+  return Math.max(plancher, Math.min(plafond, Math.round(surfaceM2 * tauxM2)));
 }
 
 /**
@@ -112,19 +161,26 @@ export function applyLiveEstimates(apt: Apartment): Apartment {
   const immeuble = isImmeuble(apt.type_bien);
   const fige = (champ: ChampEstimable) =>
     apt.champs_manuels.includes(champ) || apt.champs_estimes_ia.includes(champ);
+  // Une TF issue du calcul communal déterministe (taux DGFiP réel) est figée
+  // en base : la recalculer ici avec la formule DÉPARTEMENTALE (la seule
+  // disponible côté client) l'écraserait par une valeur moins précise. On la
+  // détecte via le préfixe de sa justification (signal client-safe).
+  const tfCommunaleFigee =
+    apt.taxe_fonciere != null &&
+    (apt.taxe_fonciere_justification ?? "").startsWith(TF_JUSTIF_COMMUNE_PREFIX);
   return {
     ...apt,
     frais_notaire_estimes: apt.champs_manuels.includes("frais_notaire_estimes")
       ? apt.frais_notaire_estimes
       : estimateFraisNotaire(apt.prix, apt.etat_bien),
-    taxe_fonciere: fige("taxe_fonciere")
+    taxe_fonciere: fige("taxe_fonciere") || tfCommunaleFigee
       ? apt.taxe_fonciere
-      : estimateTaxeFonciere(apt.surface_m2),
+      : estimateTaxeFonciere(apt.surface_m2, apt.code_postal, apt.prix),
     charges_copro_annuelles: fige("charges_copro_annuelles")
       ? apt.charges_copro_annuelles
-      : estimateChargesCopro(apt.surface_m2, immeuble),
+      : estimateChargesCopro(apt.surface_m2, immeuble, apt.code_postal),
     assurance_annuelle: apt.champs_manuels.includes("assurance_annuelle")
       ? apt.assurance_annuelle
-      : estimateAssurance(immeuble, apt.nb_lots, apt.surface_m2),
+      : estimateAssurance(immeuble, apt.nb_lots, apt.surface_m2, apt.type_bien),
   };
 }

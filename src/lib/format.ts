@@ -11,8 +11,8 @@ export function formatPercent(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   return new Intl.NumberFormat("fr-FR", {
     style: "percent",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
   }).format(value);
 }
 
@@ -62,6 +62,73 @@ export function formatDate(iso: string | null | undefined): string {
   } catch {
     return "—";
   }
+}
+
+/**
+ * Remplace toute mention €/m² (ou €/m²/an, €/m²/mois) par la valeur
+ * multipliée par la surface dans l'unité cible.
+ *
+ * Quand le texte contient déjà la conversion ("X €/m², soit Y €/mois"),
+ * on garde uniquement la partie convertie.
+ */
+function replaceEurM2(text: string, surface: number, unit: "€/mois" | "€/an"): string {
+  let t = text;
+  const unitRe = unit.replace("/", "\\/");
+  t = t.replace(
+    new RegExp(`\\d+[.,]?\\d*\\s*[–-]\\s*\\d+[.,]?\\d*\\s*€\\/m²[^,]*,\\s*soit\\s+(\\d[\\d\\s]*[–-]\\s*\\d[\\d\\s]*${unitRe})`, "g"),
+    "$1",
+  );
+  t = t.replace(
+    new RegExp(`\\d+[.,]?\\d*\\s*€\\/m²[^,]*,\\s*soit\\s+(\\d[\\d\\s]*${unitRe})`, "g"),
+    "$1",
+  );
+  t = t.replace(
+    /(\d+[.,]?\d*)\s*[–-]\s*(\d+[.,]?\d*)\s*€\/m²[/\w]*/g,
+    (_, a, b) => {
+      const va = parseFloat(a.replace(",", "."));
+      const vb = parseFloat(b.replace(",", "."));
+      return `${Math.round(va * surface).toLocaleString("fr-FR")} – ${Math.round(vb * surface).toLocaleString("fr-FR")} ${unit}`;
+    },
+  );
+  t = t.replace(
+    /(\d+[.,]?\d*)\s*€\/m²[/\w]*/g,
+    (_, v) => {
+      const n = parseFloat(v.replace(",", "."));
+      return `${Math.round(n * surface).toLocaleString("fr-FR")} ${unit}`;
+    },
+  );
+  return t;
+}
+
+/**
+ * Nettoyage commun à toute justification IA (loyer, charges, taxe foncière).
+ * Double filet : appliqué au STOCKAGE (génération) ET à l'AFFICHAGE (données
+ * anciennes déjà en base). Chaque règle compense une violation récurrente de
+ * Gemini malgré les consignes dans le prompt :
+ *  1. Convertit les €/m² dans l'unité cible (€/mois ou €/an)
+ *  2. Supprime les formules de calcul (X * Y = Z, parenthèses arithmétiques)
+ *  3. Supprime "Résultat : X €…" en fin de texte
+ *  4. Remplace "moyenne nationale" par "moyenne locale"
+ *  5. Tronque à `maxPhrases` phrases
+ */
+export function sanitizeJustification(
+  text: string,
+  surface: number | null,
+  unit: "€/mois" | "€/an",
+  maxPhrases = 4,
+): string {
+  let t = text;
+  if (surface != null && surface > 0) t = replaceEurM2(t, surface, unit);
+  t = t.replace(/\([^)]*[×*÷/][^)]*\)/g, "");
+  t = t.replace(/\d[\d\s.,]*[×*]\s*\d[\d\s.,]*\s*=\s*[\d\s.,]+\s*€?/g, "");
+  t = t.replace(/\.?\s*Résultat\s*:\s*[\d\s ]+\s*€[^.]*\.?/gi, "");
+  t = t.replace(/moyenne\s+nationale/gi, "moyenne locale");
+  t = t.replace(/\s{2,}/g, " ").trim();
+  const sentences = t.match(/[^.!]+[.!]+/g);
+  if (sentences && sentences.length > maxPhrases) {
+    t = sentences.slice(0, maxPhrases).join("").trim();
+  }
+  return t;
 }
 
 /** Date + heure, format FR courant ("08/07/2026 à 14:32"). */

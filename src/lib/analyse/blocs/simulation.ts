@@ -77,17 +77,34 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
     anneesSansImpotFait(result.annees),
   ];
 
-  // Note = cash-flow mensuel moyen situé par rapport aux seuils personnels,
-  // avec les mêmes paliers (et le même écart de 100 €) au-dessus/en dessous
-  // des seuils que les autres blocs déterministes.
+  // Note = cash-flow mensuel moyen (facteur principal, adapté au profil
+  // investisseur) + ajustements pour la soutenabilité et l'avantage fiscal.
   const r = cfMoyen;
+  const mid = (seuils.vert + seuils.rouge) / 2;
   let base: number;
-  if (r >= seuils.vert + 100) base = 5;
+  if (r >= seuils.vert + 200) base = 5;
+  else if (r >= seuils.vert + 100) base = 4.5;
   else if (r >= seuils.vert) base = 4;
-  else if (r >= seuils.rouge) base = 3;
+  else if (r >= mid) base = 3;
+  else if (r >= seuils.rouge) base = 2.5;
   else if (r >= seuils.rouge - 100) base = 2;
+  else if (r >= seuils.rouge - 200) base = 1.5;
   else base = 1;
-  const note = clampNote(base * 2);
+
+  // Soutenabilité : un cash-flow positif en année 1 qui bascule négatif sur
+  // la durée est un signal de fragilité — mais uniquement si le cash-flow
+  // moyen sort de la zone acceptable (verte) définie par le profil investisseur.
+  if (cfAn1 > 0 && cfMoyen < 0 && cfMoyen < seuils.vert) base -= 0.5;
+
+  // Avantage fiscal LMNP : des années sans impôt améliorent la rentabilité
+  // réelle, pas d'avantage fiscal = charge supplémentaire dès le départ.
+  const nbAnneesSansImpot = result.annees.findIndex((a) => a.impot >= 1);
+  const anneesSansImpotEff = nbAnneesSansImpot === -1 ? result.annees.length : nbAnneesSansImpot;
+  if (anneesSansImpotEff >= 10) base += 0.5;
+  else if (anneesSansImpotEff >= 5) base += 0.25;
+  else if (anneesSansImpotEff === 0) base -= 0.25;
+
+  const note = clampNote(Math.max(0, base) * 2);
 
   return {
     cle: "simulation",

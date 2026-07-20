@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, type AppSettings } from "../settings";
-import type { AnalyseIA, BlocAnalyse, BlocKey, Verdict } from "./types";
+import { BLOC_POIDS_SANS_PRIX, type AnalyseIA, type BlocAnalyse, type BlocKey, type Verdict } from "./types";
 
 /**
  * Seuils de rendement net (objectif principal : la rentabilité locative), en
@@ -75,13 +75,17 @@ export function computeScoreGlobal(
   rendementNet: number | null,
   seuils: RendementSeuils = SEUILS_RENDEMENT_DEFAUT
 ): number | null {
+  const prixNote = blocs.prix.note != null;
+  const poidsMap = prixNote ? null : BLOC_POIDS_SANS_PRIX;
+  const poids = (b: BlocAnalyse) => poidsMap ? poidsMap[b.cle] : b.poids;
+
   const notes = (Object.values(blocs) as BlocAnalyse[]).filter((b) => b.note != null);
   if (notes.length === 0) return null;
 
-  const poidsTotal = notes.reduce((s, b) => s + b.poids, 0);
+  const poidsTotal = notes.reduce((s, b) => s + poids(b), 0);
   if (poidsTotal === 0) return null;
 
-  let global = notes.reduce((s, b) => s + (b.note as number) * b.poids, 0) / poidsTotal;
+  let global = notes.reduce((s, b) => s + (b.note as number) * poids(b), 0) / poidsTotal;
 
   const risque = blocs.risque;
   if (risque.note != null && risque.note <= 4) global = Math.min(global, 4);
@@ -132,7 +136,29 @@ export function buildVerdicts(
     }
   }
 
-  // 2) Tout bloc noté ≤ 5/10 remonte comme point d'attention critique.
+  // 2) DPE passoire thermique — verdict dédié, indépendant du score du bloc.
+  const dpeLabel = blocs.risque.dpeGes?.dpe?.toUpperCase();
+  if (dpeLabel === "G") {
+    verdicts.push({
+      niveau: "alerte",
+      titre: "DPE G — interdit à la location",
+      detail: "Passoire thermique interdite à la location depuis le 1er janvier 2025 (loi Climat). Des travaux de rénovation énergétique sont obligatoires avant toute mise en location.",
+    });
+  } else if (dpeLabel === "F") {
+    verdicts.push({
+      niveau: "alerte",
+      titre: "DPE F — interdiction de louer en 2028",
+      detail: "Passoire thermique interdite à la location à partir de 2028 (loi Climat). Des travaux de rénovation énergétique coûteux seront nécessaires, impactant fortement la rentabilité.",
+    });
+  } else if (dpeLabel === "E") {
+    verdicts.push({
+      niveau: "attention",
+      titre: "DPE E — interdiction de louer en 2034",
+      detail: "Logement classé E, interdit à la location à partir de 2034 (loi Climat). Des travaux de rénovation énergétique seront nécessaires à moyen terme.",
+    });
+  }
+
+  // 3) Tout bloc noté ≤ 5/10 remonte comme point d'attention critique.
   for (const b of Object.values(blocs) as BlocAnalyse[]) {
     if (b.note != null && b.note <= 5) {
       verdicts.push({
@@ -143,7 +169,7 @@ export function buildVerdicts(
     }
   }
 
-  // 3) Points forts marquants (note ≥ 9/10) — équilibre, en dernier, max 2.
+  // 4) Points forts marquants (note ≥ 9/10) — équilibre, en dernier, max 2.
   const forts = (Object.values(blocs) as BlocAnalyse[])
     .filter((b) => b.note != null && (b.note as number) >= 9)
     .sort((a, b) => (b.note as number) - (a.note as number))

@@ -130,10 +130,11 @@ valeur exacte de la chaîne.
   annuelles" au lieu de "Charges copro annuelles", ~12 €/m²/an au lieu de
   ~20 €/m²/an, plancher 1500 € au lieu de 800 €). Le libellé UI doit suivre
   `isImmeuble()`, pas rester générique.
-- **Assurance** (`estimateAssurance(immeuble, nbLots, surfaceM2)`) : un
-  immeuble assure chacun de ses lots — le montant par défaut par logement
-  (150 €/an) est multiplié par `lotsEffectifs(...)`, jamais un montant fixe
-  unique comme pour un logement seul.
+- **Assurance PNO** (`estimateAssurance(immeuble, nbLots, surfaceM2, typeBien)`)
+  : dynamique selon surface et type de bien. Appartement : 2.5 €/m²
+  (plancher 90 €, plafond 350 €). Maison : 3.0 €/m² (plancher 180 €, plafond
+  450 €). Immeuble : par lot avec économies d'échelle (−5 % par lot au-delà
+  de 2, plafonné à −30 %).
 - **Analyse IA — bloc Prix** (`src/lib/analyse/blocs/prix.ts`) : la seule
   source de comparaison (DVF) ne contient que des ventes d'**appartements au
   détail** (`codtypbien=121`). Décision produit assumée : garder la
@@ -163,3 +164,348 @@ valeur exacte de la chaîne.
   loyer total et les charges totales), mais le régime fiscal n'est PAS
   spécialisé par type de bien. À traiter comme un chantier séparé si demandé,
   pas un oubli à corriger silencieusement en marge d'une autre tâche.
+
+# Architecture d'estimation (loyer + charges)
+
+Les estimations utilisent un mix de calculs déterministes et d'IA selon la
+disponibilité des données. Ne pas modifier un flux sans vérifier la cohérence
+avec les autres.
+
+## Quatre champs estimés individuellement
+
+Chaque champ a son propre bouton "Estimer avec IA" dans l'UI et son propre
+appel backend. Il n'y a plus de bouton "Réestimer" global — tout est par champ.
+
+| Estimation | Mode | Fichier | API route | Paramètre |
+|---|---|---|---|---|
+| **Loyer mensuel CC** | Déterministe + IA blending | `src/lib/rentEstimation.ts` | `/api/estimate-rent` | — |
+| **Charges copro** | Déterministe + IA blending | `src/lib/chargesEstimation.ts` | `/api/estimate-charges` | `field: "charges_copro_annuelles"` |
+| **Taxe foncière** (avec taux communal) | **100% déterministe** — pas d'appel IA | `src/lib/taxeFonciereCommune.ts` | idem | `field: "taxe_fonciere"` |
+| **Taxe foncière** (sans taux communal) | Déterministe + IA blending (fallback) | idem | idem | `field: "taxe_fonciere"` |
+| **Assurance PNO** | **100% déterministe** — pas d'appel IA | `src/lib/estimates.ts` | PATCH direct `/api/apartments/[id]` | — |
+
+Sans paramètre `field`, `/api/estimate-charges` estime les deux (charges copro
++ TF) — utilisé par `runRecalc` lors d'un changement de données du bien.
+
+## Blending déterministe + IA (loyer, charges copro, TF fallback)
+
+1. **Calcul déterministe** à partir de barèmes connus (ANIL pour le loyer,
+   barèmes départementaux pour les charges) ajusté par les caractéristiques.
+2. **Appel Gemini + Google Search** (temperature 0) avec prompt structuré
+   qui injecte l'ancrage déterministe comme référence.
+3. **Blending** : `final = 0.6 × déterministe + 0.4 × IA`, clampé :
+   - Loyer : fourchette ANIL min/max × surface
+   - Charges copro : ±30 % du déterministe (0.7–1.4)
+   - TF fallback : ±30 % du déterministe (0.7–1.4)
+
+Le poids IA (`AI_WEIGHT = 0.4`) est identique dans les deux fichiers. Ne pas
+le changer dans un seul — la stabilité dépend de cette constance.
+
+## Taxe foncière — mode déterministe (taux communal disponible)
+
+Quand le `code_insee` du bien est trouvé dans la table DGFiP (34 874 communes),
+la TF est calculée **sans appel IA** :
+- `TF = surface × RC_m2 × taux_commune`
+- Quand estimée seule (`field: "taxe_fonciere"`), aucun appel Gemini
+- Quand estimée avec les charges (`runRecalc`), le prompt IA ne demande que
+  les charges copro (économie de tokens)
+- Le badge affiche "ESTIMATION IA" (rouge) comme les autres — choix UX
+  volontaire pour l'homogénéité, même si le calcul est déterministe
+- La justification est générée localement (taux, source DGFiP)
+
+## Provision sur charges (estimation loyer)
+
+La provision sur charges utilisée pour convertir un loyer HC en CC n'est plus
+un forfait fixe (2.5 €/m²/mois). `provisionChargesM2(input)` dans
+`rentEstimation.ts` utilise les charges réelles du bien quand disponibles :
+`charges_copro_annuelles / 12 / surface_m2`. Fallback à 2.5 €/m²/mois si
+les charges sont inconnues (cas rare — elles sont estimées dès la création).
+
+## Ajustements déterministes
+
+Les mêmes facteurs d'ajustement sont appliqués dans le calcul déterministe ET
+dans le prompt IA (via des consignes structurées) pour garantir la cohérence :
+
+- **Étage/ascenseur** : pas d'impact aux étages 1-2. Rez-de-chaussée : décote
+  (-5 % loyer, pas d'effet sur charges). Étage ≥ 3 avec ascenseur : prime
+  (+5 % loyer, +20 % charges copro). Étage ≥ 3 sans ascenseur : décote
+  (-3 % loyer). Ne JAMAIS appliquer d'impact ascenseur en dessous du 3e étage.
+- **Travaux** : trois paliers basés sur €/m² de travaux (<300 légers, 300-800
+  moyens, ≥800 lourds). Impactent le loyer à la hausse uniquement (bien
+  rénové). N'impactent pas les charges.
+- **DPE** : facteur multiplicateur par lettre (A=1.04 → G=0.91). Impacte le
+  loyer uniquement.
+- **Ancienneté** : immeuble >50 ans = +15 % charges, ≤20 ans = -10 % charges.
+  N'impacte pas le loyer (couvert par le DPE et l'état du bien).
+
+## Règles d'affichage des justifications
+
+Toutes les justifications (loyer, charges, taxe foncière) passent par
+**`sanitizeJustification(text, surface, unit, maxPhrases)`**
+(`src/lib/format.ts`). Double filet : appliqué au **stockage** (génération)
+ET à l'**affichage** (données anciennes en base). Règles appliquées :
+1. Convertit les €/m² dans l'unité cible (€/mois ou €/an)
+2. Supprime les formules de calcul (X × Y = Z)
+3. Supprime "Résultat : X €…" en fin de texte
+4. Remplace "moyenne nationale" par "moyenne locale"
+5. Tronque à `maxPhrases` phrases
+
+Ne JAMAIS contourner ce filet — le code garantit la conformité même si
+l'IA viole les consignes du prompt.
+
+- **Rendu bold** : appliquer `renderBoldInline()` (`ApartmentDetail.tsx`) à
+  tout texte de justification. La regex met en gras les montants €, les %, et
+  les mots-clés pertinents (ascenseur, travaux, taux communal, etc.).
+- **Données récentes uniquement** : dernière année connue, pas de moyenne
+  multi-années.
+
+## Couleurs sémantiques (perspective investisseur)
+
+La logique de couleur `ecartTone()` (`LoyerDetailPanel.tsx`) suit la
+perspective de l'investisseur, pas du locataire :
+- **Au-dessus du marché** (écart ≥ 0 %) = `emerald` (bon revenu locatif).
+- **En-dessous du marché** (écart -1 % à -10 %) = `amber` (revenu sous-optimal).
+- **Très au-dessus** (>15 %) ou **très en-dessous** (<-10 %) = `red` (irréaliste
+  ou problématique).
+Ne JAMAIS inverser cette logique (ci-dessus = vert parce que c'est bon pour
+l'investisseur).
+
+# Taxe foncière — estimation commune + département
+
+## Architecture à deux niveaux
+
+L'estimation de la taxe foncière utilise deux niveaux de précision :
+
+1. **Niveau communal** (précis) — `src/lib/taxeFonciereCommune.ts` (server-only,
+   473 Ko de données) :
+   - Source : DGFiP 2025 REI, 34 874 communes
+   - Données : `src/lib/taux_tfpb_communes.json` (code_insee → taux_global %)
+   - Moyennes dept : `src/lib/taux_moyen_dept.json` (code_dept → taux_moyen %)
+   - Formule : `TF = surface × RC_m2 × taux_commune`
+   - **Purement déterministe** — pas d'appel IA
+   - Activé quand le `code_insee` du bien est disponible (via géocodage BAN)
+
+2. **Niveau départemental** (fallback) — `src/lib/taxeFonciereData.ts` :
+   - TF/m² par département (barème statique)
+   - Estimation : `estimateTaxeFonciereLocale(surface, codePostal, prix)`
+   - Complété par IA + blending quand appelé via `/api/estimate-charges`
+
+## Estimation du RC (revenu cadastral) par m²
+
+Le RC n'est pas une donnée publique — il est estimé à partir des données
+départementales : `RC_m2 = TF_EUR_M2_dept / taux_moyen_dept`.
+
+Ce calcul brut souffre d'un **biais de covariance** : dans les départements
+urbains, la moyenne simple du taux (non pondérée par la population)
+sous-estime le taux réel pondéré, ce qui surestime le RC. Un **dampening
+adaptatif** corrige ce biais en fonction de l'écart entre le taux communal
+et la moyenne départementale :
+
+- **Taux communal ≤ moyenne dept** (ex : Le Plessis-Trévise 34.7 % vs dept
+  37.9 %) → pas de biais pour cette commune → **pas de dampening** (facteur 1.0)
+- **Taux communal > moyenne dept** (ex : Marseille 47.9 % vs dept 39.9 %) →
+  biais probable → **dampening proportionnel** à l'écart (facteur 0.3 à 1.0)
+- **Taux communal = moyenne dept** (ex : Paris, seule commune du dept 75) →
+  aucun biais possible → **pas de dampening** (facteur 1.0)
+- **Sans taux communal** (fallback) → **dampening maximal** (facteur 0.3)
+
+Constante de référence : `NATIONAL_RC_M2 = 49` (20 €/m² TF ÷ 0.41 taux
+moyen national). Le dampening ne s'applique que quand `deptRC > NATIONAL_RC_M2`.
+
+## Données (server-only)
+
+Le module `taxeFonciereCommune.ts` et ses JSON (473 Ko) ne sont importés que
+par le code serveur (API routes). Ne JAMAIS l'importer depuis un composant
+client ou un fichier importé côté client — ça ajouterait 473 Ko au bundle.
+Le module `taxeFonciereData.ts` (département, ~2 Ko) est importable partout.
+
+## Fonctions exportées
+
+- **`getTauxCommune(codeInsee)`** → taux global TFB de la commune (ou null)
+- **`estimateTaxeFonciereCommune(surface, codeInsee, codePostal, prix)`** →
+  estimation TF avec taux communal si disponible, sinon fallback départemental
+- **`estimateTaxeFonciereLocale(surface, codePostal, prix)`** → estimation
+  départementale pure (dans `taxeFonciereData.ts`)
+- **`defaultQuotePartTerrain(codePostal)`** → quote-part terrain par défaut
+  selon la zone (urbain 10 %, périurbain 15 %, rural 20 %)
+
+**Migration requise** : `supabase/migrations/0005_quote_part_terrain.sql`
+ajoute `quote_part_terrain_pct` (real, nullable). À exécuter dans le SQL
+Editor de CHAQUE projet Supabase (prod et dev).
+
+# Quote-part terrain (amortissement LMNP)
+
+La simulation LMNP (`src/lib/simulation.ts`) n'utilise plus un ratio fixe
+90 % bâti / 10 % terrain. Le champ `quote_part_terrain_pct` (nullable) sur
+`Apartment` permet à l'utilisateur de saisir le vrai ratio (disponible sur
+l'acte notarié ou l'avis d'imposition). Quand le champ est `null`, un défaut
+intelligent est calculé selon la zone via `defaultQuotePartTerrain()` :
+- Zone urbaine dense (Paris, Lyon, Annecy, Nice…) : **10 %** terrain
+- Zone intermédiaire (villes moyennes) : **15 %** terrain
+- Zone rurale / périurbaine : **20 %** terrain
+
+Le champ est modifiable dans l'onglet « Simulation financière » (section
+Fiscalité LMNP), avec un badge « auto » quand il est en mode automatique.
+La modification est sauvegardée immédiatement (PATCH direct) pour un feedback
+en temps réel sur le cash-flow simulé.
+
+# Analyse IA — bloc Risques et scoring DPE/GES
+
+Le bloc "Risques" (`src/lib/analyse/blocs/risque.ts`) est 100 % déterministe,
+aucun appel IA. Les données viennent de l'ADEME (DPE officiel) et Géorisques
+(aléas naturels). La note /10 (10 = risque faible) combine deux sous-scores :
+énergie (DPE + GES, 80 %) et géorisques (20 %).
+
+## Pénalités DPE (perspective investisseur — loi Climat)
+
+| DPE | Pénalité | Raison |
+|-----|----------|--------|
+| G   | 5 (max)  | Interdit à la location depuis 2025 |
+| F   | 3.5      | Interdiction en 2028 |
+| E   | 1.5      | Interdiction en 2034 |
+| D   | 0.5      | Modéré, OK pour l'instant |
+| C-A | 0        | Aucun risque réglementaire |
+
+## Pénalités GES
+
+| GES | Pénalité |
+|-----|----------|
+| G   | 1.5      |
+| F   | 1.0      |
+| E   | 0.5      |
+| D   | 0.25     |
+| C-A | 0        |
+
+## Caps DPE sur la note risque
+
+- DPE G → note risque plafonnée à **2/10** (interdit de louer)
+- DPE F → note risque plafonnée à **4/10** (interdiction imminente)
+
+Ces caps garantissent qu'un DPE catastrophique ne peut jamais être
+"compensé" par de bons résultats géorisques.
+
+## Verdicts globaux DPE (`scoring.ts`)
+
+Indépendamment du score du bloc, le DPE déclenche des verdicts dédiés
+au niveau de l'analyse globale :
+- DPE G → **alerte** "DPE G — interdit à la location"
+- DPE F → **alerte** "DPE F — interdiction de louer en 2028"
+- DPE E → **attention** "DPE E — interdiction de louer en 2034"
+
+Ces verdicts s'ajoutent aux verdicts "bloc faible" classiques et sont
+toujours visibles en tête d'analyse.
+
+## Plafonds globaux existants (rappel)
+
+- Bloc risque ≤ 4/10 → score global plafonné à 4 (`computeScoreGlobal`)
+- Rendement net < seuil rédhibitoire → score global plafonné à 5
+
+Ne pas modifier ces plafonds — ils sont le garde-fou contre la dilution
+d'un point rédhibitoire par la moyenne pondérée.
+
+# Pattern CTA non-bloquant (bannière sticky)
+
+## Estimation par champ (`estimateFieldAI`)
+
+Chaque champ estimé (loyer, charges copro, TF, assurance) a un bouton
+"Estimer avec IA" discret à côté de "Modifier". `estimateFieldAI(key)`
+gère tout : pending state, appel API, mise à jour `apt`, bannière.
+
+- **`estimatingFields`** (`Set<string>`) : un champ par estimation en cours.
+  Le bouton affiche un spinner et se disable pendant l'estimation.
+- **Loyer / Charges copro / TF** : appel vers `/api/estimate-rent` ou
+  `/api/estimate-charges?field=...`. L'API écrase la valeur manuelle et
+  bascule le champ dans `champs_estimes_ia`.
+- **Assurance** : pas d'appel IA — calcul déterministe local
+  (`estimateAssurance()`), puis PATCH direct avec `champs_manuels` nettoyé
+  et `champs_estimes_ia` mis à jour. L'UI affiche "ESTIMATION IA" comme
+  les autres (choix UX volontaire).
+
+## Recalcul automatique (`runRecalc`)
+
+Quand les données du bien changent (description, adresse, surface…),
+`runRecalc` ré-estime automatiquement les champs impactés :
+
+1. `computeRecalcNeeds(patch)` détermine quels champs recalculer selon les
+   clés modifiées (`RENT_FIELDS`, `CHARGES_FIELDS`, `ASSURANCE_FIELDS`,
+   `ANALYSIS_FIELDS`).
+2. Les estimations s'exécutent séquentiellement : PATCH → loyer → charges →
+   assurance → analyse IA.
+3. **Les valeurs manuelles sont écrasées** : la nouvelle estimation est
+   toujours prioritaire. Les champs sortent de `champs_manuels` et entrent
+   dans `champs_estimes_ia`.
+
+Flags `*Pending` (`rentPending`, `chargesPending`, `analysisPending`) :
+contrôlent les skeletons des sections impactées pendant le recalcul.
+
+## Bannière sticky (`useBanner()`)
+
+3 phases : `saving` (accent), `success` (vert, auto-dismiss 3 s), `error`
+(rouge, auto-dismiss 6 s). Utilisée par `save()`, `saveField()`,
+`estimateFieldAI()`, et `runRecalc()`.
+
+## `fireEstimation` (analyse IA uniquement)
+
+`fireEstimation(url, msgs, setPending, onSuccess?)` reste utilisé par
+`handleRelancerAnalyse`. Les re-estimations par champ utilisent
+`estimateFieldAI` à la place.
+
+# Pattern Display/Edit pour champs estimés
+
+Les sections Location et Charges annuelles (`ApartmentDetail.tsx`) utilisent
+un pattern **Display → Edit → Save/Cancel** pour les 5 champs : loyer,
+charges copro, taxe foncière, assurance, frais de gestion.
+
+## Mode Display (par défaut)
+
+Composant `DisplayValue` : valeur affichée en gros (`text-2xl font-semibold`)
+non éditable, avec :
+- **Badge** : `AiEstimatedBadge` (rouge) pour les estimations IA/déterministes,
+  `ManualBadge` (gris) pour les valeurs saisies manuellement, rien si null.
+- **Bouton "Modifier"** (icône crayon, hover accent) : passe en mode Edit.
+- **Bouton "Estimer avec IA"** (icône sparkle, accent) : relance l'estimation
+  pour ce champ uniquement. Présent sur loyer, charges copro, TF, assurance.
+  Absent sur frais de gestion (paramètre utilisateur, pas un champ estimé).
+- La justification IA est visible sous la valeur.
+
+Actif quand le champ n'est PAS dans `editingFields` et PAS dans `finPatch`.
+Les champs manuels (`champs_manuels`) s'affichent aussi en mode Display
+(avec `ManualBadge`), plus en mode Edit comme avant.
+
+## Mode Edit (au clic "Modifier")
+
+Composant `EditableValue` : `NumberField` éditable avec deux boutons :
+- **✓ (accent)** : enregistre la valeur (`saveField(key)`) — PATCH serveur,
+  le champ passe dans `champs_manuels`, retour au mode Display avec
+  `ManualBadge`.
+- **✕ (gris)** : annule (`cancelField(key)`) — retire le champ de
+  `editingFields` et `finPatch`, retour au mode Display sans modification.
+
+## Frais de gestion locative
+
+Le champ "Frais de gestion locative" (`hypothese_gestion_pct`) utilise aussi
+le pattern Display/Edit avec save/cancel mais sans badge ni bouton
+"Estimer avec IA" — c'est un paramètre utilisateur, pas un champ estimé.
+
+# Simulation financière — hypothèses optionnelles
+
+L'onglet "Simulation financière" (`SimulationFinanciere.tsx`) expose des
+hypothèses optionnelles désactivées par défaut (valeur `null` = hypothèse
+prudente). Chacune se présente sous forme d'un bouton "+" (dashed border)
+qui, au clic, active l'hypothèse avec une valeur par défaut.
+
+| Hypothèse | Champ (`SimulationInputs`) | Défaut | Suffix | Effet |
+|---|---|---|---|---|
+| Revalorisation du bien | `revalorisationBienPct` | 1 % | %/an | Patrimoine uniquement (pas le cash-flow) |
+| Revalorisation du loyer | `revalorisationLoyerPct` | 1 % | %/an | Loyer revalorisé chaque année (compound) |
+| Indexation charges | `indexationChargesPct` | 2 % | %/an | Copro + TF indexées (compound) |
+| Vacance locative | `vacanceLocativePct` | 5 % | % du loyer | Réduit les loyers effectifs (cascade sur gestion, impôt, cash-flow) |
+
+Le composant `OptionalRateField` gère l'UI : bouton "+" quand `null`,
+`NumberField` + bouton "✕" quand actif. Le prop `suffix` permet de varier
+le libellé ("%/an" vs "% du loyer").
+
+La vacance locative s'applique comme facteur multiplicatif
+`(1 - vacanceLocativePct / 100)` sur les loyers annuels dans la boucle
+année par année (`simulation.ts`). Cela cascade automatiquement sur les
+frais de gestion (% du loyer), le résultat imposable, et le cash-flow.

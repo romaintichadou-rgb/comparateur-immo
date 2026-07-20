@@ -72,6 +72,7 @@ function emptyInput(): ApartmentInput {
     loyer_retenu: null,
     loyer_justification: "",
     hypothese_gestion_pct: DEFAULT_HYPOTHESE_GESTION_PCT,
+    quote_part_terrain_pct: null,
     notes: "",
     score_coup_de_coeur: null,
     photo_url: "",
@@ -94,11 +95,10 @@ type Banner = { tone: "info" | "warning" | "success"; text: string } | null;
 // exécutés en séquence (pas en parallèle), ils ne créent aucun risque de
 // rate-limit, et rester séparés permet de les réestimer indépendamment
 // depuis la fiche (voir ApartmentDetail.tsx) sans dupliquer un appel combiné.
-type ProcPhase = "creating" | "renting" | "charging" | "analysing";
+type ProcPhase = "creating" | "estimating" | "analysing";
 const PROC_STEPS: { key: ProcPhase; label: string; detail: string }[] = [
   { key: "creating", label: "Enregistrement du bien", detail: "Géolocalisation (BAN) et sauvegarde de la fiche." },
-  { key: "renting", label: "Estimation du loyer de marché", detail: "Loyer de référence du secteur via IA et données publiques." },
-  { key: "charging", label: "Estimation des charges annuelles", detail: "Charges de copropriété (ou d'exploitation) et taxe foncière via IA." },
+  { key: "estimating", label: "Estimation loyer et charges", detail: "Loyer de marché, charges de copropriété et taxe foncière via IA." },
   { key: "analysing", label: "Analyse IA complète", detail: "Prix (DVF), risques (ADEME, Géorisques), potentiel du quartier." },
 ];
 
@@ -312,9 +312,9 @@ export default function AddApartmentFlow() {
       return;
     }
 
-    // 2) Estimation du loyer (best-effort) — AVANT l'analyse, car le rendement
-    //    du bloc "Potentiel locatif" en dépend.
-    setProcPhase("renting");
+    // 2) Estimation loyer + charges (best-effort, séquentiels) — AVANT
+    //    l'analyse, car le rendement du bloc "Potentiel locatif" en dépend.
+    setProcPhase("estimating");
     try {
       await fetch("/api/estimate-rent", {
         method: "POST",
@@ -324,10 +324,6 @@ export default function AddApartmentFlow() {
     } catch {
       // non bloquant : le loyer pourra être réestimé depuis la fiche.
     }
-
-    // 2bis) Estimation des charges annuelles (best-effort) — même logique que
-    //    le loyer : appel Gemini séquentiel distinct (voir PROC_STEPS).
-    setProcPhase("charging");
     try {
       await fetch("/api/estimate-charges", {
         method: "POST",
