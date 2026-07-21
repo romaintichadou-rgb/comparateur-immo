@@ -280,7 +280,7 @@ export default function SyntheseView({
         {/* Pied "analyse" : le radar des blocs + le lien vers l'analyse
             détaillée. Volontairement discret, subordonné au verdict. */}
         <div className="mt-7 flex flex-wrap items-end justify-between gap-4">
-          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 sm:gap-x-8">
             {BLOCS_NOTES.map((cle) => {
               const bloc = analyse.blocs[cle];
               return (

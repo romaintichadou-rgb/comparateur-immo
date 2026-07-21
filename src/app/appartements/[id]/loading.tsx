@@ -6,7 +6,7 @@ export default function Loading() {
 
       {/* En-tête compact : vignette · titre · carte */}
       <div className="flex items-center gap-4">
-        <div className="h-28 w-28 shrink-0 animate-pulse rounded-xl bg-ink-100" />
+        <div className="h-20 w-20 shrink-0 animate-pulse rounded-xl bg-ink-100 sm:h-28 sm:w-28" />
         <div className="min-w-0 flex-1 space-y-2">
           <div className="h-5 w-48 animate-pulse rounded bg-ink-100" />
           <div className="h-4 w-64 max-w-full animate-pulse rounded bg-ink-100" />

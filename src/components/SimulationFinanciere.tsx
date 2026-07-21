@@ -393,29 +393,29 @@ export default function SimulationFinanciere({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-y border-ink-100 bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-400">
-                <th className="px-5 py-2 font-medium">Année</th>
-                <th className="px-3 py-2 text-right font-medium">Loyers</th>
-                <th className="px-3 py-2 text-right font-medium">Crédit</th>
-                <th className="px-3 py-2 text-right font-medium">Charges</th>
-                <th className="px-3 py-2 text-right font-medium">Impôt</th>
-                <th className="px-3 py-2 text-right font-medium">Cash-flow /an</th>
-                <th className="px-5 py-2 text-right font-medium">/mois</th>
+                <th className="px-2 py-2 font-medium sm:px-5">Année</th>
+                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Loyers</th>
+                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Crédit</th>
+                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Charges</th>
+                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Impôt</th>
+                <th className="px-1.5 py-2 text-right font-medium sm:px-3">CF /an</th>
+                <th className="px-2 py-2 text-right font-medium sm:px-5">/mois</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-50">
               {result.annees.map((a) => (
                 <tr key={a.annee} className="hover:bg-ink-50/60">
-                  <td className="px-5 py-1.5 text-ink-500">{a.annee}</td>
-                  <td className="px-3 py-1.5 text-right text-ink-700">{euros(a.loyers)}</td>
-                  <td className="px-3 py-1.5 text-right text-ink-700">
+                  <td className="px-2 py-1.5 text-ink-500 sm:px-5">{a.annee}</td>
+                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(a.loyers)}</td>
+                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">
                     {euros(-(result.mensualiteTotale * 12))}
                   </td>
-                  <td className="px-3 py-1.5 text-right text-ink-700">{euros(-a.chargesExploitation)}</td>
-                  <td className="px-3 py-1.5 text-right text-ink-700">{euros(-a.impot)}</td>
-                  <td className={`px-3 py-1.5 text-right font-medium ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
+                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.chargesExploitation)}</td>
+                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.impot)}</td>
+                  <td className={`px-1.5 py-1.5 text-right font-medium sm:px-3 ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
                     {signe(a.cashflowAnnuel)}
                   </td>
-                  <td className={`px-5 py-1.5 text-right font-semibold ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
+                  <td className={`px-2 py-1.5 text-right font-semibold sm:px-5 ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
                     {signe(a.cashflowMensuel)}
                   </td>
                 </tr>

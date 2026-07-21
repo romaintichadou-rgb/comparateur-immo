@@ -23,6 +23,7 @@ import {
   Phone,
   ReceiptText,
   RotateCcw,
+  Trash2,
   Sparkles,
   Star,
   User,
@@ -176,12 +177,12 @@ function EditableValue({
 
 type Tab = "synthese" | "ia" | "donnees" | "financiere" | "simulation";
 
-const TABS: { key: Tab; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
-  { key: "synthese", label: "Synthèse", icon: Gauge },
-  { key: "ia", label: "Analyse IA", icon: Sparkles },
-  { key: "donnees", label: "Description du bien", icon: Home },
-  { key: "financiere", label: "Détails de l'opération", icon: HandCoins },
-  { key: "simulation", label: "Simulation financière", icon: Calculator },
+const TABS: { key: Tab; label: string; shortLabel: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
+  { key: "synthese", label: "Synthèse", shortLabel: "Synthèse", icon: Gauge },
+  { key: "ia", label: "Analyse IA", shortLabel: "IA", icon: Sparkles },
+  { key: "donnees", label: "Description du bien", shortLabel: "Bien", icon: Home },
+  { key: "financiere", label: "Détails de l'opération", shortLabel: "Opération", icon: HandCoins },
+  { key: "simulation", label: "Simulation financière", shortLabel: "Simulation", icon: Calculator },
 ];
 
 // Enregistrer une modification de la description ou de la section Achat déclenche
@@ -749,13 +750,13 @@ export default function ApartmentDetail({
             href={apt.url || "#"}
             target="_blank"
             rel="noreferrer"
-            className="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400"
+            className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400 sm:h-28 sm:w-28"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
           </a>
         ) : (
-          <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl bg-ink-50 ring-1 ring-ink-200">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-ink-50 ring-1 ring-ink-200 sm:h-28 sm:w-28">
             <Home className="h-5 w-5 text-ink-300" />
           </div>
         )}
@@ -789,6 +790,30 @@ export default function ApartmentDetail({
                 </a>
               </>
             )}
+            {hasCoords && (
+              <>
+                <span className="sm:hidden">·</span>
+                <a
+                  href={apt.adresse
+                    ? `https://www.google.com/maps/search/${encodeURIComponent(apt.adresse + (apt.ville ? ", " + apt.ville : ""))}`
+                    : `https://www.google.com/maps/@${apt.latitude},${apt.longitude},17z`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-0.5 text-accent-600 hover:text-accent-800 sm:hidden"
+                >
+                  Carte <MapPin className="h-3 w-3" />
+                </a>
+              </>
+            )}
+            <span>·</span>
+            <button
+              type="button"
+              onClick={(e) => requestDelete(e, apt)}
+              className="text-ink-300 transition-colors hover:text-red-500"
+              title="Supprimer ce bien"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
         </div>
 
@@ -815,14 +840,6 @@ export default function ApartmentDetail({
           </div>
         )}
 
-        {/* Supprimer */}
-        <button
-          type="button"
-          onClick={(e) => requestDelete(e, apt)}
-          className="shrink-0 text-xs text-ink-400 underline decoration-ink-200 underline-offset-2 transition-colors hover:text-red-600 hover:decoration-red-300"
-        >
-          Supprimer
-        </button>
       </div>
 
       {/* Onglets */}
@@ -844,7 +861,8 @@ export default function ApartmentDetail({
               }`}
             >
               <tab.icon className="size-4" />
-              {tab.label}
+              <span className="sm:hidden">{tab.shortLabel}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </Link>
           ))}
         </nav>
