@@ -741,81 +741,88 @@ export default function ApartmentDetail({
         Retour à la liste
       </Link>
 
-      {/* En-tête */}
-      <div className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          {/* Photo */}
-          <div className="relative h-56 min-w-0 flex-1 overflow-hidden rounded-xl border border-ink-200 sm:h-72">
-            {apt.photo_url ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
-                  <h1 className="font-display text-2xl font-semibold text-white sm:text-3xl">
-                    {formatApartmentTitle(apt)}
-                  </h1>
-                  {localisation && <p className="mt-1 text-sm text-white/85">{localisation}</p>}
-                </div>
-              </>
-            ) : (
-              <div className="flex h-full flex-col justify-center bg-ink-50 p-5 sm:p-6">
-                <h1 className="font-display text-2xl font-semibold text-ink-900 sm:text-3xl">
-                  {formatApartmentTitle(apt)}
-                </h1>
-                {localisation && <p className="mt-1 text-sm text-ink-500">{localisation}</p>}
-              </div>
-            )}
-          </div>
-
-          {/* Carte */}
-          <div className="relative isolate h-56 w-full shrink-0 overflow-hidden rounded-xl border border-ink-200 sm:h-72 sm:w-72">
-            {hasCoords ? (
-              <ApartmentLocationMap
-                latitude={apt.latitude!}
-                longitude={apt.longitude!}
-                approximatif={localisationApproximative}
-              />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-ink-50 text-ink-400">
-                <MapPin className="h-5 w-5" />
-                <span className="text-xs">Localisation indisponible</span>
-              </div>
-            )}
-            {hasCoords && localisationApproximative && (
-              <span className="pointer-events-none absolute bottom-2 left-2 z-[1000] rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-amber-600 shadow-sm">
-                Position approximative
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 py-2 text-sm text-ink-500">
-          <span>Ajouté le {formatDate(apt.date_ajout)}</span>
-          <span>·</span>
-          <span>{apt.plateforme}</span>
-          {apt.url && (
-            <>
-              <span>·</span>
-              <a
-                href={apt.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-accent-600 hover:text-accent-800"
-              >
-                Voir l&apos;annonce <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </>
-          )}
-          {/* Action destructive discrète, repoussée à droite : présente sans
-              jamais concurrencer les actions principales de la fiche. */}
-          <button
-            type="button"
-            onClick={(e) => requestDelete(e, apt)}
-            className="ml-auto text-ink-400 underline decoration-ink-200 underline-offset-2 transition-colors hover:text-red-600 hover:decoration-red-300"
+      {/* En-tête compact : vignette photo · titre · mini carte */}
+      <div className="flex items-center gap-4">
+        {/* Photo vignette → ouvre l'annonce */}
+        {apt.photo_url ? (
+          <a
+            href={apt.url || "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400"
           >
-            Supprimer ce bien
-          </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
+          </a>
+        ) : (
+          <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl bg-ink-50 ring-1 ring-ink-200">
+            <Home className="h-5 w-5 text-ink-300" />
+          </div>
+        )}
+
+        {/* Titre + adresse + quartier + meta */}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-display text-lg font-semibold text-ink-900">
+            {formatApartmentTitle(apt)}
+          </h1>
+          {localisation && <p className="truncate text-sm text-ink-500">{localisation}</p>}
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-400">
+            {apt.quartier && (
+              <>
+                <span className="font-medium text-ink-500">{apt.quartier}</span>
+                <span>·</span>
+              </>
+            )}
+            <span>{formatDate(apt.date_ajout)}</span>
+            <span>·</span>
+            <span>{apt.plateforme}</span>
+            {apt.url && (
+              <>
+                <span>·</span>
+                <a
+                  href={apt.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-0.5 text-accent-600 hover:text-accent-800"
+                >
+                  Annonce <ExternalLink className="h-3 w-3" />
+                </a>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Mini carte → ouvre Google Maps à l'adresse exacte */}
+        {hasCoords ? (
+          <a
+            href={apt.adresse
+              ? `https://www.google.com/maps/search/${encodeURIComponent(apt.adresse + (apt.ville ? ", " + apt.ville : ""))}`
+              : `https://www.google.com/maps/@${apt.latitude},${apt.longitude},17z`}
+            target="_blank"
+            rel="noreferrer"
+            className="relative isolate hidden h-28 w-72 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400 sm:block"
+          >
+            <ApartmentLocationMap
+              latitude={apt.latitude!}
+              longitude={apt.longitude!}
+              approximatif={localisationApproximative}
+              compact
+            />
+          </a>
+        ) : (
+          <div className="hidden h-28 w-72 shrink-0 items-center justify-center rounded-xl bg-ink-50 ring-1 ring-ink-200 sm:flex">
+            <MapPin className="h-4 w-4 text-ink-400" />
+          </div>
+        )}
+
+        {/* Supprimer */}
+        <button
+          type="button"
+          onClick={(e) => requestDelete(e, apt)}
+          className="shrink-0 text-xs text-ink-400 underline decoration-ink-200 underline-offset-2 transition-colors hover:text-red-600 hover:decoration-red-300"
+        >
+          Supprimer
+        </button>
       </div>
 
       {/* Onglets */}

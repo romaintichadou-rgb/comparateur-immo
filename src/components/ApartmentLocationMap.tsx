@@ -39,16 +39,21 @@ export default function ApartmentLocationMap({
   latitude,
   longitude,
   approximatif,
+  compact,
 }: {
   latitude: number;
   longitude: number;
   approximatif: boolean;
+  compact?: boolean;
 }) {
   return (
     <MapContainer
       center={[latitude, longitude]}
-      zoom={approximatif ? 11 : 13}
+      zoom={approximatif ? 11 : compact ? 14 : 13}
       scrollWheelZoom={false}
+      dragging={!compact}
+      zoomControl={!compact}
+      attributionControl={!compact}
       className="h-full w-full"
     >
       <TileLayer
