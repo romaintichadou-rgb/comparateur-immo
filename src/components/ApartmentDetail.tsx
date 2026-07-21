@@ -1473,23 +1473,44 @@ function ReadOnlyField({
 function SyntheseSkeleton() {
   return (
     <div className="space-y-4">
-      {/* Hero verdict — même structure que SyntheseView */}
-      <section className="rounded-xl border border-ink-200 bg-white p-6 sm:p-8">
-        <div className="flex items-center justify-between gap-6">
-          <div className="flex-1 space-y-3">
-            <Skeleton className="h-3 w-48 rounded" />
-            <Skeleton className="h-9 w-64 rounded" />
-            <Skeleton className="h-4 w-80 max-w-full rounded" />
+      <section className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-9">
+        <div className="flex flex-col-reverse gap-8 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-3 w-16 rounded" />
+              <Skeleton className="h-4 w-28 rounded-full" />
+            </div>
+            <Skeleton className="h-8 w-64 max-w-full rounded sm:h-10" />
+            <Skeleton className="h-3.5 w-80 max-w-full rounded" />
+            <Skeleton className="h-3.5 w-60 max-w-full rounded" />
           </div>
-          <Skeleton className="h-16 w-20 shrink-0 rounded-lg" />
+          <div className="shrink-0 space-y-1.5">
+            <Skeleton className="h-12 w-20 rounded-lg" />
+            <Skeleton className="h-3 w-20 rounded" />
+          </div>
+        </div>
+        <div className="mt-7 flex flex-wrap items-baseline gap-x-4 gap-y-2 sm:gap-x-8">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-baseline gap-1.5">
+              <Skeleton className="h-3 w-20 rounded" />
+              <Skeleton className="h-4 w-6 rounded" />
+            </div>
+          ))}
         </div>
       </section>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-32 rounded-xl" />
+          <div key={i} className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-3 w-24 rounded" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <Skeleton className="mt-3 h-7 w-28 rounded" />
+            <Skeleton className="mt-2 h-3 w-full rounded" />
+            <Skeleton className="mt-auto pt-3 h-3 w-16 rounded" />
+          </div>
         ))}
       </div>
-      <Skeleton className="h-14 rounded-xl" />
     </div>
   );
 }
