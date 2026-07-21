@@ -552,12 +552,12 @@ radar (l'espacement suffit).
 ## Les 4 chiffres du "comité"
 
 Cartes `MetricCard` (Geist Mono, `tabular-nums`) : Cash-flow mensuel, Rendement
-net, **Prix vs marché** (l'écart DVF ; libellé et sous-titre explicitent qu'il
-s'agit du PRIX D'ACHAT vs médiane DVF — ne pas revenir à « Écart au marché »
-seul, trop ambigu), DPE.
+net, **Prix au m²** (valeur principale : `prix_m2` en `€/m²`, sous-titre :
+écart % vs médiane DVF locale quand disponible, sinon "Pas de comparable DVF"),
+DPE.
 
-- **Slot toujours rempli** : si l'écart DVF manque (aucun comparable), la 3e
-  carte bascule sur « Prix au m² » (toujours calculable) — jamais de tiret.
+- **Carte unique** : la 3e carte est TOUJOURS "Prix au m²" (plus de condition
+  prix-vs-marché / prix-au-m²). L'écart DVF est en sous-titre, pas en valeur.
 - **Tonalité cash-flow calibrée** : `< CASHFLOW_ROUGE_SEUIL` (−200 €/mois) =
   rouge (alerte), négatif léger = ambre, positif = vert.
 - **Emphase "pourquoi"** : sur négocie/passe uniquement, la/les métrique(s) qui
@@ -565,7 +565,9 @@ seul, trop ambigu), DPE.
   passe, `À négocier` en négocie). Sur un GO franc : aucune emphase.
 - **CTA ancré en bas à droite** (`mt-auto self-end`) : les liens s'alignent
   entre cartes malgré des sous-titres de longueurs différentes. Le soulignement
-  ne porte que sur le libellé, pas sur la flèche « → ».
+  ne porte que sur le libellé, pas sur la flèche « → ». Les CTA sont des mots
+  uniques (« Simulation », « Détails », « Analyse », « Risques ») — pas de
+  phrases ("Voir l'analyse").
 
 ## Navigation vers la bonne section (ancres)
 
@@ -590,6 +592,62 @@ Ancres cibles (avec `scroll-mt-24` pour passer sous la navbar sticky) :
 `BlocCard` porte `id={`bloc-${bloc.cle}`}` — toute nouvelle ancre vers un bloc
 d'analyse suit ce schéma. `renderBold` (gras markdown `**…**`) est exporté
 depuis `AnalyseIA.tsx` pour être réutilisé.
+
+# Page appartement — en-tête et navigation
+
+## En-tête compact (`ApartmentDetail.tsx`)
+
+L'en-tête utilise un layout inline flex (pas de blocs empilés) :
+**vignette photo** (80px mobile / 112px desktop) · **titre + adresse + meta** ·
+**mini carte** (112×288px, desktop uniquement).
+
+- **Photo** → lien vers l'annonce (`apt.url`). Fallback : icône `Home` sur
+  fond `ink-50`.
+- **Ligne meta** : quartier · date · plateforme · lien "Annonce" (avec
+  `ExternalLink`) · lien "Carte" (mobile uniquement, `sm:hidden`, ouvre
+  Google Maps) · icône poubelle `Trash2` (suppression).
+- **Mini carte** (`ApartmentLocationMap compact`) : masquée sur mobile
+  (`hidden sm:block`), cliquable → ouvre Google Maps à l'adresse exacte
+  (pas aux coordonnées). Le mode `compact` désactive zoom, attribution et
+  drag (`zoomControl={false}`, `attributionControl={false}`, `dragging={false}`).
+- **Google Maps URL** : quand `apt.adresse` est disponible, utiliser
+  `/maps/search/${encodeURIComponent(adresse + ville)}` (précis). Fallback
+  aux coordonnées `/@lat,lng,17z` sinon.
+
+## Onglets avec icônes
+
+Chaque onglet a une icône Lucide et un label court pour mobile :
+
+| Tab | Icône | Label desktop | Label mobile |
+|-----|-------|---------------|--------------|
+| Synthèse | `Gauge` | Synthèse | Synthèse |
+| Analyse IA | `Sparkles` | Analyse IA | IA |
+| Description | `Home` | Description du bien | Bien |
+| Opération | `HandCoins` | Détails de l'opération | Opération |
+| Simulation | `Calculator` | Simulation financière | Simulation |
+
+Le label court est dans `shortLabel` (TABS). L'affichage utilise
+`<span className="sm:hidden">{shortLabel}</span>` /
+`<span className="hidden sm:inline">{label}</span>`. La barre de tabs
+scrolle horizontalement sur mobile (`overflow-x-auto`).
+
+## Skeletons
+
+3 niveaux de skeleton fidèles à la structure réelle :
+
+1. **Page-level** (`loading.tsx`) : Next.js Suspense, affiché pendant le
+   chargement serveur. Reprend l'en-tête compact + tabs + verdict + cards.
+2. **SyntheseSkeleton** : affiché quand `analysisPending` sur l'onglet
+   Synthèse. Structure `flex-col-reverse` mobile / `flex-row` desktop,
+   5 sous-notes en pied, 4 MetricCards avec label + badge + valeur + CTA.
+3. **AnalyseIASkeleton** : affiché quand `analysisPending` sur l'onglet
+   Analyse IA. Score gauge circulaire, verdict chips, synthèse texte,
+   grille de 6 `SkeletonBloc`.
+
+Les autres onglets (donnees, financiere, simulation) n'ont pas de skeleton
+global — ils rendent immédiatement avec les données déjà chargées. Les
+skeletons inline (`Skeleton` shimmer) sont utilisés par champ pendant les
+recalculs (`rentPending`, `chargesPending`).
 
 # Point d'entrée "Ajouter un bien"
 
