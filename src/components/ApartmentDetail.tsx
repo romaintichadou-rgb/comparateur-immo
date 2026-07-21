@@ -7,10 +7,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Banknote,
+  Calculator,
+  HandCoins,
   Check,
   CheckCircle2,
   ClipboardList,
   ExternalLink,
+  Gauge,
   Home,
   KeyRound,
   Loader2,
@@ -173,12 +176,12 @@ function EditableValue({
 
 type Tab = "synthese" | "ia" | "donnees" | "financiere" | "simulation";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "synthese", label: "Synthèse" },
-  { key: "ia", label: "Analyse IA" },
-  { key: "donnees", label: "Description du bien" },
-  { key: "financiere", label: "Détails de l'opération" },
-  { key: "simulation", label: "Simulation financière" },
+const TABS: { key: Tab; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
+  { key: "synthese", label: "Synthèse", icon: Gauge },
+  { key: "ia", label: "Analyse IA", icon: Sparkles },
+  { key: "donnees", label: "Description du bien", icon: Home },
+  { key: "financiere", label: "Détails de l'opération", icon: HandCoins },
+  { key: "simulation", label: "Simulation financière", icon: Calculator },
 ];
 
 // Enregistrer une modification de la description ou de la section Achat déclenche
@@ -786,7 +789,7 @@ export default function ApartmentDetail({
             )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-ink-200 bg-white px-5 py-3 text-sm text-ink-500 sm:px-6">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 py-2 text-sm text-ink-500">
           <span>Ajouté le {formatDate(apt.date_ajout)}</span>
           <span>·</span>
           <span>{apt.plateforme}</span>
@@ -827,12 +830,13 @@ export default function ApartmentDetail({
                 setActiveTab(tab.key);
                 router.push(`/appartements/${apt.id}?tab=${tab.key}`, { scroll: false });
               }}
-              className={`shrink-0 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition ${
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition ${
                 activeTab === tab.key
                   ? "border-accent-600 text-accent-600"
                   : "border-transparent text-ink-500 hover:text-ink-700"
               }`}
             >
+              <tab.icon className="size-4" />
               {tab.label}
             </Link>
           ))}

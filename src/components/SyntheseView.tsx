@@ -79,15 +79,15 @@ function dpeInfo(dpe: string): { sub: string; tone: MetricTone } {
     case "G":
       return { sub: "Interdit à la location", tone: "alerte" };
     case "F":
-      return { sub: "Interdiction de louer en 2028", tone: "alerte" };
+      return { sub: "Interdit dès 2028", tone: "alerte" };
     case "E":
-      return { sub: "Interdiction de louer en 2034", tone: "attention" };
+      return { sub: "Interdit dès 2034", tone: "attention" };
     case "D":
-      return { sub: "Correct, aucune échéance proche", tone: "neutral" };
+      return { sub: "OK, pas d'échéance proche", tone: "neutral" };
     case "A":
     case "B":
     case "C":
-      return { sub: "Aucun risque réglementaire", tone: "positif" };
+      return { sub: "Aucune restriction", tone: "positif" };
     default:
       return { sub: "Non renseigné", tone: "neutral" };
   }
@@ -320,7 +320,7 @@ export default function SyntheseView({
               ? "—"
               : `${cashflow >= 0 ? "+" : "−"} ${formatEuros(Math.abs(Math.round(cashflow)))}`
           }
-          sub={cashflow == null ? "Simulation incomplète" : "Après crédit et impôt, an 1"}
+          sub={cashflow == null ? "Simulation incomplète" : "Net en poche chaque mois"}
           tone={cashflowTone}
           emphasis={driver(cashflowTone)}
           linkLabel="Simulation"
@@ -329,36 +329,25 @@ export default function SyntheseView({
         <MetricCard
           label="Rendement net"
           value={apt.rendement_net == null ? "—" : formatPercent(apt.rendement_net)}
-          sub="Après charges, hors crédit"
+          sub="Loyers − charges − impôts"
           tone={netTone === "neutral" ? "neutral" : netTone}
           emphasis={driver(netTone === "neutral" ? "neutral" : netTone)}
           linkLabel="Détails"
           onClick={() => onGoTab("financiere", "fin-resultats")}
         />
-        {ecartDisponible ? (
-          <MetricCard
-            label="Prix vs marché"
-            value={`${ecartPct! > 0 ? "+" : ""}${ecartPct} %`}
-            sub={
-              medianeM2 != null
-                ? `Prix d'achat vs médiane DVF (${formatEuros(medianeM2)}/m²)`
-                : "Prix d'achat vs ventes comparables"
-            }
-            tone={ecartTone}
-            emphasis={driver(ecartTone)}
-            linkLabel="Analyse du prix"
-            onClick={() => onGoTab("ia", "bloc-prix")}
-          />
-        ) : (
-          <MetricCard
-            label="Prix au m²"
-            value={apt.prix_m2 == null ? "—" : `${formatEuros(apt.prix_m2)}/m²`}
-            sub="Achat + travaux · pas de comparable DVF"
-            tone="neutral"
-            linkLabel="Détails"
-            onClick={() => onGoTab("financiere", "fin-achat")}
-          />
-        )}
+        <MetricCard
+          label="Prix au m²"
+          value={apt.prix_m2 == null ? "—" : `${formatEuros(apt.prix_m2)}/m²`}
+          sub={
+            ecartDisponible
+              ? `${ecartPct! > 0 ? "+" : ""}${ecartPct} % vs médiane locale${medianeM2 != null ? ` (${formatEuros(medianeM2)}/m²)` : ""}`
+              : "Pas de comparable DVF"
+          }
+          tone={ecartDisponible ? ecartTone : "neutral"}
+          emphasis={ecartDisponible ? driver(ecartTone) : undefined}
+          linkLabel={ecartDisponible ? "Analyse" : "Détails"}
+          onClick={() => ecartDisponible ? onGoTab("ia", "bloc-prix") : onGoTab("financiere", "fin-achat")}
+        />
         <MetricCard
           label="DPE"
           value={apt.dpe.trim() === "" ? "—" : apt.dpe.trim().toUpperCase()}
