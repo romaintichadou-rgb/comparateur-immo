@@ -29,6 +29,27 @@ const VERDICT_STYLES: Record<VerdictNiveau, { chip: string; icon: typeof AlertTr
   positif: { chip: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
 };
 
+// Bandeau Score global : reprend la grammaire visuelle de la carte "Verdict"
+// (onglet Synthèse) — dégradé tonal + bordure colorée + libellé teinté + gros
+// chiffre `font-mono` à droite. La tonalité (et la couleur du chiffre) suit les
+// mêmes seuils que le verdict : ≥8 vert, ≥5 ambre, sinon rouge. Un score inconnu
+// reste neutre (blanc).
+type ScoreTone = "emerald" | "amber" | "red" | "neutral";
+
+const SCORE_STYLES: Record<ScoreTone, { grad: string; border: string; caption: string; score: string }> = {
+  emerald: { grad: "bg-gradient-to-r from-white to-emerald-50", border: "border-emerald-200", caption: "text-emerald-700", score: "text-emerald-700" },
+  amber: { grad: "bg-gradient-to-r from-white to-amber-50", border: "border-amber-200", caption: "text-amber-700", score: "text-amber-700" },
+  red: { grad: "bg-gradient-to-r from-white to-red-50", border: "border-red-200", caption: "text-red-600", score: "text-red-600" },
+  neutral: { grad: "bg-white", border: "border-ink-200", caption: "text-ink-400", score: "text-ink-400" },
+};
+
+function scoreTone(note: number | null): ScoreTone {
+  if (note == null) return "neutral";
+  if (note >= 8) return "emerald";
+  if (note >= 5) return "amber";
+  return "red";
+}
+
 const BLOC_ICONS: Record<BlocKey, typeof Banknote> = {
   prix: Banknote,
   location: KeyRound,
@@ -175,14 +196,21 @@ export default function AnalyseIA({
 
   return (
     <div className="space-y-6">
-      {/* Score global + synthèse */}
-      <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+      {/* Score global + synthèse — même grammaire visuelle que la carte
+          "Verdict" de l'onglet Synthèse : dégradé tonal, bordure colorée,
+          libellé teinté, date en chip discret. */}
+      <div className={`overflow-hidden rounded-2xl border ${SCORE_STYLES[scoreTone(analyse.score_global)].border} ${SCORE_STYLES[scoreTone(analyse.score_global)].grad}`}>
         <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-5">
-            <ScoreGauge note={analyse.score_global} />
+            <div className="shrink-0 text-center">
+              <p className={`font-mono text-5xl font-bold leading-none tabular-nums ${SCORE_STYLES[scoreTone(analyse.score_global)].score}`}>
+                {analyse.score_global != null ? formatNote(analyse.score_global) : "—"}
+              </p>
+              <p className="mt-1.5 text-xs text-ink-500">score global /10</p>
+            </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-                Score global · opportunité d&apos;achat
+              <p className={`text-xs font-semibold uppercase tracking-wide ${SCORE_STYLES[scoreTone(analyse.score_global)].caption}`}>
+                Opportunité d&apos;achat
               </p>
               <p className="mt-1 text-base font-medium leading-snug text-ink-800">
                 {syntheseCourte(analyse)}
@@ -190,13 +218,13 @@ export default function AnalyseIA({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end">
-            <span className="whitespace-nowrap text-xs text-ink-400">
+            <span className="whitespace-nowrap rounded-full bg-white/70 px-2.5 py-0.5 text-[10px] font-medium text-ink-400 ring-1 ring-inset ring-ink-200">
               Généré le {formatDateTime(analyse.genere_le)}
             </span>
             <button
               onClick={onRelancer}
               disabled={!onRelancer}
-              className="inline-flex items-center gap-1.5 rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-md border border-ink-300 bg-white/60 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-60"
             >
               Relancer
             </button>
@@ -257,48 +285,6 @@ function VerdictChip({ verdict }: { verdict: Verdict }) {
       <Icon className="h-3.5 w-3.5 shrink-0" />
       {verdict.titre}
     </span>
-  );
-}
-
-export function noteHex(note: number | null): string {
-  if (note == null) return "#c9c2d9";
-  if (note >= 8) return "#10b981";
-  if (note >= 5) return "#f59e0b";
-  return "#ef4444";
-}
-
-/** Jauge circulaire : anneau de progression proportionnel à la note /10. */
-function ScoreGauge({ note }: { note: number | null }) {
-  const size = 96;
-  const stroke = 9;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const ratio = note != null ? Math.max(0, Math.min(1, note / 10)) : 0;
-  const color = noteHex(note);
-
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e6e1f0" strokeWidth={stroke} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - ratio)}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-2xl font-semibold leading-none" style={{ color }}>
-          {note != null ? formatNote(note) : "—"}
-        </span>
-        <span className="font-mono text-[10px] text-ink-400">/ 10</span>
-      </div>
-    </div>
   );
 }
 

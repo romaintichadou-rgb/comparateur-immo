@@ -48,6 +48,24 @@ export function rendementNetTone(
   return "alerte";
 }
 
+/** Seuils de cash-flow mensuel (€), profil investisseur. Au-dessus du vert =
+ * positif ; entre vert et rouge = attention ; sous le rouge = alerte. Mêmes
+ * seuils que ceux utilisés pour colorer le cash-flow du bloc Simulation. */
+export interface CashflowSeuils {
+  vert: number;
+  rouge: number;
+}
+
+export function cashflowTone(
+  cashflow: number | null,
+  seuils: CashflowSeuils
+): RendementTone {
+  if (cashflow == null) return "neutral";
+  if (cashflow >= seuils.vert) return "positif";
+  if (cashflow >= seuils.rouge) return "attention";
+  return "alerte";
+}
+
 /**
  * Couleur de bordure au survol, pour CHAQUE composant cliquable affichant un
  * rendement (tableau, carte, fiche détaillée, Analyse IA) : source unique

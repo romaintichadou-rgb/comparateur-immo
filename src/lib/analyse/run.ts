@@ -18,6 +18,7 @@ import { fetchDelinquance, parentPLM } from "./sources/delinquance";
 import { fetchRevenuMedian, fetchProfilCommune } from "./sources/demographie";
 import { narrateAll, type NarrationStatus } from "./narration";
 import { buildVerdicts, seuilsRendementFromSettings, withScoreGlobal } from "./scoring";
+import { buildRecommandations } from "./recommandations";
 import { ANALYSE_VERSION, type AnalyseIA } from "./types";
 
 /**
@@ -122,6 +123,24 @@ export async function runAnalyse(
   // rédhibitoire). Un seul appel LLM produit narrations de blocs + synthèse.
   const scored = withScoreGlobal(analyse, rendementNet, seuils);
   scored.verdicts = buildVerdicts(scored.blocs, rendementNet, seuils);
+
+  // Recommandations prescriptives (lecture seule) : projections "si tu faisais
+  // X → note Y", calculées sur des copies du bien avec les données déjà
+  // préchargées. Ne modifie ni le bien ni son analyse (voir recommandations.ts).
+  scored.recommandations = buildRecommandations(apt, {
+    dvf,
+    loyerRef,
+    dpeData,
+    georisques,
+    settings,
+    seuils,
+    precision,
+    loyerPerimetre,
+    baseBlocs: scored.blocs,
+    baseScore: scored.score_global,
+    baseVerdicts: scored.verdicts,
+    rendementNetBase: rendementNet,
+  });
 
   // Contexte du type de bien pour la narration : un immeuble de rapport
   // change la lecture (loyer = total des lots, prix comparé à des ventes

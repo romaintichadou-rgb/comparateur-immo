@@ -593,6 +593,139 @@ Ancres cibles (avec `scroll-mt-24` pour passer sous la navbar sticky) :
 d'analyse suit ce schéma. `renderBold` (gras markdown `**…**`) est exporté
 depuis `AnalyseIA.tsx` pour être réutilisé.
 
+# Onglet "Optimiser" — recommandations prescriptives (lecture seule)
+
+L'onglet **"Optimiser"** (`src/components/OptimiserView.tsx`, 3e onglet, après
+Analyse IA) est orienté **DÉCISION + RENTABILITÉ, pas le score**. Deux modes
+selon le verdict actuel (Achète / Négocie / Passe) :
+
+- verdict ≠ **Achète** → « En faire un achat » : les actions pour faire basculer
+  le verdict à « Achète ».
+- verdict = **Achète** → « Acheter mieux » : comment augmenter la rentabilité.
+
+Chaque carte dit ce qu'une action change concrètement : **rendement net et
+cash-flow avant → après**, et un badge « → Achète » si elle fait basculer le
+verdict. **Purement informatif : ne modifie JAMAIS le bien réel** (prix, loyer,
+dpe, score, verdicts intacts).
+
+## Verdict = source unique (`src/lib/analyse/decision.ts`)
+
+`computeDecision(score, verdicts, ecartPct)` est la SEULE définition du verdict
+Achète/Négocie/Passe, partagée par `SyntheseView`, `OptimiserView` et le moteur
+de recommandations (avant, chacun le recalculait à la main → risque de dérive).
+`ecartPrixMarche(prixBloc)` extrait l'écart au marché du bloc Prix.
+
+## Moteur (`src/lib/analyse/recommandations.ts`)
+
+`buildRecommandations(apt, ctx)` est appelé **dans `runAnalyse`**, au moment où
+toutes les données externes (DVF, ANIL, DPE, géorisques, settings) sont en
+portée. Chaque projection ré-invoque les **VRAIES fonctions de blocs** sur une
+**COPIE modifiée** du bien (`computeDerived({ ...apt, prix: X })`), puis
+`computeScoreGlobal` + `buildVerdicts` + `computeDecision` pour le verdict
+projeté. Même moteur déterministe, mêmes données, zéro chiffre inventé, zéro
+appel réseau/LLM. On ne mute jamais `apt`. Rangé dans le champ **lecture seule**
+`AnalyseIA.recommandations` (nullable).
+
+**Versioning** : `ANALYSE_VERSION = 2`. Analyses antérieures (`== null`) →
+l'onglet invite à « Relancer ». `== []` → « rien de plus à optimiser » (positif).
+
+## Les 4 leviers (ordre d'affichage FIXE : prix en tête, financement en dernier)
+
+| Levier | Cible prescriptive | Affiché si |
+|---|---|---|
+| **prix** | prix EXACT à négocier pour basculer à « Achète » (dichotomie sur le prix, décision monotone). Si un frein hors-prix (ex. DPE F, alerte) bloque, on le nomme et on chiffre quand même une négociation utile à la rentabilité. En mode « acheter mieux » : médiane DVF ou −8 %. | toujours (prix + surface connus) |
+| **travaux** | DPE→D, loyer premium +12 % (`LOYER_BOOST_RENO`), coût ~350 €/m² (`COUT_RENO_M2`) | DPE ∈ {E,F,G} |
+| **loyer** | haut de fourchette ANIL, borné à une hausse réaliste **+15 %** (`LOYER_UPLIFT_MAX`) — un loyer ne bondit pas de +40 % d'un coup | loyer actuel < cible |
+| **financement** | apport pour cash-flow moyen ≥ 0 (dichotomie sur `montantEmprunte`) | cash-flow moyen < 0 & atteignable |
+
+- **Ordre** : `[prix, ...milieu, financement]`. Le prix est TOUJOURS en tête
+  (levier central), le financement TOUJOURS en dernier (levier d'appoint, pas une
+  vraie optimisation). Seuls travaux + loyer (`milieu`) sont triés entre eux
+  (flip-vers-achat puis cash-flow décroissant). Ne pas remettre le financement
+  dans le tri.
+- **Métriques par carte (avant → après)** : chaque carte affiche rendement net +
+  cash-flow ; le prix ajoute prix d'achat + prix/m² ; loyer et travaux ajoutent le
+  loyer. Portées par des champs optionnels de `Recommandation`
+  (`prixAchatAvant/Apres`, `prixM2*`, `loyer*`) rendus dynamiquement par
+  `buildPairs` (OptimiserView).
+- **Emprunt qui suit l'opération** : négocier le prix baisse le montant emprunté
+  (apport constant, `inputsAtPrice`) ; les travaux sont FINANCÉS (emprunt
+  `loanAvant + coutTravaux`). Sinon, à emprunt figé, baisser le prix (ou ajouter
+  des travaux) fausserait le cash-flow (amortissement/impôt qui bougent sans que
+  la mensualité suive). `loanAvant` est hoisté pour les deux leviers. Le coût des
+  travaux pèse donc sur le rendement (via `budget_total`) ET sur le cash-flow (via
+  mensualité + amortissement). Les frais de notaire sont recalculés depuis le
+  nouveau prix par `applyLiveEstimates` (sauf si saisis manuellement).
+- **`cashflowOf` utilise `mod.simulation_inputs`** (pas les inputs d'origine) —
+  sinon financement/travaux afficheraient un cash-flow ignorant l'emprunt modifié.
+- **Sous-titre honnête** : si aucun levier ne fait basculer à « Achète »
+  (`recos.some(r => r.flipVersAchat) === false`), le sous-titre le dit au lieu de
+  promettre un achat.
+
+## Popups de détail (rendement + cash-flow) & couleurs profil
+
+- **Blocs Rendement net / Cash-flow cliquables** : ouvrent une popup latérale de
+  détail du calcul **recalculée avec les valeurs proposées**. Chaque reco stocke
+  un champ **`patch`** (`RecommandationPatch` : les overrides EXACTS appliqués —
+  prix, loyer, dpe, travaux, `simulation_inputs`). Le client reconstruit le bien
+  modifié via `computeDerived({ ...apt, ...reco.patch })` (COPIE, jamais
+  persistée) et le passe à `openRendementDetail` / `openCashflowDetail`. Ne pas
+  reconstruire le patch à la main côté client (dérive) — le moteur le stocke.
+- **`CashflowDetailPanel` / `CashflowDetailProvider`** : nouveau popup, calqué
+  sur `RendementDetailPanel`, monté dans `layout.tsx`
+  (`RendementDetailProvider > LoyerDetailProvider > CashflowDetailProvider`).
+  Rejoue `simulate()` et affiche financement + flux mensuels moyens.
+- **Couleurs = seuils du profil investisseur** : rendement via
+  `rendementNetTone(v, seuilsRendement)`, cash-flow via `cashflowTone(v,
+  cashflowSeuils)` (nouveau, dans `scoring.ts` — mêmes seuils que le bloc
+  Simulation). `cashflowSeuils` = `{ vert: settings.cashflowSeuilVertEuros,
+  rouge: settings.cashflowSeuilRougeEuros }`, passé par `ApartmentDetail`. Un
+  cash-flow de −60 € est donc VERT si le seuil vert du profil est −100.
+  **L'ancienne valeur (avant) reste TOUJOURS grise** (`text-ink-400`, référence
+  neutre) ; seule la nouvelle valeur proposée porte la couleur du profil. Les
+  prix/loyer (pas de seuils profil) restent directionnels côté après (baisse/
+  hausse = vert).
+
+## Arguments par levier (accordéon discret)
+
+Chaque reco porte un champ **`arguments?: Argument[]`** (`{ titre, detail,
+verbatim?, source? }`) : une liste d'arguments concrets pour passer à l'action
+(négocier, louer plus cher…), dont des **verbatim prêts à dire** au vendeur/
+locataire. Affichés dans un **accordéon inline discret** sous chaque carte
+(`ArgumentsAccordion`, replié par défaut, libellé par levier via
+`LEVIER_ARG_LABEL` + compteur).
+
+- **100 % déterministe**, construit dans `buildRecommandations`
+  (`buildLevier*` → helpers `argsPrix`, arrays inline). Deux familles :
+  **contextuels** (conditionnés par les données réelles — écart DVF, DPE ADEME,
+  cash-flow simulé, fourchette ANIL — chiffres interpolés, avec `source`) et
+  **méthode** (playbook statique). **Aucun chiffre inventé** ; le `verbatim` est
+  une mise en mots (comme la narration), jamais une source de nombre.
+- **Ton** : `detail` en tutoiement (l'investisseur) ; `verbatim` en vouvoiement
+  (adressé au vendeur/locataire), affiché dans un bloc cité (liseré `accent-300`,
+  fond `accent-50`, icône `Quote`).
+- **`ANALYSE_VERSION = 3`** : analyses antérieures sans `arguments` → accordéon
+  masqué (dégradation silencieuse, pas d'invite).
+- Spec complète (contenu des 4 leviers) : `docs/spec-arguments-leviers.md`.
+
+## `renovePremium` sur `buildBlocLocation`
+
+Le levier travaux suppose une **rénovation haut de gamme** justifiant un loyer
+**au-dessus de la fourchette ANIL** sans que ce soit un signal d'excès. Le 5e
+param optionnel `opts.renovePremium` de `buildBlocLocation` **supprime la
+pénalité « loyer optimiste »** dans ce seul cas. Défaut `false` : le chemin
+d'analyse réel est **inchangé** — n'appeler `renovePremium: true` que depuis le
+moteur de recommandations. Les constantes `MAJORATION_MEUBLE` et
+`PROVISION_CHARGES_M2` sont exportées de `location.ts` pour que le moteur cible
+le haut de fourchette sur la même base de conversion (pas de duplication).
+
+## Skeleton & recalcul
+
+`OptimiserSkeleton` (dans `ApartmentDetail.tsx`) s'affiche quand
+`analysisPending`, comme les autres onglets. Les recos font partie de la sortie
+de `runAnalyse` → elles se régénèrent à chaque « Relancer » / recalcul, sans
+traitement particulier.
+
 # Page appartement — en-tête et navigation
 
 ## En-tête compact (`ApartmentDetail.tsx`)

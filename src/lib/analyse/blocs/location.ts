@@ -29,20 +29,29 @@ const SRC_LOYERS: Source = {
 
 // Provision de charges locatives récupérables, en €/m²/mois, servant à
 // convertir un loyer HC en CC pour comparer à la Carte des loyers (HC).
-const PROVISION_CHARGES_M2 = 2.5;
+// Exportée pour que le moteur de recommandations (recommandations.ts) cible le
+// haut de fourchette ANIL sur la même base de conversion, sans dupliquer la
+// constante (risque de dérive).
+export const PROVISION_CHARGES_M2 = 2.5;
 
 // Les données ANIL sont dominées par la location nue (~75 % du parc locatif
 // français). En LMNP, le bien est loué meublé : un logement meublé se loue
 // typiquement 10-15 % plus cher qu'un logement nu équivalent. On applique
 // cette majoration au loyer ANIL avant comparaison, pour ne pas déclencher
 // de faux positif "loyer optimiste" à chaque estimation meublée.
-const MAJORATION_MEUBLE = 0.12;
+export const MAJORATION_MEUBLE = 0.12;
 
 export function buildBlocLocation(
   apt: Apartment,
   loyerRef: LoyerReference | null,
   seuils: RendementSeuils = SEUILS_RENDEMENT_DEFAUT,
-  perimetre: "rayon500" | "arrondissement" = "arrondissement"
+  perimetre: "rayon500" | "arrondissement" = "arrondissement",
+  // `renovePremium` : hypothèse "rénovation haut de gamme" (moteur de
+  // recommandations uniquement). Un bien refait à neuf justifie un loyer au-
+  // dessus de la fourchette ANIL sans que ce soit un signal d'excès — on
+  // n'applique alors pas la pénalité "loyer optimiste". Défaut false : le
+  // chemin d'analyse réel est inchangé.
+  opts: { renovePremium?: boolean } = {}
 ): BlocAnalyse {
   const faits: Fait[] = [];
   const sources: Source[] = [];
@@ -184,15 +193,19 @@ export function buildBlocLocation(
     // marché. Plafonnée à 0.5 pour ne jamais pousser un rendement « vert »
     // (selon le profil investisseur) sous les 8/10.
     let loyerPenalite = 0;
-    if (ecartLoyerMarche != null && ecartLoyerMarche > 0.10) {
-      loyerPenalite = Math.min((ecartLoyerMarche - 0.10) * 2, 0.5);
+    // Hypothèse "rénové haut de gamme" (recommandations) : le loyer premium
+    // au-dessus de la fourchette est légitime, pas de pénalité.
+    if (!opts.renovePremium) {
+      if (ecartLoyerMarche != null && ecartLoyerMarche > 0.10) {
+        loyerPenalite = Math.min((ecartLoyerMarche - 0.10) * 2, 0.5);
+      }
+      if (loyerNonVerifie && ecartLoyerMarche != null && ecartLoyerMarche > 0.10) {
+        loyerPenalite += 0.15;
+      }
+      // Immeuble : le loyer/m² moyen sort naturellement plus haut que la
+      // médiane d'un logement unique — on réduit la pénalité de moitié.
+      if (immeuble) loyerPenalite *= 0.5;
     }
-    if (loyerNonVerifie && ecartLoyerMarche != null && ecartLoyerMarche > 0.10) {
-      loyerPenalite += 0.15;
-    }
-    // Immeuble : le loyer/m² moyen sort naturellement plus haut que la
-    // médiane d'un logement unique — on réduit la pénalité de moitié.
-    if (immeuble) loyerPenalite *= 0.5;
 
     note = clampNote(Math.max(0, rendementBase - loyerPenalite) * 2);
   } else {

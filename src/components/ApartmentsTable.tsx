@@ -17,22 +17,18 @@ const RENDEMENT_TEXT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> 
   alerte: "text-red-600",
 };
 
-// Dégradé du panneau verdict : transparent au niveau du prix, pleinement
-// teinté au niveau du rendement — même logique de tons que RENDEMENT_TEXT_CLASS.
-const RENDEMENT_GRADIENT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
-  neutral: "",
-  positif: "bg-gradient-to-r from-transparent to-emerald-50",
-  attention: "bg-gradient-to-r from-transparent to-amber-50",
-  alerte: "bg-gradient-to-r from-transparent to-red-50",
-};
-
 // Score IA : mêmes seuils que noteHex/noteColorClasses (AnalyseIA.tsx), mais
 // exprimés en classes Tailwind pour piloter fond + rail + anneau d'un bloc.
+// `grad` : le même ton, en dégradé transparent→teinté — utilisé sous la cellule
+// Rendement pour prolonger la couleur du score en continu (transparent au prix
+// → teinté au score), plutôt qu'un second ton piloté par le rendement (qui
+// créait une double couleur sur la ligne). La couleur du TEXTE du rendement,
+// elle, reste pilotée par RENDEMENT_TEXT_CLASS (signal de rendement conservé).
 function scoreToneClasses(score: number | null) {
-  if (score == null) return { bg: "bg-ink-50", rail: "border-ink-200", text: "text-ink-400", stroke: "stroke-ink-300" };
-  if (score >= 8) return { bg: "bg-emerald-50", rail: "border-emerald-400", text: "text-emerald-700", stroke: "stroke-emerald-500" };
-  if (score >= 5) return { bg: "bg-amber-50", rail: "border-amber-400", text: "text-amber-700", stroke: "stroke-amber-500" };
-  return { bg: "bg-red-50", rail: "border-red-400", text: "text-red-700", stroke: "stroke-red-500" };
+  if (score == null) return { bg: "bg-ink-50", grad: "bg-gradient-to-r from-transparent to-ink-50", rail: "border-ink-200", text: "text-ink-400", stroke: "stroke-ink-300" };
+  if (score >= 8) return { bg: "bg-emerald-50", grad: "bg-gradient-to-r from-transparent to-emerald-50", rail: "border-emerald-400", text: "text-emerald-700", stroke: "stroke-emerald-500" };
+  if (score >= 5) return { bg: "bg-amber-50", grad: "bg-gradient-to-r from-transparent to-amber-50", rail: "border-amber-400", text: "text-amber-700", stroke: "stroke-amber-500" };
+  return { bg: "bg-red-50", grad: "bg-gradient-to-r from-transparent to-red-50", rail: "border-red-400", text: "text-red-700", stroke: "stroke-red-500" };
 }
 
 export type SortKey =
@@ -146,7 +142,7 @@ export default function ApartmentsTable({
                     <p className="mt-0.5 font-mono text-xs text-ink-400">{formatEuros(apt.prix_m2)}/m²</p>
                   )}
                 </td>
-                <td className={`px-5 py-3 text-center ${RENDEMENT_GRADIENT_CLASS[tone]}`}>
+                <td className={`px-5 py-3 text-center ${scoreTone.grad}`}>
                   <button
                     type="button"
                     onClick={(e) => {

@@ -6,6 +6,7 @@ import { formatDate, formatEuros, formatPercent } from "@/lib/format";
 import { rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
 import { simulate, defaultInputs } from "@/lib/simulation";
 import { BLOC_LABELS, type BlocKey } from "@/lib/analyse/types";
+import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/decision";
 import { formatNote } from "@/components/AnalyseIA";
 
 // En-dessous de ce cash-flow mensuel, la ponction est franche : la carte passe
@@ -20,8 +21,6 @@ const CASHFLOW_ROUGE_SEUIL = -200;
  * Cet écran tranche (Achète / Négocie / Passe) et renvoie vers les onglets
  * détaillés via des liens discrets ; il n'affiche jamais le détail lui-même.
  */
-
-type Decision = "achete" | "negocie" | "passe";
 
 // Dégradé tonal directionnel repris de la home (lignes du tableau) : la
 // couleur porte le verdict avant même la lecture du titre.
@@ -151,10 +150,7 @@ export default function SyntheseView({
 
   const faits = analyse.blocs.prix.faits;
   const faitEcart = faits.find((f) => f.label === "Écart au prix de marché");
-  const ecartPct =
-    faitEcart?.value != null && !Number.isNaN(Number(String(faitEcart.value).replace("+", "")))
-      ? Number(String(faitEcart.value).replace("+", ""))
-      : null;
+  const ecartPct = ecartPrixMarche(analyse.blocs.prix);
   const faitMediane = faits.find((f) => f.label === "Prix/m² médian comparable");
   const medianeM2 = typeof faitMediane?.value === "number" ? faitMediane.value : null;
   const prixMarche =
@@ -197,21 +193,18 @@ export default function SyntheseView({
   // Un GO franc est exigeant : le moindre verdict "attention" (rendement
   // modeste, bloc faible, DPE E...) ou une surcote bascule en "négocie".
   const surcote = ecartPct != null && ecartPct > 5;
-  let decision: Decision;
+  const decision: Decision = computeDecision(score, analyse.verdicts, ecartPct);
   let raison: string;
-  if (alerte || score < 5) {
-    decision = "passe";
+  if (decision === "passe") {
     raison = alerte
       ? `${alerte.titre}. C'est rédhibitoire : une négociation ne le rattrape pas, mieux vaut chercher un autre bien.`
       : `Score global ${formatNote(score)}/10 : trop de points faibles pour un investissement sain. Passe ton chemin.`;
-  } else if (score >= 7 && !attention && !surcote) {
-    decision = "achete";
+  } else if (decision === "achete") {
     raison =
       ecartPct != null && ecartPct <= -5
         ? `Aucun frein détecté, et un prix affiché ${Math.abs(ecartPct)} % sous les ventes comparables : un bon dossier, à sécuriser sans traîner.`
         : "Aucun frein détecté : prix, rendement et risques sont alignés pour investir.";
   } else {
-    decision = "negocie";
     raison = surcote
       ? `Le prix affiché est ${ecartPct} % au-dessus des ventes comparables du secteur. Négocie-le vers le marché : c'est là qu'est ta marge.`
       : attention
