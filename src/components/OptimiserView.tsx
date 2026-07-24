@@ -296,9 +296,7 @@ function RecoCard({
         ))}
       </div>
 
-      <p className="mt-3 border-t border-ink-100 pt-3 text-xs leading-relaxed text-ink-600">
-        {reco.pourquoi}
-      </p>
+      <p className="mt-3 text-xs leading-relaxed text-ink-600">{reco.pourquoi}</p>
 
       {(reco.cout || reco.caveat) && (
         <div className="mt-2 space-y-1">
@@ -318,7 +316,7 @@ function RecoCard({
 function ArgumentsAccordion({ label, args }: { label: string; args: Argument[] }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mt-3 border-t border-ink-100 pt-2">
+    <div className="mt-3">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

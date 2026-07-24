@@ -141,49 +141,82 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       const ecartPct = ecartPrixMarche(ctx.baseBlocs.prix);
       const mediane = ctx.dvf?.medianeRecente ?? null;
       const nbVentes = ctx.dvf?.nbVentesRecent ?? null;
+      const prixMin = ctx.dvf?.recentMin ?? null;
+      const prixMax = ctx.dvf?.recentMax ?? null;
+      const baseComparaison = ctx.dvf?.baseComparaison ?? null;
       const dpe = (ctx.baseBlocs.risque.dpeGes?.dpe ?? apt.dpe ?? "").toUpperCase();
+      const surface = apt.surface_m2 ?? 0;
+      const prixAchat = apt.prix ?? 0;
+      const prixM2Actuel = surface > 0 ? prixAchat / surface : 0;
+      const cibleM2 = surface > 0 ? cible / surface : 0;
 
-      if (ecartPct != null && ecartPct >= 3) {
-        const ref =
-          nbVentes != null && mediane != null
-            ? ` (${nbVentes} ventes à ${fmtEuros(mediane)}/m² sur 3 ans)`
-            : mediane != null
-              ? ` (médiane ${fmtEuros(mediane)}/m²)`
-              : "";
+      // Fourchette DVF détaillée avec contexte.
+      if (mediane != null && (prixMin != null || prixMax != null)) {
+        const fourchette =
+          prixMin != null && prixMax != null
+            ? ` (fourchette ${fmtEuros(prixMin)}–${fmtEuros(prixMax)}/m²)`
+            : prixMin != null
+              ? ` (minimum observé ${fmtEuros(prixMin)}/m²)`
+              : prixMax != null
+                ? ` (maximum observé ${fmtEuros(prixMax)}/m²)`
+                : "";
+        const baseRef = baseComparaison ? ` pour ${baseComparaison}` : "";
         out.push({
-          titre: "Prix au-dessus du marché",
-          detail: `Le prix ressort +${ecartPct} % au-dessus de la médiane des ventes réelles du quartier${ref}.`,
-          verbatim: `D'après les ventes notariales récentes du secteur (base DVF)${mediane != null ? `, le prix au m² tourne autour de ${fmtEuros(mediane)}` : ""}. Votre bien est ${ecartPct} % au-dessus : je me positionne à ${fmtEuros(cible)}, cohérent avec le marché.`,
+          titre: "Comparaison marché locale",
+          detail: `Le marché récent du secteur : médiane ${fmtEuros(mediane)}/m²${fourchette}${baseRef} (${nbVentes ?? "?"} ventes sur 3 ans). Ton bien : ${fmtEuros(Math.round(prixM2Actuel))}/m², soit +${ecartPct}%.`,
           source: "DVF",
         });
       }
+
+      // DPE avec coût travaux chiffré pour CE bien.
       if (["E", "F", "G"].includes(dpe)) {
         const echeance =
-          dpe === "G" ? "déjà interdit à la location" : dpe === "F" ? "interdit à la location en 2028" : "interdit à la location en 2034";
+          dpe === "G"
+            ? "déjà interdit à la location"
+            : dpe === "F"
+              ? "interdit à la location en 2028"
+              : "interdit à la location en 2034";
+        const coutReno = Math.round((COUT_RENO_M2 * surface) / 1000) * 1000;
+        const pctBudget = Math.round((coutReno / prixAchat) * 100);
         out.push({
-          titre: `DPE ${dpe} : levier de décote`,
-          detail: `Classe ${dpe} — ${echeance} (loi Climat). Les travaux de rénovation à prévoir se déduisent du prix.`,
-          verbatim: `Le DPE ${dpe} impose une rénovation énergétique pour pouvoir louer ; son coût doit être répercuté sur le prix d'achat.`,
+          titre: `DPE ${dpe} : travaux obligatoires`,
+          detail: `Classe ${dpe} — ${echeance}. Pour ce bien (${Math.round(surface)} m²), rénovation à ~${fmtEuros(coutReno)} (${COUT_RENO_M2}€/m²), soit ${pctBudget}% du prix d'achat.`,
+          verbatim: `Le DPE ${dpe} impose une rénovation énergétique (travaux estimés ${fmtEuros(coutReno)}). Ce coût devrait être déduit du prix d'achat.`,
           source: "ADEME",
         });
       }
+
+      // Décomposition de l'écart marché (si écart significatif).
+      if (ecartPct != null && ecartPct >= 5) {
+        const facteurs: string[] = [];
+        if (["E", "F", "G"].includes(dpe)) facteurs.push(`DPE ${dpe}`);
+        if (facteurs.length > 0) {
+          const raisons = facteurs.join(", ");
+          out.push({
+            titre: "Pourquoi ce prix de négociation ?",
+            detail: `Écart marché +${ecartPct}% expliqué par : ${raisons}. Le prix cible ${fmtEuros(Math.round(cibleM2))}/m² l'aligne sur ventes comparables moins travaux.`,
+          });
+        }
+      }
+
+      // Cash-flow déficitaire (chiffré).
       if (cashflowAvant != null && cashflowAvant < 0) {
         out.push({
-          titre: "Opération déficitaire à ce prix",
-          detail: `Au prix affiché, le cash-flow est négatif (−${fmtEuros(Math.abs(cashflowAvant))}/mois après crédit et impôts).`,
-          verbatim: `À ce niveau de prix, l'opération est déficitaire chaque mois ; pour qu'elle s'équilibre, il faut viser environ ${fmtEuros(cible)}.`,
+          titre: "Rentabilité à l'équilibre",
+          detail: `À ${fmtEuros(Math.round(prixM2Actuel))}/m², le cash-flow est négatif (−${fmtEuros(Math.abs(cashflowAvant))}/mois). À ${fmtEuros(Math.round(cibleM2))}/m², il s'équilibre.`,
+          verbatim: `À ce prix de ${fmtEuros(Math.round(prixM2Actuel))}/m², chaque mois tu paies −${fmtEuros(Math.abs(cashflowAvant))} de poche. En négociant à ${fmtEuros(Math.round(cibleM2))}/m², l'opération s'autofinance.`,
           source: "Calcul",
         });
       }
+
+      // Méthode : tactique de négociation.
       out.push({
-        titre: "Fais une offre écrite et argumentée",
-        detail:
-          "Une offre chiffrée, avec ton plan de financement prêt, pèse plus qu'une négociation orale. Ancre bas mais justifié, et n'annonce jamais ton budget maximum.",
+        titre: "Stratégie : chiffre et ancre bas",
+        detail: `Une offre écrite, détaillée (prix de marché + travaux obligatoires + plan de financement), pèse plus qu'une négociation orale. Ancre à ${fmtEuros(Math.round(cibleM2))}/m² avec justification.`,
       });
       out.push({
         titre: "Sonde la motivation du vendeur",
-        detail:
-          "Ancienneté de l'annonce, baisses de prix déjà passées, raison de la vente : plus le vendeur est pressé, plus ta marge de négociation est grande.",
+        detail: `Ancienneté de l'annonce, baisses passées, urgence de vendre. Un vendeur pressé laisse plus de marge de négociation.`,
       });
       return out;
     };
@@ -328,33 +361,58 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         simulation_inputs: { ...inputs, montantEmprunte: loanAvant + coutTravaux },
       },
       cout: `≈ ${fmtEuros(coutTravaux)} de travaux`,
-      arguments: [
-        {
-          titre: "Sortie de passoire thermique",
-          detail: `Rénover jusqu'à un DPE D lève l'interdiction de louer (classe ${dpeCourant} : ${
-            dpeCourant === "G" ? "déjà interdite" : dpeCourant === "F" ? "interdite en 2028" : "interdite en 2034"
-          }) et sécurise la revente.`,
+      arguments: (() => {
+        const args: Argument[] = [];
+        const surface = apt.surface_m2 ?? 0;
+        const loyerActuel = apt.loyer_retenu ?? 0;
+        const pctBudget = Math.round((coutTravaux / (apt.prix ?? 1)) * 100);
+        const loyerGain = loyerCible - loyerActuel;
+        const loyerGainAnnuel = loyerGain * 12;
+        const dlEquilibre = coutTravaux > 0 ? Math.round(coutTravaux / loyerGain) : 0;
+        const echeance =
+          dpeCourant === "G" ? "2025 (DÉJÀ INTERDIT)" : dpeCourant === "F" ? "2028" : "2034";
+
+        // Urgence DPE chiffrée.
+        args.push({
+          titre: `DPE ${dpeCourant} : interdiction louer ${echeance}`,
+          detail: `Classe ${dpeCourant} interdit à la location ${echeance}. Rénover jusqu'à D lève l'interdiction ET sécurise la revente.`,
+          verbatim: `Le DPE ${dpeCourant} impose une rénovation pour continuer à louer. C'est un coût de restructuration obligatoire, à anticiper.`,
           source: "ADEME",
-        },
-        {
-          titre: "Loyer premium après rénovation",
-          detail: `Un bien refait à neuf se loue jusqu'à +${Math.round(LOYER_BOOST_RENO * 100)} % (voir le levier Loyer).`,
-        },
-        {
-          titre: "Aides mobilisables",
-          detail:
-            "MaPrimeRénov', éco-PTZ et primes CEE réduisent la facture des travaux (éligibilité selon ta situation, à vérifier).",
-        },
-        {
-          titre: "Travaux amortissables (LMNP réel)",
-          detail: "En LMNP au réel, les travaux s'amortissent et gomment l'impôt pendant plusieurs années.",
-        },
-        {
-          titre: "Priorise l'impact, chiffre avant d'acheter",
-          detail:
-            "D'abord isolation, chauffage et menuiseries (DPE), puis cuisine et salle de bains (loyer). Demande 2–3 devis : ils servent aussi d'argument pour négocier le prix.",
-        },
-      ],
+        });
+
+        // Coût travaux contextualisé.
+        args.push({
+          titre: `Coût réaliste pour ce bien : ${fmtEuros(coutTravaux)}`,
+          detail: `${Math.round(surface)} m² × ${COUT_RENO_M2}€/m² (énergie + standing). = ${pctBudget}% du prix d'achat. À affiner avec 2–3 devis réels (élec, vitrages, chauffage).`,
+        });
+
+        // ROI des travaux chiffré.
+        args.push({
+          titre: `ROI des travaux : ${Math.round(LOYER_BOOST_RENO * 100)}% loyer = +${fmtEuros(loyerGain)}/mois`,
+          detail: `Loyer passe de ${fmtEuros(loyerActuel)} à ${fmtEuros(loyerCible)}/mois (+${fmtEuros(loyerGainAnnuel)}/an). Travaux rentabilisés en ~${dlEquilibre} mois.`,
+          verbatim: `Un bien refait à neuf se loue nettement plus cher. Ici : passage de ${fmtEuros(loyerActuel)} à ${fmtEuros(loyerCible)}/mois. Les travaux se remboursent vite.`,
+        });
+
+        // Aides chiffrées.
+        args.push({
+          titre: "Aides publiques à explorer",
+          detail: `MaPrimeRénov' + éco-PTZ + primes CEE peuvent couvrir 30–50% du coût travaux. LMNP meublé : éligibilité partielle (à vérifier avec un conseiller).`,
+        });
+
+        // Amortissement fiscal.
+        args.push({
+          titre: "Travaux amortis en LMNP réel",
+          detail: `${fmtEuros(coutTravaux)} amortis sur 10–20 ans = réduction d'impôt significative. Combiné au loyer premium, l'opération dégage vite du flux.`,
+        });
+
+        // Priorisation technique.
+        args.push({
+          titre: "Par où commencer ? Priorise l'impact",
+          detail: `1. Isolation/chauffage/fenêtres (impact DPE + économies d'énergie) → 50–60% du budget. 2. Cuisine/SdB (impact loyer) → 30–40%. 3. Peinture/finitions (photos) → 10%. Demande 2–3 devis détaillés : ils servent aussi d'argument de négociation auprès du vendeur.`,
+        });
+
+        return args;
+      })(),
       pourquoi: `DPE ${dpeCourant}→${dpeCible} : lève l'interdiction de louer et justifie un loyer premium.`,
       caveat: "Coût des travaux et loyer premium estimés — à affiner avec des devis.",
     };
@@ -395,33 +453,58 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       verdictApres,
       flipVersAchat: !dejaAchat && verdictApres === "achete",
       patch: { loyer_retenu: loyerCible },
-      arguments: [
-        {
-          titre: "Marge de revalorisation réelle",
-          detail: `Ton loyer est sous le haut du marché local (Carte des loyers ANIL${ctx.loyerRef.annee ? `, ${ctx.loyerRef.annee}` : ""}). Une remise à niveau, surtout à la relocation, est justifiée.`,
+      arguments: (() => {
+        const args: Argument[] = [];
+        const surface = apt.surface_m2 ?? 0;
+        const loyerActuel = apt.loyer_retenu ?? 0;
+        const loyerActuelM2 = surface > 0 ? loyerActuel / surface : 0;
+        const minCC_m2 = ctx.loyerRef.min * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2;
+        const loyerMinAnil = Math.round(minCC_m2 * surface);
+        const loyerMoyAnil = Math.round((minCC_m2 + maxCC_m2) / 2 * surface);
+        const cibleM2 = surface > 0 ? loyerCible / surface : 0;
+        const pct = Math.round(((loyerCible - loyerActuel) / loyerActuel) * 100);
+
+        // Fourchette ANIL détaillée pour ce bien.
+        args.push({
+          titre: "Fourchette ANIL pour ce bien",
+          detail: `${Math.round(surface)} m² : loyer min ${fmtEuros(loyerMinAnil)}/mois, max ${fmtEuros(loyerMaxAnil)}/mois (Carte ANIL${ctx.loyerRef.annee ? ` ${ctx.loyerRef.annee}` : ""}, ${ctx.loyerPerimetre === "arrondissement" ? "arrondissement" : "rayon 500m"}). Ton loyer actuel ${fmtEuros(loyerActuel)} = ${loyerActuel < loyerMoyAnil ? "−" : "+"}${Math.abs(Math.round(((loyerActuel - loyerMoyAnil) / loyerMoyAnil) * 100))}% vs moyenne.`,
           source: "ANIL",
-        },
-        {
-          titre: "Meuble avec qualité (LMNP)",
-          detail:
-            "Mobilier soigné, électroménager complet, literie neuve : le meublé haut de gamme justifie un loyer premium et attire de meilleurs dossiers.",
-        },
-        {
-          titre: "Rafraîchis à petit budget",
-          detail:
-            "Peinture claire, luminaires, petits travaux : des photos qui donnent envie = plus de candidats et un loyer tenu dans le temps.",
-        },
-        {
-          titre: "Soigne l'annonce et les atouts",
-          detail:
-            "Photos lumineuses, description qui met en avant transports, commerces et écoles à proximité, réactivité aux demandes.",
-        },
-        {
-          titre: "Vérifie l'encadrement des loyers",
-          detail:
-            "Dans certaines communes (Paris, Lille, Lyon, Montpellier…), un loyer plafond légal s'applique : à contrôler avant de fixer le prix.",
-        },
-      ],
+        });
+
+        // Potentiel de revalorisation chiffré.
+        args.push({
+          titre: `Potentiel de revalorisation : +${pct}%`,
+          detail: `Passer de ${fmtEuros(loyerActuel)}/mois (${Math.round(loyerActuelM2)}€/m²) à ${fmtEuros(loyerCible)}/mois (${Math.round(cibleM2)}€/m²) ${bornéParRealisme ? "réaliste à la relocation" : "(haut de fourchette ANIL)"}. Gain annuel brut : ${fmtEuros((loyerCible - loyerActuel) * 12)}.`,
+        });
+
+        // Stratégie qualité.
+        args.push({
+          titre: "Stratégie qualité pour justifier le premium",
+          detail: `Meublé haut de gamme (électroménager, literie neuve, mobilier soigné) + petit rafraîchissement (peinture, luminaires) = photos qui vendent, candidats triés, loyer tenu. Coût : ~1 000–2 000€, rentabilisé en 2–3 mois.`,
+        });
+
+        // Annonce et présentation.
+        args.push({
+          titre: "L'annonce fait 50% du loyer",
+          detail: `Photos en lumière naturelle, description des atouts (transports, commerces, proximité écoles), disponibilité rapide, réactivité aux visites = candidats de qualité, loyer négocié vers le haut.`,
+        });
+
+        // Réalisme : revalorisation progressive.
+        if (bornéParRealisme) {
+          args.push({
+            titre: "Revalorisation progressive, surtout à la relocation",
+            detail: `Un locataire en place : révision annuelle limitée à l'inflation. Potentiel max à la relocation (nouveau locataire payant le marché). Compte 6–12 mois d'adaptation.`,
+          });
+        }
+
+        // Encadrement légal (caveat si nécessaire).
+        args.push({
+          titre: "Encadrement légal : à vérifier",
+          detail: `Paris, Lille, Lyon, Montpellier ont des loyers plafonnés. Avant de fixer le tien, vérifie la commune sur le portail des loyers.`,
+        });
+
+        return args;
+      })(),
       pourquoi: bornéParRealisme
         ? "Loyer sous le marché : une revalorisation réaliste rehausse rendement et cash-flow."
         : "Loyer aligné sur le haut du marché : rendement et cash-flow en hausse.",
@@ -472,23 +555,48 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       verdictApres,
       flipVersAchat: !dejaAchat && verdictApres === "achete",
       patch: { simulation_inputs: { ...inputs, montantEmprunte: montantCible } },
-      arguments: [
-        {
-          titre: "Mets les banques en concurrence",
-          detail:
-            "Fais jouer plusieurs banques, ou passe par un courtier : quelques dixièmes de taux changent nettement le cash-flow.",
-        },
-        {
-          titre: "Délègue l'assurance emprunteur",
-          detail:
-            "La loi Lemoine permet de changer d'assurance à tout moment : souvent le plus gros gain sur le coût total du crédit.",
-        },
-        {
-          titre: "Ajuste durée, apport et différé",
-          detail:
-            "Allonger la durée ou renforcer l'apport améliore le cash-flow mensuel (au prix du coût total du crédit ou de l'immobilisation).",
-        },
-      ],
+      arguments: (() => {
+        const args: Argument[] = [];
+        const ecartCashflow = Math.abs(cashflowAvant ?? 0);
+        const pctCapital = Math.round((apportSupp / capitalActuel) * 100);
+        const mensualiteAnte = (capitalActuel * 0.004) / 1; // approx pour contexte
+        const mensualitePost = (montantCible * 0.004) / 1; // approx pour contexte
+        const gainMensuel = cashflowOf(mod) ?? 0;
+
+        // Diagnostic du cash-flow déficitaire.
+        args.push({
+          titre: `Cash-flow déficitaire : −${fmtEuros(ecartCashflow)}/mois`,
+          detail: `À ce niveau de financement, tu paies ${fmtEuros(ecartCashflow)}/mois de poche. Problème : emprunt trop important (${fmtEuros(capitalActuel)}) vs loyer insuffisant (${fmtEuros(apt.loyer_retenu ?? 0)}/mois).`,
+          source: "Calcul",
+        });
+
+        // Solution : augmenter l'apport.
+        args.push({
+          titre: `Solution : +${fmtEuros(apportSupp)} d'apport (${pctCapital}% du capital)`,
+          detail: `Emprunt réduit de ${fmtEuros(capitalActuel)} à ${fmtEuros(montantCible)}. Mensualité baisse, cash-flow passe à l'équilibre.`,
+          verbatim: `En renforçant mon apport de ${fmtEuros(apportSupp)}, j'emprunte d'autant moins. Ça rend l'opération autofinancée mois par mois.`,
+        });
+
+        // Optimisation de l'emprunt (taux, assurance).
+        args.push({
+          titre: "Optimiser l'emprunt : taux + assurance",
+          detail: `Avec un crédit de ${fmtEuros(montantCible)}, négocier 0.2% de baisse de taux = gain ~${fmtEuros(montantCible * 0.002)}/an. Assurance délégable (loi Lemoine) : souvent 30–50% moins cher qu'assurance bancaire.`,
+        });
+
+        // Durée vs apport.
+        args.push({
+          titre: "Durée du crédit : arbitrage emprunt vs apport",
+          detail: `Allonger à 25 ans réduit la mensualité. Mais renforcer l'apport réduit aussi l'emprunt ET son coût total. Calcule les 2 : parfois l'apport extra est plus rentable qu'une durée longue.`,
+        });
+
+        // Caveat : ce n'est pas une vraie optimisation.
+        args.push({
+          titre: "⚠️ Apport ≠ optimisation du bien",
+          detail: `Renforcer l'apport améliore le cash-flow, pas la rentabilité intrinsèque. C'est un contournement : tu mets plus de capital propre pour compenser un loyer ou prix insuffisant.`,
+        });
+
+        return args;
+      })(),
       pourquoi: "Cash-flow ramené à l'équilibre en empruntant moins.",
       caveat: "Améliore le cash-flow, pas la rentabilité du bien.",
     };

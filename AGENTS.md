@@ -608,6 +608,10 @@ cash-flow avant → après**, et un badge « → Achète » si elle fait bascule
 verdict. **Purement informatif : ne modifie JAMAIS le bien réel** (prix, loyer,
 dpe, score, verdicts intacts).
 
+Les cartes de levier n'ont **aucun divider interne** (`border-t`) : l'espacement
+vertical suffit à séparer action → métriques → `pourquoi`/`caveat` → accordéon
+d'arguments, cohérent avec la charte (le bordé de la carte détache déjà le bloc).
+
 ## Verdict = source unique (`src/lib/analyse/decision.ts`)
 
 `computeDecision(score, verdicts, ecartPct)` est la SEULE définition du verdict
