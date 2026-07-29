@@ -144,13 +144,21 @@ export default function SyntheseView({
   }
 
   // --- Données dérivées (aucun nouvel appel) ------------------------------
+  // Le type dit `verdicts: Verdict[]`/`blocs: Record<BlocKey, BlocAnalyse>`
+  // (non optionnels), mais une analyse stockée AVANT l'ajout d'un champ ou
+  // d'un bloc ne les a pas forcément en base — le type ne garantit pas la
+  // forme réelle du JSON. Sans ce garde, un bien avec une analyse d'un schéma
+  // plus ancien plantait tout le rendu de cet onglet, qui est l'onglet PAR
+  // DÉFAUT de la fiche (page blanche au premier chargement). Même tolérance
+  // que AnalyseIA.tsx pour les blocs manquants (".filter(Boolean)").
   const score = analyse.score_global;
-  const alerte = analyse.verdicts.find((v) => v.niveau === "alerte");
-  const attention = analyse.verdicts.find((v) => v.niveau === "attention");
+  const verdicts = analyse.verdicts ?? [];
+  const alerte = verdicts.find((v) => v.niveau === "alerte");
+  const attention = verdicts.find((v) => v.niveau === "attention");
 
-  const faits = analyse.blocs.prix.faits;
+  const faits = analyse.blocs?.prix?.faits ?? [];
   const faitEcart = faits.find((f) => f.label === "Écart au prix de marché");
-  const ecartPct = ecartPrixMarche(analyse.blocs.prix);
+  const ecartPct = ecartPrixMarche(analyse.blocs?.prix);
   const faitMediane = faits.find((f) => f.label === "Prix/m² médian comparable");
   const medianeM2 = typeof faitMediane?.value === "number" ? faitMediane.value : null;
   const prixMarche =
@@ -193,7 +201,7 @@ export default function SyntheseView({
   // Un GO franc est exigeant : le moindre verdict "attention" (rendement
   // modeste, bloc faible, DPE E...) ou une surcote bascule en "négocie".
   const surcote = ecartPct != null && ecartPct > 5;
-  const decision: Decision = computeDecision(score, analyse.verdicts, ecartPct);
+  const decision: Decision = computeDecision(score, verdicts, ecartPct);
   let raison: string;
   if (decision === "passe") {
     raison = alerte
@@ -275,7 +283,11 @@ export default function SyntheseView({
         <div className="mt-7 flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 sm:gap-x-8">
             {BLOCS_NOTES.map((cle) => {
-              const bloc = analyse.blocs[cle];
+              const bloc = analyse.blocs?.[cle];
+              // Bloc absent (analyse d'un schéma antérieur à son ajout) : on
+              // l'omet du radar plutôt que de planter — même tolérance que le
+              // détail de l'Analyse IA.
+              if (!bloc) return null;
               return (
                 <button
                   key={cle}

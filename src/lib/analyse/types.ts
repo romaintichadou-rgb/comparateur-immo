@@ -136,19 +136,24 @@ export type RecommandationLevier = "prix" | "travaux" | "loyer" | "financement";
 
 /**
  * Argument concret pour passer à l'action sur un levier (négocier, louer plus
- * cher…). 100 % déterministe : `detail`/`verbatim` s'appuient sur un fait réel
- * de l'analyse (chiffres interpolés) ou une bonne pratique — jamais de donnée
- * inventée. `verbatim` = phrase prête à dire au vendeur/locataire (vouvoiement).
+ * cher…). 100 % déterministe : `detail` s'appuie sur un fait réel de l'analyse
+ * (chiffres interpolés) ou une bonne pratique — jamais de donnée inventée.
  */
 export interface Argument {
   /** Titre court (ex. "Prix au-dessus du marché"). */
   titre: string;
   /** Explication en 1 phrase (chiffres du bien interpolés). */
   detail: string;
-  /** Phrase prête à l'emploi, affichée entre « » (adressée au vendeur/locataire). */
-  verbatim?: string;
-  /** Source du fait qui fonde l'argument (crédibilité). */
+  /** Source du fait qui fonde l'argument (crédibilité). Sa PRÉSENCE distingue
+   * une "preuve" (adossée à une donnée réelle, opposable à l'interlocuteur)
+   * d'un argument de "méthode" (playbook) — l'onglet Optimiser groupe sur ce
+   * critère. Ne pas renseigner `source` sur un argument de méthode. */
   source?: "DVF" | "ADEME" | "ANIL" | "Géorisques" | "Calcul";
+  /** Chiffre-clé de la preuve, déjà formaté (ex. "24 000 €", "+11 %"), extrait
+   * en colonne pour être lisible sans lire la phrase. Réservé aux preuves. */
+  chiffre?: string;
+  /** Légende du chiffre-clé, 1-2 mots (ex. "travaux", "vs marché"). */
+  chiffreLabel?: string;
 }
 
 /**
@@ -180,6 +185,11 @@ export interface Recommandation {
   prixCible?: number;
   baisseEuros?: number;
   baissePct?: number;
+  /** Trésorerie que l'investisseur doit engager pour ce levier : coût des
+   * travaux, apport supplémentaire. C'est une SORTIE, pas un gain — l'onglet
+   * Optimiser l'affiche en neutre, jamais en vert. Absent sur prix et loyer,
+   * dont l'action se lit comme une transition (avant → après). */
+  montantEngage?: number;
   /** Détails "avant → après" spécifiques au levier (affichés si présents). */
   prixAchatAvant?: number;
   prixAchatApres?: number;
@@ -202,6 +212,12 @@ export interface Recommandation {
   cout?: string;
   /** Réserve honnête sur l'hypothèse, optionnel. */
   caveat?: string;
+  /** true quand le `caveat` nomme un frein RÉDHIBITOIRE (l'achat reste bloqué
+   * quoi qu'on fasse sur ce levier), et non une simple réserve d'estimation.
+   * Seul ce cas justifie une alerte rouge : sans ce drapeau, une réserve du
+   * type « coût estimé, à affiner avec des devis » serait peinte comme un
+   * blocage. */
+  caveatBloquant?: boolean;
 }
 
 export interface AnalyseIA {
@@ -219,7 +235,7 @@ export interface AnalyseIA {
   recommandations?: Recommandation[];
 }
 
-export const ANALYSE_VERSION = 3;
+export const ANALYSE_VERSION = 4;
 
 /** Bloc vide "à venir", pour les phases pas encore implémentées. */
 export function blocIndisponible(cle: BlocKey, message: string): BlocAnalyse {

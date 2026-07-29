@@ -1546,31 +1546,32 @@ function OptimiserSkeleton() {
         </div>
         <Skeleton className="h-3.5 w-96 max-w-full rounded" />
       </div>
-      {/* Cartes : héros (prix) pleine largeur + 3 cartes */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={`flex flex-col rounded-xl border border-ink-200 bg-white p-5 ${
-              i === 0 ? "lg:col-span-2" : ""
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-7 w-7 rounded-lg" />
-                <Skeleton className="h-3.5 w-36 rounded" />
-              </div>
-              {i === 0 && <Skeleton className="h-5 w-20 rounded-full" />}
-            </div>
-            <Skeleton className="mt-3 h-5 w-64 max-w-full rounded" />
-            <div className={`mt-3 grid gap-3 ${i === 0 ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2"}`}>
-              {(i === 0 ? [0, 1, 2, 3] : [0, 1]).map((j) => (
-                <Skeleton key={j} className="h-12 w-full rounded-lg" />
-              ))}
-            </div>
-            <Skeleton className="mt-4 h-3 w-full rounded" />
+      {/* Panneau du levier : sélecteur + changement + pivot, chiffres, arguments */}
+      <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+        <div className="border-b border-ink-100 bg-accent-50 p-5">
+          <Skeleton className="mb-4 h-10 w-80 max-w-full rounded-lg" />
+          <Skeleton className="h-8 w-64 max-w-full rounded" />
+          <Skeleton className="mt-2 h-3.5 w-full max-w-xl rounded" />
+          <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            ))}
           </div>
-        ))}
+        </div>
+        <div className="p-5">
+          <Skeleton className="h-2.5 w-16 rounded" />
+          <div className="mt-3 space-y-2">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="mt-6 h-2.5 w-16 rounded" />
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -603,14 +603,69 @@ selon le verdict actuel (Achète / Négocie / Passe) :
   le verdict à « Achète ».
 - verdict = **Achète** → « Acheter mieux » : comment augmenter la rentabilité.
 
-Chaque carte dit ce qu'une action change concrètement : **rendement net et
-cash-flow avant → après**, et un badge « → Achète » si elle fait basculer le
-verdict. **Purement informatif : ne modifie JAMAIS le bien réel** (prix, loyer,
-dpe, score, verdicts intacts).
+**Purement informatif : ne modifie JAMAIS le bien réel** (prix, loyer, dpe,
+score, verdicts intacts).
 
-Les cartes de levier n'ont **aucun divider interne** (`border-t`) : l'espacement
-vertical suffit à séparer action → métriques → `pourquoi`/`caveat` → accordéon
-d'arguments, cohérent avec la charte (le bordé de la carte détache déjà le bloc).
+## Un levier à la fois (`SelecteurLevier`)
+
+L'écran affiche **UN SEUL levier**. Ce n'est PAS un écran de comparaison : le
+moteur a déjà classé les leviers (prix en tête, financement en dernier) et la vue
+d'ensemble vit dans l'onglet **Synthèse**. Empiler les quatre leviers en cartes
+répétait quatre fois le même gabarit et repoussait les arguments derrière un
+clic — ne pas y revenir.
+
+La sélection passe par un **contrôle segmenté** (`SelecteurLevier`) : compact,
+aligné à gauche, fond `ink-100` avec pastille blanche active, **rendu DANS le
+bandeau `accent-50` du levier**. État local (`actif`), jamais dans l'URL.
+
+**Ne pas en refaire une barre d'onglets soulignée pleine largeur** : la page
+porte déjà une navigation par onglets, et deux barres de même forme à deux
+niveaux de hiérarchie se lisaient comme une double navigation. Elles ne se
+comportent d'ailleurs pas pareil — les onglets de page sont des liens qui
+changent l'URL, celui-ci est un état local ; leur ressemblance était donc aussi
+un mensonge sur le comportement. Il garde `role="tablist"` / `aria-selected`
+(c'est bien un sélecteur de panneaux), et défile horizontalement sur mobile.
+Un segment porte le badge « Achète » quand son levier fait basculer le verdict.
+
+Ordre de lecture imposé, à ne pas réarranger :
+
+1. **L'action à faire** — `reco.action`, en titre.
+2. **Les chiffres impactés** — cartes `avant → après` (`buildPairs`).
+3. **Les arguments** — preuves puis méthode.
+
+Les points 1 et 2 vivent dans **une seule section** (le bandeau `accent-50`) :
+l'action et son impact se lisent d'un bloc. Ne pas les redécouper en deux zones.
+
+### Le chiffre pivot est PORTÉ PAR LE TITRE
+
+Le pivot est le chiffre que l'investisseur **contrôle** : le prix qu'il annonce
+au vendeur, le loyer qu'il affiche, le budget qu'il fait chiffrer, l'apport qu'il
+vire. **Jamais une conséquence** (rendement, cash-flow) : celles-ci se constatent,
+elles ne s'exécutent pas. Un pivot fixe sur le cash-flow mettrait mécaniquement le
+levier financement en tête — or c'est le levier d'appoint, et le cash-flow mesure
+le levier de crédit, pas la qualité de l'actif.
+
+**Il n'y a pas de carte pivot** : `reco.action` porte le chiffre (« Négocie à
+272 800 € »), donc une carte à côté aurait répété le titre mot pour mot. Les
+`action` du moteur ne contiennent **que** ce chiffre — ne pas y remettre
+« — soit −X % (Y de moins) », qui redisait la même chose deux fois de plus.
+
+Autour du titre, en second plan et sans jamais répéter la cible :
+- la **pastille d'écart** (`−12 %`, `+15 %`) collée au titre ;
+- une ligne de contexte « Prix affiché 310 000 € · {pourquoi} ».
+
+`buildPivot` ne fournit donc que ce contexte (`label`, `avant`, `delta`), pas la
+valeur cible. Il renvoie `null` pour travaux et financement : leur montant est une
+grandeur sèche, déjà dans le titre, et il n'existe pas de valeur « avant ».
+La métrique portée par le titre est exclue des cartes (pas de répétition).
+
+### Bandeau d'alerte
+
+Le `caveat` s'affiche en bandeau sous les chiffres. Rouge **uniquement** si
+`caveatBloquant` est vrai (frein rédhibitoire nommé), ambre sinon. Sans ce
+drapeau, une réserve du type « coût estimé, à affiner avec des devis » serait
+peinte comme un blocage. `pourquoi` (ce que le levier apporte) et `caveat` (la
+réserve) ne doivent jamais se recouvrir — ils sont rendus à deux endroits.
 
 ## Verdict = source unique (`src/lib/analyse/decision.ts`)
 
@@ -630,8 +685,11 @@ projeté. Même moteur déterministe, mêmes données, zéro chiffre inventé, z
 appel réseau/LLM. On ne mute jamais `apt`. Rangé dans le champ **lecture seule**
 `AnalyseIA.recommandations` (nullable).
 
-**Versioning** : `ANALYSE_VERSION = 2`. Analyses antérieures (`== null`) →
-l'onglet invite à « Relancer ». `== []` → « rien de plus à optimiser » (positif).
+**Versioning** : `ANALYSE_VERSION = 4`. Analyses antérieures (`recommandations ==
+null`) → l'onglet invite à « Relancer ». `== []` → « rien de plus à optimiser »
+(positif). Les champs ajoutés en v4 (`montantEngage`, `Argument.chiffre`) sont
+optionnels : une analyse v3 s'affiche sans pivot sur travaux/financement et sans
+colonne de chiffres, sans casser (dégradation silencieuse, pas d'invite).
 
 ## Les 4 leviers (ordre d'affichage FIXE : prix en tête, financement en dernier)
 
@@ -647,11 +705,12 @@ l'onglet invite à « Relancer ». `== []` → « rien de plus à optimiser » (
   vraie optimisation). Seuls travaux + loyer (`milieu`) sont triés entre eux
   (flip-vers-achat puis cash-flow décroissant). Ne pas remettre le financement
   dans le tri.
-- **Métriques par carte (avant → après)** : chaque carte affiche rendement net +
-  cash-flow ; le prix ajoute prix d'achat + prix/m² ; loyer et travaux ajoutent le
-  loyer. Portées par des champs optionnels de `Recommandation`
-  (`prixAchatAvant/Apres`, `prixM2*`, `loyer*`) rendus dynamiquement par
-  `buildPairs` (OptimiserView).
+- **Métriques (avant → après)** : rendement net + cash-flow partout ; le prix
+  ajoute prix/m² ; travaux ajoute le loyer. Portées par des champs optionnels de
+  `Recommandation` (`prixAchatAvant/Apres`, `prixM2*`, `loyer*`, `montantEngage`)
+  rendus par `buildPivot` (le chiffre piloté) et `buildPairs` (les conséquences)
+  dans `OptimiserView`. Les cartes reprennent le style de l'app : bordées,
+  libellé en capitales, suffixe « · détail » sur rendement et cash-flow.
 - **Emprunt qui suit l'opération** : négocier le prix baisse le montant emprunté
   (apport constant, `inputsAtPrice`) ; les travaux sont FINANCÉS (emprunt
   `loanAvant + coutTravaux`). Sinon, à emprunt figé, baisser le prix (ou ajouter
@@ -690,27 +749,40 @@ l'onglet invite à « Relancer ». `== []` → « rien de plus à optimiser » (
   prix/loyer (pas de seuils profil) restent directionnels côté après (baisse/
   hausse = vert).
 
-## Arguments par levier (accordéon discret)
+## Arguments par levier — preuves et méthode
 
-Chaque reco porte un champ **`arguments?: Argument[]`** (`{ titre, detail,
-verbatim?, source? }`) : une liste d'arguments concrets pour passer à l'action
-(négocier, louer plus cher…), dont des **verbatim prêts à dire** au vendeur/
-locataire. Affichés dans un **accordéon inline discret** sous chaque carte
-(`ArgumentsAccordion`, replié par défaut, libellé par levier via
-`LEVIER_ARG_LABEL` + compteur).
+Chaque reco porte **`arguments?: Argument[]`** (`{ titre, detail, source?,
+chiffre?, chiffreLabel? }`). Ils sont **toujours visibles** dans le panneau du
+levier (pas d'accordéon : les cacher revenait à enterrer ce que l'écran est
+censé fournir), en **deux sections** :
 
-- **100 % déterministe**, construit dans `buildRecommandations`
-  (`buildLevier*` → helpers `argsPrix`, arrays inline). Deux familles :
-  **contextuels** (conditionnés par les données réelles — écart DVF, DPE ADEME,
-  cash-flow simulé, fourchette ANIL — chiffres interpolés, avec `source`) et
-  **méthode** (playbook statique). **Aucun chiffre inventé** ; le `verbatim` est
-  une mise en mots (comme la narration), jamais une source de nombre.
-- **Ton** : `detail` en tutoiement (l'investisseur) ; `verbatim` en vouvoiement
-  (adressé au vendeur/locataire), affiché dans un bloc cité (liseré `accent-300`,
-  fond `accent-50`, icône `Quote`).
-- **`ANALYSE_VERSION = 3`** : analyses antérieures sans `arguments` → accordéon
-  masqué (dégradation silencieuse, pas d'invite).
-- Spec complète (contenu des 4 leviers) : `docs/spec-arguments-leviers.md`.
+- **Les faits** — arguments portant une `source`. Adossés à une donnée réelle
+  donc opposables à l'interlocuteur. Le `chiffre` est extrait dans un **badge à
+  fond `ink-50`** (alignement d'un fait à l'autre — c'est tout l'intérêt de le
+  sortir de la phrase), avec `chiffreLabel` en légende. Pas de trait vertical
+  séparant le badge du texte — la forme du badge suffit à le détacher, un
+  diviseur n'ajoute qu'une ligne à lire.
+- **La méthode** — arguments **sans** `source`. Playbook, en grille deux
+  colonnes.
+
+**C'est la présence de `source` qui trie** : ne jamais renseigner `source` sur un
+argument de méthode, ni l'omettre sur un fait.
+
+- **100 % déterministe**, construit dans `buildRecommandations` (`buildLevier*` →
+  helper `argsPrix`, arrays inline), à partir des données réelles (écart DVF, DPE
+  ADEME, cash-flow simulé, fourchette ANIL). **Aucun chiffre inventé.**
+- **Textes courts** : titre de 3 à 5 mots, `detail` d'une phrase — le `chiffre`
+  porte le reste. Ne pas réintroduire de paragraphes.
+- **Ton** : `detail` en tutoiement (l'investisseur).
+- **Pas de verbatim** (champ retiré) : un ancien design affichait une phrase
+  prête à dire au vendeur/locataire sous chaque fait, mais elle ne faisait le
+  plus souvent que reformuler le `detail` juste au-dessus à la première
+  personne — décision produit assumée de la retirer plutôt que la garder pour
+  une valeur marginale. Si le besoin réapparaît (« une formulation à
+  emprunter »), le traiter comme une fonctionnalité à part (ex. un bouton
+  copier sur une seule phrase par levier), pas un champ par argument.
+- Spec d'origine (contenu des 4 leviers) : `docs/spec-arguments-leviers.md` —
+  antérieure à ce redécoupage, périmée sur l'emplacement UI ET sur le verbatim.
 
 ## `renovePremium` sur `buildBlocLocation`
 
@@ -792,3 +864,52 @@ Le CTA « Ajouter un bien » (`/appartements/nouveau`) n'est **plus dans la
 navbar** : il est sur la home (`HomeView.tsx`), à droite de la dropdown de tri.
 L'état vide (`EmptyHomeState.tsx`) garde ses propres points d'entrée. La navbar
 ne contient donc que les liens de navigation + le wordmark.
+
+# Pages d'erreur (not-found / error)
+
+L'app a des boundaries d'erreur Next.js à deux niveaux, toutes bâties sur le
+même composant partagé **`ErrorScreen.tsx`** (badge à halo dans le style de
+`EmptyHomeState`, titre `font-display`, texte `ink-500`, un CTA plein
+`accent-600` + un lien tertiaire souligné) :
+
+- **`src/app/appartements/[id]/not-found.tsx`** / **`error.tsx`** — spécifiques
+  à la fiche. `not-found` (tonalité neutre `accent`, icône `SearchX`) pour un
+  bien supprimé ou un ID qui ne correspond plus à rien. `error` (tonalité
+  `amber`, icône `AlertTriangle`, bouton **Réessayer** via `reset()`) pour un
+  échec technique au rendu.
+- **`src/app/not-found.tsx`** / **`error.tsx`** — mêmes gabarits, génériques,
+  filet de sécurité pour le reste de l'app (accueil, paramètres).
+
+**Sans ces boundaries**, une exception non gérée pendant le rendu SSR coupe la
+réponse HTTP en plein flux : le navigateur affiche son propre écran d'erreur
+réseau ("This page couldn't load"), pas une page de l'app — c'est le bug
+observé en prod qui a motivé leur ajout. `error.tsx` doit être un Client
+Component (contrainte Next.js) ; il reçoit `{ error, reset }` et n'affiche que
+`error.digest` (référence opaque) à l'utilisateur, jamais le message ni la
+stack — Next.js redacte de toute façon le message réel en prod.
+
+**Trois causes déjà rencontrées et corrigées** (à garder à l'esprit avant de
+supposer qu'une nouvelle panne est inédite) :
+1. **Bloc ou champ manquant sur une analyse ancienne** — le type
+   `AnalyseIA.blocs`/`.verdicts` promet des champs toujours présents, mais une
+   analyse stockée dans un schéma antérieur à l'ajout d'un bloc ne les a pas
+   forcément en base (le type ne garantit pas la vraie forme du JSON stocké).
+   `SyntheseView.tsx`, l'onglet PAR DÉFAUT de la fiche, y accédait sans garde
+   (`analyse.blocs.prix.faits`, `analyse.blocs[cle].note`,
+   `analyse.verdicts.find(...)`) → tout bien avec une analyse ancienne
+   plantait au premier chargement. Corrigé avec la même tolérance que
+   `AnalyseIA.tsx` (`analyse.blocs?.prix?.faits ?? []`, bloc absent → omis du
+   radar plutôt qu'un crash). **Réflexe à appliquer à tout nouveau champ de
+   `AnalyseIA`** : ne jamais le lire sans un garde, même si le type dit qu'il
+   est obligatoire.
+2. **ID malformé dans l'URL** (lien tronqué/copié) — Postgrest rejette avant
+   même de chercher la ligne (`invalid input syntax for type uuid`). Dans
+   `page.tsx`, cette erreur est distinguée d'une vraie erreur de config
+   Supabase (`requiredEnv()` dans `db.ts`, préfixe "Variable d'environnement
+   manquante") et traitée comme un bien introuvable (`notFound()`), pas
+   affichée via `SetupNotice` (message Postgres brut sous un titre "config
+   Supabase requise" — trompeur pour un utilisateur en prod).
+3. **`page.tsx` : le `try/catch` ne couvre que le fetch**, pas
+   `computeDerived()` ni le rendu de `ApartmentDetail` — une exception dans
+   l'un ou l'autre échappe au `catch` et retombe sur `error.tsx` (point 1
+   ci-dessus, avant sa correction, tombait exactement dans ce trou).
