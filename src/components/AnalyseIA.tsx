@@ -6,23 +6,37 @@ import { AlertTriangle, CheckCircle2, Clock, Info, Loader2, Sparkles } from "luc
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, VerdictNiveau } from "@/lib/analyse/types";
-import { RENDEMENT_HOVER_RING, SEUILS_RENDEMENT_DEFAUT, scoreCategorie, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import {
+  DECISION_RING_STYLES,
+  NOTE_TEXT_CLASS,
+  RENDEMENT_HOVER_RING,
+  SEUILS_RENDEMENT_DEFAUT,
+  TONE_TEXT_CLASS,
+  cashflowTone,
+  noteTone,
+  scoreCategorie,
+  rendementNetTone,
+  type CashflowSeuils,
+  type RendementSeuils,
+  type ScoreTone,
+} from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/decision";
 import { simulate, defaultInputs } from "@/lib/simulation";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
-import { formatDateTime, formatEuros, formatPercent } from "@/lib/format";
+import { formatDateTime, formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 
-const CASHFLOW_ROUGE_SEUIL = -200;
+/** Repli si le profil investisseur n'a pas pu être chargé — les seuils réels
+ * viennent toujours des réglages (prop `cashflowSeuils`). */
+const CASHFLOW_SEUILS_DEFAUT: CashflowSeuils = { vert: 0, rouge: -200 };
 
 const HIGHLIGHTS_RENDEMENT = new Set(["Rendement brut", "Rendement net"]);
 
-const HIGHLIGHT_TONES: Record<BlocHighlight["tone"], { wrap: string; label: string; value: string }> = {
-  neutral: { wrap: "bg-white border border-ink-200", label: "text-ink-500", value: "text-ink-900" },
-  positif: { wrap: "bg-white border border-ink-200", label: "text-ink-500", value: "text-emerald-700" },
-  attention: { wrap: "bg-white border border-ink-200", label: "text-ink-500", value: "text-amber-700" },
-  alerte: { wrap: "bg-white border border-ink-200", label: "text-ink-500", value: "text-red-600" },
-};
+/** Les highlights ont un habillage identique quelle que soit la tonalité —
+ * seule la couleur de la valeur varie, et elle vient de `TONE_TEXT_CLASS`
+ * (source unique). Ne pas réintroduire une table par tonalité ici. */
+const HIGHLIGHT_WRAP = "bg-white border border-ink-200";
+const HIGHLIGHT_LABEL = "text-ink-500";
 
 const VERDICT_STYLES: Record<
   VerdictNiveau,
@@ -39,8 +53,6 @@ const VERDICT_BG: Record<VerdictNiveau, string> = {
   positif: "bg-emerald-50/80",
 };
 
-type ScoreTone = "emerald" | "amber" | "red" | "neutral";
-
 const CATEGORIE_TAG_STYLES: Record<ScoreTone, string> = {
   emerald: "bg-emerald-50 text-emerald-700 shadow-[inset_0_0_0_1px_rgba(4,120,87,.12)]",
   amber: "bg-amber-50 text-amber-700 shadow-[inset_0_0_0_1px_rgba(180,83,9,.12)]",
@@ -48,28 +60,17 @@ const CATEGORIE_TAG_STYLES: Record<ScoreTone, string> = {
   neutral: "bg-ink-100 text-ink-500",
 };
 
-function scoreTone(note: number | null): ScoreTone {
-  if (note == null) return "neutral";
-  if (note >= 8) return "emerald";
-  if (note >= 5) return "amber";
-  return "red";
-}
-
-function noteTone(note: number | null): ScoreTone {
-  if (note == null) return "neutral";
-  if (note >= 8.5) return "emerald";
-  if (note >= 7) return "emerald";
-  if (note >= 5) return "amber";
-  return "red";
-}
-
+/** Habillage de la CARTE verdict. Les couleurs de l'anneau lui-même (trait et
+ * chiffre) viennent de `DECISION_RING_STYLES` — partagé avec le `ScoreRing` de
+ * l'accueil, pour que les deux anneaux ne puissent pas diverger. Seul le fond
+ * de piste reste ici : il est teinté parce que la carte l'est. */
 const DECISION_STYLES: Record<
   Decision,
-  { grad: string; border: string; title: string; caption: string; score: string; stroke: string; trackStroke: string; scoreFill: string }
+  { grad: string; border: string; title: string; caption: string; trackStroke: string }
 > = {
-  achete: { grad: "bg-gradient-to-r from-white to-emerald-50", border: "border-emerald-200", title: "text-emerald-900", caption: "text-emerald-700", score: "text-emerald-700", stroke: "stroke-emerald-500", trackStroke: "stroke-emerald-100", scoreFill: "fill-emerald-700" },
-  negocie: { grad: "bg-gradient-to-r from-white to-amber-50", border: "border-amber-200", title: "text-amber-900", caption: "text-amber-700", score: "text-amber-700", stroke: "stroke-amber-400", trackStroke: "stroke-amber-100", scoreFill: "fill-amber-700" },
-  passe: { grad: "bg-gradient-to-r from-white to-red-50", border: "border-red-200", title: "text-red-900", caption: "text-red-700", score: "text-red-600", stroke: "stroke-red-500", trackStroke: "stroke-red-100", scoreFill: "fill-red-600" },
+  achete: { grad: "bg-gradient-to-r from-white to-emerald-50", border: "border-emerald-200", title: "text-emerald-900", caption: "text-emerald-700", trackStroke: "stroke-emerald-100" },
+  negocie: { grad: "bg-gradient-to-r from-white to-amber-50", border: "border-amber-200", title: "text-amber-900", caption: "text-amber-700", trackStroke: "stroke-amber-100" },
+  passe: { grad: "bg-gradient-to-r from-white to-red-50", border: "border-red-200", title: "text-red-900", caption: "text-red-700", trackStroke: "stroke-red-100" },
 };
 
 const GAUGE_SIZE = 100;
@@ -78,7 +79,16 @@ const GAUGE_RADIUS = (GAUGE_SIZE - GAUGE_STROKE) / 2;
 const GAUGE_CENTER = GAUGE_SIZE / 2;
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * GAUGE_RADIUS;
 
-function VerdictGauge({ score, styles: s }: { score: number | null; styles: typeof DECISION_STYLES[Decision] }) {
+function VerdictGauge({
+  score,
+  decision,
+  styles: s,
+}: {
+  score: number | null;
+  decision: Decision;
+  styles: typeof DECISION_STYLES[Decision];
+}) {
+  const ring = DECISION_RING_STYLES[decision];
   const filled = score == null ? 0 : Math.max(0, Math.min(1, score / 10));
   const offset = GAUGE_CIRCUMFERENCE * (1 - filled);
   return (
@@ -102,14 +112,14 @@ function VerdictGauge({ score, styles: s }: { score: number | null; styles: type
           strokeDasharray={GAUGE_CIRCUMFERENCE}
           strokeDashoffset={offset}
           transform={`rotate(-90 ${GAUGE_CENTER} ${GAUGE_CENTER})`}
-          className={`${s.stroke} transition-[stroke-dashoffset] duration-700 ease-out`}
+          className={`${ring.stroke} transition-[stroke-dashoffset] duration-700 ease-out`}
         />
       )}
       <text
         x={GAUGE_CENTER} y={GAUGE_CENTER}
         textAnchor="middle" dominantBaseline="central"
         style={{ fontFamily: "var(--font-mono)", fontSize: 30, fontWeight: 700 }}
-        className={s.scoreFill}
+        className={ring.fill}
       >
         {score != null ? formatNote(score) : "—"}
       </text>
@@ -119,15 +129,18 @@ function VerdictGauge({ score, styles: s }: { score: number | null; styles: type
 
 type MetricTone = "positif" | "attention" | "alerte" | "neutral";
 
-const METRIC_VALUE_CLASS: Record<MetricTone, string> = {
-  positif: "text-emerald-700",
-  attention: "text-amber-700",
-  alerte: "text-red-600",
-  neutral: "text-ink-900",
-};
-
 const BLOC_ORDRE: BlocKey[] = ["prix", "location", "simulation", "potentiel", "risque"];
 
+/**
+ * Gravité d'un FAIT — axe distinct de la tonalité (`TONE_TEXT_CLASS`), d'où
+ * une table séparée et non une réutilisation.
+ *
+ * `info` ≠ `neutral` : "neutral" veut dire "donnée indisponible" (valeur "—"),
+ * alors qu'un fait `info` porte une vraie valeur, simplement sans jugement.
+ * D'où `text-ink-800` — lisible, un cran sous le `text-ink-900` d'une valeur
+ * mise en avant. Ce n'est PAS une 3e définition du neutre qui aurait dérivé :
+ * ne pas l'aligner sur ink-900 ni sur ink-400 en "harmonisant".
+ */
 const GRAVITE_STYLES: Record<FaitGravite, { dot: string; value: string }> = {
   positif: { dot: "bg-emerald-500", value: "text-emerald-700" },
   info: { dot: "bg-ink-300", value: "text-ink-800" },
@@ -168,6 +181,7 @@ type GoTab = (tab: "ia" | "optimiser" | "donnees" | "financiere" | "simulation",
 export default function AnalyseIA({
   apartment,
   seuilsRendement = SEUILS_RENDEMENT_DEFAUT,
+  cashflowSeuils = CASHFLOW_SEUILS_DEFAUT,
   onAnalysed,
   onRelancer,
   onGoTab,
@@ -175,6 +189,7 @@ export default function AnalyseIA({
 }: {
   apartment: ApartmentWithComputed;
   seuilsRendement?: RendementSeuils;
+  cashflowSeuils?: CashflowSeuils;
   onAnalysed: (apt: ApartmentWithComputed) => void;
   onRelancer?: () => void;
   onGoTab?: GoTab;
@@ -257,14 +272,14 @@ export default function AnalyseIA({
   const medianeM2 = typeof faitMediane?.value === "number" ? faitMediane.value : null;
 
   const simu = simulate(apartment, apartment.simulation_inputs ?? defaultInputs());
+  // Année 1 : c'est LA définition du "cash-flow mensuel" non qualifié dans
+  // toute l'app (MetricCards, Optimiser, recommandations). Le cash-flow moyen
+  // reste affiché à côté, mais toujours explicitement libellé "moyen".
   const cashflow = simu?.cashflowMensuelAn1 ?? null;
   const netTone = rendementNetTone(apartment.rendement_net, seuilsRendement);
   const dpe = dpeInfo(apartment.dpe);
 
-  const cashflowTone: MetricTone =
-    cashflow == null ? "neutral"
-      : cashflow >= 0 ? "positif"
-        : cashflow < CASHFLOW_ROUGE_SEUIL ? "alerte" : "attention";
+  const cfTone: MetricTone = cashflowTone(cashflow, cashflowSeuils);
 
   const ecartTone: MetricTone =
     faitEcart?.gravite === "positif" ? "positif"
@@ -320,8 +335,8 @@ export default function AnalyseIA({
     .slice(0, 3);
 
   // Blocs for flat sections
-  const blocsNotes = BLOC_ORDRE.map((k) => analyse.blocs[k]).filter((b): b is BlocAnalyse => b != null);
-  const quartier = analyse.blocs.quartier;
+  const blocsNotes = BLOC_ORDRE.map((k) => analyse.blocs?.[k]).filter((b): b is BlocAnalyse => b != null);
+  const quartier = analyse.blocs?.quartier;
   const blocs = quartier ? [...blocsNotes, quartier] : blocsNotes;
 
   const goTab = onGoTab ?? (() => {});
@@ -352,14 +367,13 @@ export default function AnalyseIA({
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-600">{raison}</p>
           </div>
-          <VerdictGauge score={score} styles={styles} />
+          <VerdictGauge score={score} decision={decision} styles={styles} />
         </div>
 
         {blocsNotes.length > 0 && (
           <div className="mt-6 flex flex-wrap items-baseline gap-x-8 gap-y-2 pt-1">
             {blocsNotes.map((b) => {
-              const t = noteTone(b.note);
-              const colorClass = t === "emerald" ? "text-emerald-700" : t === "amber" ? "text-amber-700" : t === "red" ? "text-red-600" : "text-ink-300";
+              const colorClass = NOTE_TEXT_CLASS[noteTone(b.note)];
               return (
                 <span key={b.cle} className="text-xs text-ink-400">
                   {b.titre}
@@ -393,10 +407,10 @@ export default function AnalyseIA({
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard
           label="Cash-flow mensuel"
-          value={cashflow == null ? "—" : `${cashflow >= 0 ? "+" : "−"} ${formatEuros(Math.abs(Math.round(cashflow)))}`}
-          sub={cashflow == null ? "Simulation incomplète" : "Net en poche chaque mois"}
-          tone={cashflowTone}
-          emphasis={driver(cashflowTone)}
+          value={formatEurosSigned(cashflow)}
+          sub={cashflow == null ? "Simulation incomplète" : "Année 1 · net en poche chaque mois"}
+          tone={cfTone}
+          emphasis={driver(cfTone)}
           linkLabel="Simulation"
           onClick={() => goTab("simulation", "sim-cashflow")}
         />
@@ -475,9 +489,11 @@ function VerdictRow({ verdict }: { verdict: Verdict }) {
   );
 }
 
+/** Tag d'emphase d'une MetricCard : même pastille que le chip d'un verdict de
+ * même niveau — c'est le même signal, il ne doit pas exister en deux exemplaires. */
 const EMPHASIS_TAG_CLASS: Record<"alerte" | "attention", string> = {
-  alerte: "bg-red-100 text-red-700",
-  attention: "bg-amber-100 text-amber-700",
+  alerte: VERDICT_STYLES.alerte.chip,
+  attention: VERDICT_STYLES.attention.chip,
 };
 
 function MetricCard({
@@ -507,7 +523,7 @@ function MetricCard({
           </span>
         )}
       </div>
-      <p className={`mt-1.5 font-mono text-2xl font-bold tabular-nums ${METRIC_VALUE_CLASS[tone]}`}>
+      <p className={`mt-1.5 font-mono text-2xl font-bold tabular-nums ${TONE_TEXT_CLASS[tone]}`}>
         {value}
       </p>
       <p className="mt-1 text-xs text-ink-400">{sub}</p>
@@ -604,7 +620,7 @@ function FlatSection({
         </div>
         {bloc.note != null && (
           <div className="flex items-baseline gap-0.5">
-            <span className={`font-mono text-[28px] font-bold tabular-nums leading-none ${tone === "emerald" ? "text-emerald-700" : tone === "amber" ? "text-amber-700" : tone === "red" ? "text-red-600" : "text-ink-400"}`}>
+            <span className={`font-mono text-[28px] font-bold tabular-nums leading-none ${NOTE_TEXT_CLASS[tone]}`}>
               {formatNote(bloc.note)}
             </span>
             <span className="font-mono text-[13px] font-medium text-ink-400">/10</span>
@@ -650,7 +666,7 @@ function FlatSection({
           )}
 
           {/* Facts */}
-          {!isQuartier && bloc.faits.length > 0 && (
+          {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
             <ul className="divide-y divide-ink-100">
               {bloc.faits.map((f, i) => (
                 <FaitRow key={i} fait={f} />
@@ -708,26 +724,31 @@ function HighlightCard({
   seuilsRendement: RendementSeuils;
 }) {
   const { open: openRendementDetail } = useRendementDetail();
-  const t = HIGHLIGHT_TONES[highlight.tone];
   const content = (
     <>
-      <p className={`text-xs font-medium ${t.label}`}>{highlight.label}</p>
-      <p className={`mt-1.5 font-mono text-[22px] font-bold tabular-nums ${t.value}`}>{highlight.value}</p>
+      <p className={`text-xs font-medium ${HIGHLIGHT_LABEL}`}>{highlight.label}</p>
+      <p className={`mt-1.5 font-mono text-[22px] font-bold tabular-nums ${TONE_TEXT_CLASS[highlight.tone]}`}>
+        {highlight.value}
+      </p>
     </>
   );
 
   const isClickable = HIGHLIGHTS_RENDEMENT.has(highlight.label);
 
   if (!isClickable) {
-    return <div className={`rounded-xl p-4 ${t.wrap}`}>{content}</div>;
+    return <div className={`rounded-xl p-4 ${HIGHLIGHT_WRAP}`}>{content}</div>;
   }
 
+  // Anneau de survol dans la TONALITÉ du rendement affiché, comme partout
+  // ailleurs (tableau, carte, fiche). `RENDEMENT_HOVER_RING` était déjà importé
+  // ici mais jamais appliqué — un hover gris neutre lui tenait lieu de
+  // remplacement, seul écart de l'app à la règle documentée dans AGENTS.md.
   return (
     <button
       type="button"
       onClick={() => openRendementDetail(apartment, seuilsRendement)}
       title="Voir le détail du calcul"
-      className={`rounded-xl p-4 text-left transition hover:bg-ink-50 hover:border-ink-300 ${t.wrap}`}
+      className={`rounded-xl p-4 text-left transition ${HIGHLIGHT_WRAP} ${RENDEMENT_HOVER_RING[highlight.tone]}`}
     >
       {content}
     </button>

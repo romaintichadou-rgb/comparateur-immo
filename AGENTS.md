@@ -264,12 +264,37 @@ l'IA viole les consignes du prompt.
 Trois fonctions canoniques pilotent les couleurs. Ne pas en créer de nouvelles
 ni coder des seuils inline — toujours réutiliser celles-ci.
 
+**Les tables tonalité → classe vivent aussi dans `scoring.ts`** et sont les
+seules autorisées. Ne JAMAIS en redéfinir une copie locale dans un composant
+(`METRIC_VALUE_CLASS`, `TONE_TEXT`, `RENDEMENT_TEXT_CLASS`, `cashflowTextClass`
+étaient quatre copies divergentes — supprimées) :
+
+- **`TONE_TEXT_CLASS[tone]`** — texte sur fond BLANC : tout chiffre coloré par un
+  seuil du profil investisseur (rendement, cash-flow, écart). `neutral` =
+  `text-ink-900`.
+- **`NOTE_TEXT_CLASS[tone]`** — pour toute note /10. `neutral` = `text-ink-400`.
+- **`TONE_PANEL_STYLES[tone]`** — texte sur fond TEINTÉ : panneaux de détail,
+  cartes statistiques, pills. Quatre slots (`wrap` / `label` / `value` / `sub`),
+  un cran plus foncé que sur blanc (voir « Intensité du rouge » plus bas).
+  `sub` sert aux cartes à trois lignes. Concerne `RendementDetailPanel`,
+  `CashflowDetailPanel`, `LoyerDetailPanel` et la pill de `ApartmentsMap` — qui
+  en avaient chacun une copie locale divergente.
+
+De même, `cashflowTone()` ne doit pas être ré-implémentée inline (elle l'était
+dans `blocs/simulation.ts` et `SimulationFinanciere.tsx`). Utiliser
+`cashflowSeuilsFromSettings(settings)` pour construire les seuils.
+
 ### `noteTone(note)` — couleur d'un score /10
 
-Utilisé pour les sous-scores du verdict, les scores de FlatSection, et les
-tags de catégorie. Source unique dans `scoring.ts`.
+Utilisé pour les sous-scores du verdict, les scores de FlatSection, les tags de
+catégorie **et l'anneau de score du tableau d'accueil** (`ScoreRing` /
+`scoreToneClasses` dans `ApartmentsTable.tsx`, qui n'apporte plus que le fond,
+le rail et l'anneau — jamais ses propres seuils). Source unique dans
+`scoring.ts`. Les paliers sont alignés sur `scoreCategorie` : ≥ 7 = « Opportunité
+solide » donc vert. Un 7,5 doit être vert PARTOUT — ne pas réintroduire un seuil
+à 8 côté tableau.
 
-| Score  | Tone    | Classe text      |
+| Score  | Tone    | Classe text (`NOTE_TEXT_CLASS`) |
 |--------|---------|------------------|
 | ≥ 7    | emerald | `text-emerald-700` |
 | ≥ 5    | amber   | `text-amber-700`   |
@@ -312,8 +337,36 @@ rouge −200 €).
 | ≥ seuil rouge (−200 €)  | attention |
 | < seuil rouge            | alerte    |
 
-Mapping tone → classe : `positif` = `text-emerald-700`, `attention` =
-`text-amber-700`, `alerte` = `text-red-600`, `neutral` = `text-ink-900`.
+Mapping tone → classe : `TONE_TEXT_CLASS` (voir plus haut) — `positif` =
+`text-emerald-700`, `attention` = `text-amber-700`, `alerte` = `text-red-600`,
+`neutral` = `text-ink-900`.
+
+**Les MetricCards de l'onglet Analyse respectent ces seuils** (prop
+`cashflowSeuils`, passée par `ApartmentDetail`). Elles utilisaient auparavant
+des seuils codés en dur (0 / −200), ce qui rendait le profil investisseur à
+moitié appliqué : le même cash-flow apparaissait en couleurs différentes selon
+l'onglet. Ne pas revenir à une constante locale.
+
+### « Cash-flow mensuel » = ANNÉE 1, partout
+
+Un « cash-flow mensuel » non qualifié désigne TOUJOURS
+`simulate().cashflowMensuelAn1` — MetricCards de l'onglet Analyse, colonnes
+avant/après de l'onglet Optimiser, et le moteur de recommandations
+(`cashflowOf`, dichotomie du levier financement). Le cash-flow **moyen** existe
+toujours mais n'est affiché QUE sous un libellé explicite (« Cash-flow mensuel
+moyen », highlights du bloc Simulation).
+
+Pourquoi ça compte : les deux valeurs divergent franchement dès que les
+hypothèses de revalorisation/indexation sont actives, et peuvent tomber de part
+et d'autre du seuil vert (cas réel observé : An1 = **+20 €** vert, moyen =
+**−112 €** ambre, sur le même bien inchangé). La colonne « avant » d'Optimiser
+décrit le bien RÉEL non modifié : elle doit afficher exactement le chiffre déjà
+lu sur l'onglet Analyse. Seule la colonne « après » est une projection, et il
+est normal qu'elle diffère.
+
+⚠️ Les recommandations sont **persistées** dans `analyse_ia.recommandations` :
+les biens analysés avant ce changement gardent un `cashflowAvant` calculé sur la
+moyenne jusqu'à la prochaine relance d'analyse.
 
 ### `ecartTone(pct)` — écart loyer (perspective investisseur)
 
@@ -338,13 +391,93 @@ Ne JAMAIS inverser cette logique.
 | attention | `bg-amber-500`   | `text-amber-700`   |
 | alerte    | `bg-red-500`     | `text-red-600`     |
 
+La gravité est un axe **distinct** de la tonalité — d'où une table à part.
+`info` n'est pas `neutral` : `neutral` signifie « donnée indisponible » (valeur
+« — »), alors qu'un fait `info` porte une vraie valeur, simplement sans
+jugement. C'est ce qui justifie `text-ink-800`, un cran sous le `text-ink-900`
+d'une valeur mise en avant. **Ce n'est pas un 3e neutre qui aurait dérivé** — ne
+pas l'« harmoniser » vers `ink-900` ou `ink-400`.
+
 ### Verdicts de blocs (`VERDICT_STYLES`)
 
-| Niveau    | Chip                         | Fond ligne      |
-|-----------|------------------------------|-----------------|
-| alerte    | `bg-red-100 text-red-700`    | `bg-red-50/80`  |
-| attention | `bg-amber-100 text-amber-700` | `bg-amber-50/80` |
-| positif   | `bg-emerald-100 text-emerald-700` | `bg-emerald-50/80` |
+| Niveau    | Chip                         | Titre de ligne  | Fond ligne      |
+|-----------|------------------------------|-----------------|-----------------|
+| alerte    | `bg-red-100 text-red-700`    | `text-red-800`  | `bg-red-50/80`  |
+| attention | `bg-amber-100 text-amber-700` | `text-amber-800` | `bg-amber-50/80` |
+| positif   | `bg-emerald-100 text-emerald-700` | `text-emerald-800` | `bg-emerald-50/80` |
+
+### Intensité du rouge : 600 sur blanc, 700 sur teinte
+
+Règle transversale, valable aussi pour l'ambre et l'emeraude — implicite
+jusqu'ici, ce qui l'a fait passer pour une incohérence lors d'un audit :
+
+- **Texte sur fond blanc ou `ink-50`** → `text-red-600` / `text-amber-700` /
+  `text-emerald-700` (valeurs, notes, faits — c'est `TONE_TEXT_CLASS` et
+  `NOTE_TEXT_CLASS`).
+- **Texte sur fond teinté** (`bg-red-50`, `bg-red-100`…) → un cran plus foncé :
+  `text-red-700`, voire `text-red-800` pour un titre. C'est un besoin de
+  contraste, pas une couleur différente. C'est ce que code `TONE_PANEL_STYLES`
+  (`label` 700 / `value` 800 / `sub` 600) ; concerne aussi
+  `CATEGORIE_TAG_STYLES`, `VERDICT_STYLES` et les tags d'emphase des MetricCards.
+
+Avant de « corriger » un `red-700`, vérifier sur quel fond il est posé.
+
+**Le rouge suit la même marche que l'ambre et l'émeraude** — il ne reste pas un
+cran en dessous. Les copies locales de `TONE_PANEL_STYLES` avaient `alerte.value`
+à `red-700` là où positif/attention étaient à `-800` ; c'était une asymétrie, pas
+une intention.
+
+### Montants signés : `formatEurosSigned`
+
+Tout flux pouvant être négatif (cash-flow avant tout) passe par
+**`formatEurosSigned`** (`lib/format.ts`) : `− 628 €`. Deux détails que
+`formatEuros` garantit et qu'une concaténation maison perd —
+
+- le **vrai signe moins** U+2212 (`−`), jamais le trait d'union ASCII (`-`) ;
+- l'**espace insécable** avant le « € », sans quoi le symbole part seul à la
+  ligne dans une colonne étroite.
+
+`toLocaleString("fr-FR")` sur un nombre négatif produit un trait d'union : ne
+jamais s'en servir tel quel pour afficher un montant. Quatre formateurs maison
+coexistaient, dont deux se contredisaient **sur la même ligne de tableau**
+(colonnes Crédit/Charges/Impôt en trait d'union, colonnes CF en signe moins).
+
+Seule exception, dans `SimulationFinanciere` : `signe()` et `euros()`, formes
+compactes de la table année par année (pas de « € » — l'en-tête de colonne le
+porte — et pas d'espace après le signe, la densité prime). Elles utilisent le
+même glyphe. Partout ailleurs : `formatEurosSigned`.
+
+### Cartes statistiques teintées : la paire prime sur la table
+
+Quand deux cartes du même gabarit sont côte à côte dans une grille, elles se
+comparent d'un coup d'œil et doivent donc partager la même échelle de teintes —
+même si l'une porte l'accent de marque et l'autre une tonalité sémantique. Voir
+la paire « Loyer mensuel CC » (accent) / « Écart vs marché » (tonalité) dans
+`LoyerDetailPanel` : toutes deux en label 700 / valeur 800 / sub 600. La
+cohérence qui compte est celle qui est visible dans le même champ de vision, pas
+celle avec un écran que l'utilisateur ne voit pas en même temps.
+
+### Survol d'un rendement cliquable — la COULEUR est la règle, pas la forme
+
+Six endroits affichent un rendement cliquable (il ouvre `RendementDetailPanel`).
+Ce qu'ils doivent tous respecter : **le survol reprend la TONALITÉ de la valeur**
+(`rendementNetTone`), jamais un gris neutre ni une couleur fixe. Un rendement en
+alerte rougit au survol, où qu'il soit.
+
+L'**affordance elle-même suit le contexte** — décision produit assumée, les
+contextes les plus denses ne supporteraient pas un anneau :
+
+| Support | Affordance |
+|---|---|
+| Carte mobile, popup de la carte, highlights de l'Analyse | anneau `RENDEMENT_HOVER_RING[tone]` |
+| Ligne du tableau d'accueil (dense) | soulignement pointillé |
+| Tuile `ResultCard` (Opération, Simulation) | fond + bordure intensifiés (`hoverEmphase` / `hoverContext`) |
+| Carte de l'onglet Optimiser | le lien « détail → » change de couleur |
+
+Ne pas « uniformiser » vers l'anneau en lisant cette section trop vite :
+`RENDEMENT_HOVER_RING` n'est PAS obligatoire partout. Une version antérieure de
+ce document disait « CHAQUE composant », ce qui contredisait le code depuis
+toujours et invitait à corriger au hasard dans un sens ou dans l'autre.
 
 ### DPE — impact réglementaire dans MetricCards
 
@@ -355,6 +488,40 @@ Ne JAMAIS inverser cette logique.
 | E     | Interdit dès 2034        | attention |
 | F     | Interdit dès 2028        | alerte    |
 | G     | Interdit à la location   | alerte    |
+| *(vide)* | Non renseigné          | neutral   |
+
+Le cas « non renseigné » (`dpe` vide) affiche « — » en valeur et bascule le lien
+de la carte vers l'onglet Description (« Compléter ») au lieu du bloc Risques.
+
+### Anneaux de score : pilotés par la DÉCISION (`DECISION_RING_STYLES`)
+
+La jauge de la fiche (`VerdictGauge`) et l'anneau de l'accueil (`ScoreRing`)
+sont le même objet visuel : un cercle, le score /10 au centre, rempli à
+`score / 10`. Ils partagent donc **une seule table de couleurs**,
+`DECISION_RING_STYLES` (`scoring.ts`), clé `Decision | "inconnu"` :
+
+| Décision | Trait | Chiffre |
+|----------|-------|---------|
+| achete   | `stroke-emerald-500` | `text-emerald-700` / `fill-emerald-700` |
+| negocie  | `stroke-amber-400`   | `text-amber-700` / `fill-amber-700` |
+| passe    | `stroke-red-500`     | `text-red-600` / `fill-red-600` |
+| inconnu  | `stroke-ink-300`     | `text-ink-400` / `fill-ink-400` |
+
+**La couleur suit la décision, pas la note** — décision produit assumée. Score
+et décision ne coïncident pas : un bien à 7,5 surcoté de 8 % est « Négocie »
+alors que sa note seule le peindrait en vert. Sur une liste d'annonces, ce qu'on
+cherche est « achetable ou pas », pas « bien noté ou pas ». Conséquence à
+assumer : un `7,5` peut s'afficher en ambre — chiffre flatteur, couleur
+réservée, et c'est précisément le message.
+
+La teinte de ligne du tableau (`DECISION_ROW_CLASSES` dans `ApartmentsTable`)
+suit la même clé — sans quoi l'anneau et sa ligne se contrediraient.
+
+Ne PAS recolorer ces anneaux avec `noteTone()` : celui-ci reste réservé aux
+notes affichées comme telles (sous-scores du verdict, FlatSections), qui ne
+portent aucune décision. Le fond de piste (`track`) n'est pas dans la table
+partagée : il dépend du support (blanc pour le tableau, teinté pour la carte
+verdict), c'est de l'habillage local.
 
 ### Plafonds sur le score global (`computeScoreGlobal`)
 
@@ -621,10 +788,15 @@ frais de gestion (% du loyer), le résultat imposable, et le cash-flow.
 
 # Onglet "Analyse" — fusion Synthèse + Analyse IA
 
-L'ancien onglet "Synthèse" (`SyntheseView.tsx`) et l'ancien onglet "Analyse IA"
-ont été fusionnés en un seul onglet **"Analyse"** (`src/components/AnalyseIA.tsx`),
-premier onglet et onglet par défaut (tab key `"ia"`). `?tab=synthese` redirige
-vers `"ia"` pour rétrocompatibilité.
+L'ancien onglet "Synthèse" et l'ancien onglet "Analyse IA" ont été fusionnés en
+un seul onglet **"Analyse"** (`src/components/AnalyseIA.tsx`), premier onglet et
+onglet par défaut (tab key `"ia"`). `?tab=synthese` redirige vers `"ia"` pour
+rétrocompatibilité.
+
+`SyntheseView.tsx` a été **supprimé** : il n'était plus importé nulle part depuis
+la fusion, mais gardait sa propre copie de `computeDecision` et un seuil de
+cash-flow codé en dur — deux sources de dérive prêtes à repartir si quelqu'un
+l'avait réutilisé. Ne pas le recréer.
 
 ## Layout (de haut en bas)
 
@@ -648,7 +820,7 @@ vers `"ia"` pour rétrocompatibilité.
   (`ecartPct <= 5`) ;
 - **négocie** sinon.
 
-`DECISION_STYLES` porte les styles visuels par décision :
+`DECISION_STYLES` (`AnalyseIA.tsx`) porte l'habillage de la CARTE verdict :
 
 | Prop        | Achète          | Négocie         | Passe          |
 |-------------|-----------------|-----------------|----------------|
@@ -656,10 +828,12 @@ vers `"ia"` pour rétrocompatibilité.
 | Border      | emerald-200     | amber-200       | red-200        |
 | Titre       | emerald-900     | amber-900       | red-900        |
 | Caption     | emerald-700     | amber-700       | red-700        |
-| Score text  | emerald-700     | amber-700       | red-600        |
-| Gauge stroke | emerald-500    | amber-400       | red-500        |
 | Gauge track | emerald-100     | amber-100       | red-100        |
-| Score fill  | fill-emerald-700 | fill-amber-700 | fill-red-600   |
+
+Le trait et le chiffre de la jauge ne sont PAS ici : ils viennent de
+`DECISION_RING_STYLES` (`scoring.ts`), partagé avec l'anneau de l'accueil — voir
+« Anneaux de score » plus haut. Un champ `score` (`text-emerald-700`…) existait
+dans cette table sans jamais être lu : supprimé.
 
 ## MetricCards — tonalité des valeurs
 
@@ -767,9 +941,10 @@ réserve) ne doivent jamais se recouvrir — ils sont rendus à deux endroits.
 ## Verdict = source unique (`src/lib/analyse/decision.ts`)
 
 `computeDecision(score, verdicts, ecartPct)` est la SEULE définition du verdict
-Achète/Négocie/Passe, partagée par `SyntheseView`, `OptimiserView` et le moteur
+Achète/Négocie/Passe, partagée par `AnalyseIA`, `OptimiserView` et le moteur
 de recommandations (avant, chacun le recalculait à la main → risque de dérive).
-`ecartPrixMarche(prixBloc)` extrait l'écart au marché du bloc Prix.
+`ecartPrixMarche(prixBloc)` extrait l'écart au marché du bloc Prix — avec une
+garde sur `.faits`, absent des analyses stockées dans un schéma antérieur.
 
 ## Moteur (`src/lib/analyse/recommandations.ts`)
 
@@ -987,10 +1162,12 @@ supposer qu'une nouvelle panne est inédite) :
    `AnalyseIA.blocs`/`.verdicts` promet des champs toujours présents, mais une
    analyse stockée dans un schéma antérieur à l'ajout d'un bloc ne les a pas
    forcément en base (le type ne garantit pas la vraie forme du JSON stocké).
-   `SyntheseView.tsx`, l'onglet PAR DÉFAUT de la fiche, y accédait sans garde
+   L'onglet PAR DÉFAUT de la fiche y accédait sans garde
    (`analyse.blocs.prix.faits`, `analyse.blocs[cle].note`,
    `analyse.verdicts.find(...)`) → tout bien avec une analyse ancienne
-   plantait au premier chargement. Corrigé avec la même tolérance que
+   plantait au premier chargement. Même piège retrouvé depuis dans
+   `ecartPrixMarche` (`prixBloc?.faits.find` — l'optionnel s'arrêtait au bloc,
+   pas à `faits`) et dans `decisionFromAnalyse`. Corrigé avec la même tolérance que
    `AnalyseIA.tsx` (`analyse.blocs?.prix?.faits ?? []`, bloc absent → omis du
    radar plutôt qu'un crash). **Réflexe à appliquer à tout nouveau champ de
    `AnalyseIA`** : ne jamais le lire sans un garde, même si le type dit qu'il

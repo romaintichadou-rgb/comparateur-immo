@@ -3,21 +3,15 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
-import { formatApartmentTitle, formatEuros } from "@/lib/format";
-import { cashflowTone, type CashflowSeuils, type RendementTone } from "@/lib/analyse/scoring";
+import { formatApartmentTitle, formatEuros, formatEurosSigned } from "@/lib/format";
+import { TONE_PANEL_STYLES, cashflowTone, type CashflowSeuils, type RendementTone } from "@/lib/analyse/scoring";
 import { defaultInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
 
 const TRANSITION_MS = 300;
 
 // Mêmes 4 tonalités que le rendement / le reste de l'app.
-const TONE_STYLES: Record<RendementTone, { wrap: string; label: string; value: string }> = {
-  neutral: { wrap: "bg-ink-50", label: "text-ink-500", value: "text-ink-900" },
-  positif: { wrap: "bg-emerald-50", label: "text-emerald-700", value: "text-emerald-800" },
-  attention: { wrap: "bg-amber-50", label: "text-amber-700", value: "text-amber-800" },
-  alerte: { wrap: "bg-red-50", label: "text-red-700", value: "text-red-700" },
-};
 
-const fmtSigned = (v: number) => `${v >= 0 ? "+" : "−"} ${formatEuros(Math.abs(Math.round(v)))}`;
+const fmtSigned = formatEurosSigned;
 
 export default function CashflowDetailPanel({
   apartment,
@@ -182,7 +176,7 @@ function ResultTile({
   unit: string;
   tone: RendementTone;
 }) {
-  const t = TONE_STYLES[tone];
+  const t = TONE_PANEL_STYLES[tone];
   return (
     <div className={`rounded-xl p-4 ${t.wrap}`}>
       <p className={`text-xs font-medium ${t.label}`}>{label}</p>
@@ -215,7 +209,7 @@ function Row({ label, value, sign = true }: { label: string; value: number; sign
 }
 
 function TotalRow({ label, value, tone }: { label: string; value: number; tone: RendementTone }) {
-  const cls = TONE_STYLES[tone].value;
+  const cls = TONE_PANEL_STYLES[tone].value;
   return (
     <li className="flex items-baseline justify-between gap-3 py-2">
       <span className="font-semibold text-ink-900">{label}</span>

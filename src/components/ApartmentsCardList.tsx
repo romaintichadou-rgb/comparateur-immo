@@ -5,17 +5,10 @@ import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
-import { RENDEMENT_HOVER_RING, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
-import { ScoreRing, sortApartments, type SortKey } from "@/components/ApartmentsTable";
+import { RENDEMENT_HOVER_RING, TONE_TEXT_CLASS, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import { ScoreRing, decisionToneOf, sortApartments, type SortKey } from "@/components/ApartmentsTable";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
-
-const RENDEMENT_TEXT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
-  neutral: "text-ink-700",
-  positif: "text-emerald-700",
-  attention: "text-amber-700",
-  alerte: "text-red-600",
-};
 
 export default function ApartmentsCardList({
   apartments,
@@ -75,7 +68,7 @@ export default function ApartmentsCardList({
                 </p>
               </div>
               <div className="shrink-0">
-                <ScoreRing score={score} />
+                <ScoreRing score={score} decision={decisionToneOf(apt)} />
               </div>
             </div>
 
@@ -97,7 +90,7 @@ export default function ApartmentsCardList({
                       openRendementDetail(apt, seuilsRendement);
                     }}
                     title="Voir le détail du calcul"
-                    className={`-mx-1 rounded-md px-1 font-mono text-sm font-bold transition ${RENDEMENT_HOVER_RING[tone]} ${RENDEMENT_TEXT_CLASS[tone]}`}
+                    className={`-mx-1 rounded-md px-1 font-mono text-sm font-bold transition ${RENDEMENT_HOVER_RING[tone]} ${TONE_TEXT_CLASS[tone]}`}
                   >
                     {formatPercent(apt.rendement_net)}
                   </button>

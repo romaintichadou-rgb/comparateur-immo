@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "reac
 import { Banknote, Calculator, Info, Landmark, PieChart, Plus, ReceiptText, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
+import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
   defaultInputs,
   simulate,
@@ -18,6 +19,7 @@ import {
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
 import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
+import { formatEurosSigned } from "@/lib/format";
 
 /**
  * Onglet "Simulation financière" : cash-flow mensuel réel en LMNP réel,
@@ -75,21 +77,10 @@ const TMI_OPTIONS = ["11", "30", "41", "45"] as const;
 
 // Seuils personnels (page Paramètres) : au-dessus du seuil vert c'est "GO",
 // en dessous du seuil rouge c'est un point d'alerte, entre les deux c'est
-// acceptable.
-interface CashflowSeuils {
-  vert: number;
-  rouge: number;
-}
-
-function cashflowTone(monthly: number, seuils: CashflowSeuils): "positif" | "attention" | "alerte" {
-  if (monthly >= seuils.vert) return "positif";
-  if (monthly >= seuils.rouge) return "attention";
-  return "alerte";
-}
-
+// acceptable. Le type et la logique de tonalité viennent de scoring.ts —
+// source unique, pour que le même cash-flow soit peint pareil partout.
 function cashflowTextClass(monthly: number, seuils: CashflowSeuils): string {
-  const tone = cashflowTone(monthly, seuils);
-  return tone === "positif" ? "text-emerald-700" : tone === "attention" ? "text-amber-700" : "text-red-600";
+  return TONE_TEXT_CLASS[cashflowTone(monthly, seuils)];
 }
 
 export default function SimulationFinanciere({
@@ -192,14 +183,14 @@ export default function SimulationFinanciere({
         <ResultCard
           label="Cash-flow mensuel — année 1"
           sub="après impôt LMNP"
-          value={`${signe(cfAn1)} €/mois`}
+          value={`${formatEurosSigned(cfAn1)}/mois`}
           tone={cashflowTone(cfAn1, cashflowSeuils)}
           emphase
         />
         <ResultCard
           label={`Cash-flow mensuel moyen — ${inputs.dureeAnnees} ans`}
           sub="après impôt LMNP"
-          value={`${signe(cfMoyen)} €/mois`}
+          value={`${formatEurosSigned(cfMoyen)}/mois`}
           tone={cashflowTone(cfMoyen, cashflowSeuils)}
           emphase
         />
@@ -281,12 +272,12 @@ export default function SimulationFinanciere({
             <li className="flex items-center justify-between py-3">
               <span className="font-semibold text-ink-900">Cash-flow mensuel</span>
               <span className={`text-lg font-bold ${cashflowTextClass(cfAn1, cashflowSeuils)}`}>
-                {signe(cfAn1)} €
+                {formatEurosSigned(cfAn1)}
               </span>
             </li>
           </ul>
           <p className="text-xs text-ink-400">
-            Avant impôt : {signe(result.cashflowMensuelAvantImpotAn1)} €/mois.
+            Avant impôt : {formatEurosSigned(result.cashflowMensuelAvantImpotAn1)}/mois.
           </p>
         </section>
       </div>
@@ -752,14 +743,10 @@ export function ResultCard({
   onClick?: () => void;
 }) {
   // Couleur de la valeur = le ton, partout (contexte comme verdict). Tons
-  // profonds alignés sur le panneau de détail du rendement (RendementDetailPanel)
-  // pour rester cohérents dans toute l'app.
-  const valueTones = {
-    neutral: "text-ink-900",
-    positif: "text-emerald-800",
-    attention: "text-amber-800",
-    alerte: "text-red-700",
-  } as const;
+  // profonds pris DIRECTEMENT dans `TONE_PANEL_STYLES` : cette tuile ouvre au
+  // clic le panneau de détail, qui affiche la même valeur — une copie locale
+  // s'était déjà désynchronisée sur le rouge (700 ici, 800 là-bas).
+  const valueTones = TONE_PANEL_STYLES;
 
   // Conteneur : tuiles de contexte en fond transparent (seul le contour les
   // délimite sur le fond de page) ; la tuile-verdict (emphase) prend le ton en
@@ -799,7 +786,7 @@ export function ResultCard({
       {loading ? (
         <Skeleton className="mt-2 mb-1 h-6 w-24" />
       ) : (
-        <p className={`mt-1 font-mono text-2xl font-semibold ${valueTones[tone]}`}>{value}</p>
+        <p className={`mt-1 font-mono text-2xl font-semibold ${valueTones[tone].value}`}>{value}</p>
       )}
       <p className="mt-0.5 text-[11px] text-ink-400">{sub}</p>
     </>
@@ -858,12 +845,21 @@ function AmortRow({ label, amount, detail }: { label: string; amount: number; de
   );
 }
 
+/** Montant compact sans « € », NON signé pour les positifs. Rend les négatifs
+ * avec le vrai signe moins (U+2212) : `toLocaleString` seul poserait un trait
+ * d'union, et les colonnes Crédit/Charges/Impôt se retrouvaient avec un glyphe
+ * différent des colonnes CF (`signe()`) SUR LA MÊME LIGNE de tableau. */
 function euros(n: number): string {
   const r = Math.round(n) || 0; // normalise -0 → 0
-  return r.toLocaleString("fr-FR");
+  return `${r < 0 ? "−" : ""}${Math.abs(r).toLocaleString("fr-FR")}`;
 }
 
+/** Forme COMPACTE pour la table année par année : pas de « € » (l'en-tête de
+ * colonne le porte) et pas d'espace après le signe, la densité prime. Utilise
+ * le vrai signe moins (U+2212) comme `formatEurosSigned`, jamais le trait
+ * d'union — c'est le même montant, il doit s'écrire pareil.
+ * Hors de cette table, utiliser `formatEurosSigned`. */
 function signe(n: number): string {
   const r = Math.round(n) || 0; // normalise -0 → 0
-  return `${r > 0 ? "+" : ""}${r.toLocaleString("fr-FR")}`;
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${Math.abs(r).toLocaleString("fr-FR")}`;
 }

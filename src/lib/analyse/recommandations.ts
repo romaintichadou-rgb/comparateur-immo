@@ -144,9 +144,12 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
   // Utilise les hypothèses de crédit PROPRES au scénario (le levier financement
   // modifie `simulation_inputs.montantEmprunte`) — sinon le cash-flow projeté
   // ignorerait l'apport supplémentaire. Mirroir de `buildBlocSimulation`.
+  // Année 1 : même définition du "cash-flow mensuel" que les MetricCards de
+  // l'onglet Analyse. La colonne "avant" décrit le bien RÉEL non modifié — elle
+  // doit afficher exactement le chiffre déjà lu sur l'écran précédent.
   const cashflowOf = (mod: ApartmentWithComputed): number | null => {
     const s = simulate(mod, mod.simulation_inputs ?? inputs);
-    return s ? s.cashflowMensuelMoyen : null;
+    return s ? s.cashflowMensuelAn1 : null;
   };
 
   // Verdict d'un scénario : mêmes fonctions que l'analyse réelle.
@@ -619,11 +622,11 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     const capitalActuel = inputs.montantEmprunte ?? Math.round((apt.prix ?? 0) + (apt.travaux ?? 0));
     const cf = (montant: number): number => {
       const s = simulate(aptBase, { ...inputs, montantEmprunte: Math.round(montant) });
-      return s ? s.cashflowMensuelMoyen : -Infinity;
+      return s ? s.cashflowMensuelAn1 : -Infinity;
     };
     if (cf(0) < 0) return null; // même au comptant le cash-flow reste négatif
 
-    // Plus grand montant emprunté ramenant le cash-flow moyen à l'équilibre.
+    // Plus grand montant emprunté ramenant le cash-flow d'année 1 à l'équilibre.
     let lo = 0;
     let hi = capitalActuel;
     for (let i = 0; i < 26; i++) {

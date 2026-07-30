@@ -6,15 +6,21 @@ import L from "leaflet";
 import Link from "next/link";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
-import { RENDEMENT_HOVER_RING, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import {
+  RENDEMENT_HOVER_RING,
+  TONE_PANEL_STYLES,
+  rendementNetTone,
+  type RendementSeuils,
+  type RendementTone,
+} from "@/lib/analyse/scoring";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 
-const RENDEMENT_PILL_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
-  neutral: "bg-ink-100 text-ink-600",
-  positif: "bg-emerald-50 text-emerald-700",
-  attention: "bg-amber-50 text-amber-700",
-  alerte: "bg-red-50 text-red-600",
-};
+/** Pill du rendement dans la popup : texte sur fond teinté, donc `TONE_PANEL_STYLES`
+ * (un cran plus foncé que sur blanc) et non `TONE_TEXT_CLASS`. Une copie locale
+ * mettait `text-red-600` sur `bg-red-50`, en contradiction avec les tags de
+ * l'Analyse qui utilisent `text-red-700` sur le même fond. */
+const pillClass = (tone: RendementTone): string =>
+  `${TONE_PANEL_STYLES[tone].wrap} ${TONE_PANEL_STYLES[tone].label}`;
 
 // Pins en forme de goutte (SVG inline, pas de dépendance à un CDN externe
 // pour l'icône elle-même) : rouge plein et bien visible pour une
@@ -132,7 +138,7 @@ export default function ApartmentsMap({
                     type="button"
                     onClick={() => openRendementDetail(apt, seuilsRendement)}
                     title="Voir le détail du calcul"
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold transition ${RENDEMENT_HOVER_RING[rendementNetTone(apt.rendement_net, seuilsRendement)]} ${RENDEMENT_PILL_CLASS[rendementNetTone(apt.rendement_net, seuilsRendement)]}`}
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold transition ${RENDEMENT_HOVER_RING[rendementNetTone(apt.rendement_net, seuilsRendement)]} ${pillClass(rendementNetTone(apt.rendement_net, seuilsRendement))}`}
                   >
                     {formatPercent(apt.rendement_net)} net
                   </button>

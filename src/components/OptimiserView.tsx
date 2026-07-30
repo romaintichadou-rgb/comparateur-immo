@@ -15,16 +15,16 @@ import { isImmeuble } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
 import type { Argument, Recommandation, RecommandationLevier } from "@/lib/analyse/types";
 import {
+  TONE_TEXT_CLASS,
   cashflowTone,
   rendementNetTone,
   type CashflowSeuils,
   type RendementSeuils,
-  type RendementTone,
 } from "@/lib/analyse/scoring";
 import { decisionFromAnalyse } from "@/lib/analyse/decision";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
-import { formatPercent } from "@/lib/format";
+import { formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
 
 /**
  * Onglet "Optimiser" — PRESCRIPTIF, orienté DÉCISION + RENTABILITÉ (pas le
@@ -55,20 +55,14 @@ const LEVIER_TAB_LABEL: Record<RecommandationLevier, string> = {
   financement: "Financement",
 };
 
-// Couleur de texte par tonalité (profil investisseur) — même lecture partout.
-const TONE_TEXT: Record<RendementTone, string> = {
-  neutral: "text-ink-900",
-  positif: "text-emerald-700",
-  attention: "text-amber-700",
-  alerte: "text-red-600",
-};
-
-const fmtCashflow = (n: number | null): string =>
-  n == null ? "—" : `${n >= 0 ? "+" : "−"} ${Math.round(Math.abs(n)).toLocaleString("fr-FR")} €`;
+/** Tous les montants passent par `formatEuros` : il pose une espace INSÉCABLE
+ * avant le « € », là où `toLocaleString(…) + " €"` met une espace ordinaire —
+ * le symbole pouvait alors partir seul à la ligne dans ces colonnes étroites. */
+const fmtCashflow = formatEurosSigned;
 
 const fmtRendement = (n: number | null): string => (n == null ? "—" : formatPercent(n));
-const fmtEuros = (n: number): string => `${Math.round(n).toLocaleString("fr-FR")} €`;
-const fmtPrixM2 = (n: number): string => `${Math.round(n).toLocaleString("fr-FR")} €/m²`;
+const fmtEuros = (n: number): string => formatEuros(Math.round(n));
+const fmtPrixM2 = (n: number): string => `${formatEuros(Math.round(n))}/m²`;
 
 /**
  * Contexte du chiffre PIVOT — celui que l'investisseur contrôle sur ce levier
@@ -150,14 +144,14 @@ function buildPairs(
     label: "Rendement net",
     avant: fmtRendement(reco.rendementAvant),
     apres: fmtRendement(reco.rendementApres),
-    apresClass: TONE_TEXT[rendementNetTone(reco.rendementApres, seuilsRendement)],
+    apresClass: TONE_TEXT_CLASS[rendementNetTone(reco.rendementApres, seuilsRendement)],
   });
   pairs.push({
     kind: "cashflow",
     label: "Cash-flow /mois",
     avant: fmtCashflow(reco.cashflowAvant),
     apres: fmtCashflow(reco.cashflowApres),
-    apresClass: TONE_TEXT[cashflowTone(reco.cashflowApres, cashflowSeuils)],
+    apresClass: TONE_TEXT_CLASS[cashflowTone(reco.cashflowApres, cashflowSeuils)],
   });
   return pairs;
 }
@@ -483,7 +477,7 @@ function PreuveItem({ arg }: { arg: Argument }) {
 }
 
 /**
- * Reprend le gabarit exact de `MetricCard` (SyntheseView.tsx) — rounded-xl,
+ * Reprend le gabarit exact de `MetricCard` (AnalyseIA.tsx) — rounded-xl,
  * p-4, label sans capitales, valeur `text-2xl font-bold` en mono, lien de
  * détail souligné + flèche ancré en bas à droite. Seul ajout : la valeur
  * "avant", puisque ce contexte est un avant/après et non une valeur seule.

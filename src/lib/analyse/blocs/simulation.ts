@@ -1,7 +1,7 @@
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { defaultInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
-import { clampNote } from "../scoring";
+import { cashflowSeuilsFromSettings, cashflowTone, clampNote } from "../scoring";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fait } from "../types";
 
 /**
@@ -43,15 +43,13 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
     };
   }
 
-  const seuils = { vert: settings.cashflowSeuilVertEuros, rouge: settings.cashflowSeuilRougeEuros };
+  const seuils = cashflowSeuilsFromSettings(settings);
   const cfAn1 = result.cashflowMensuelAn1;
   const cfMoyen = result.cashflowMensuelMoyen;
 
-  function tone(v: number): "positif" | "attention" | "alerte" {
-    if (v >= seuils.vert) return "positif";
-    if (v >= seuils.rouge) return "attention";
-    return "alerte";
-  }
+  // Source unique (scoring.ts) : mêmes seuils, même tonalité que les
+  // MetricCards, l'onglet Optimiser et le tableau de simulation.
+  const tone = (v: number) => cashflowTone(v, seuils) as "positif" | "attention" | "alerte";
 
   const highlights: BlocHighlight[] = [
     { label: "Cash-flow mensuel — année 1", value: `${signe(cfAn1)} €`, tone: tone(cfAn1) },

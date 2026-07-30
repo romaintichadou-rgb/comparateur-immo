@@ -5,31 +5,45 @@ import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
-import { rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
+import {
+  DECISION_RING_STYLES,
+  TONE_TEXT_CLASS,
+  rendementNetTone,
+  type DecisionTone,
+  type RendementSeuils,
+} from "@/lib/analyse/scoring";
+import { decisionFromAnalyse } from "@/lib/analyse/decision";
 import { formatNote } from "@/components/AnalyseIA";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
 
-const RENDEMENT_TEXT_CLASS: Record<ReturnType<typeof rendementNetTone>, string> = {
-  neutral: "text-ink-700",
-  positif: "text-emerald-700",
-  attention: "text-amber-700",
-  alerte: "text-red-600",
-};
-
-// Score IA : mêmes seuils que noteHex/noteColorClasses (AnalyseIA.tsx), mais
-// exprimés en classes Tailwind pour piloter fond + rail + anneau d'un bloc.
-// `grad` : le même ton, en dégradé transparent→teinté — utilisé sous la cellule
-// Rendement pour prolonger la couleur du score en continu (transparent au prix
-// → teinté au score), plutôt qu'un second ton piloté par le rendement (qui
-// créait une double couleur sur la ligne). La couleur du TEXTE du rendement,
-// elle, reste pilotée par RENDEMENT_TEXT_CLASS (signal de rendement conservé).
-function scoreToneClasses(score: number | null) {
-  if (score == null) return { bg: "bg-ink-50", grad: "bg-gradient-to-r from-transparent to-ink-50", rail: "border-ink-200", text: "text-ink-400", stroke: "stroke-ink-300" };
-  if (score >= 8) return { bg: "bg-emerald-50", grad: "bg-gradient-to-r from-transparent to-emerald-50", rail: "border-emerald-400", text: "text-emerald-700", stroke: "stroke-emerald-500" };
-  if (score >= 5) return { bg: "bg-amber-50", grad: "bg-gradient-to-r from-transparent to-amber-50", rail: "border-amber-400", text: "text-amber-700", stroke: "stroke-amber-500" };
-  return { bg: "bg-red-50", grad: "bg-gradient-to-r from-transparent to-red-50", rail: "border-red-400", text: "text-red-700", stroke: "stroke-red-500" };
+/**
+ * Décision d'achat du bien, ou "inconnu" si l'analyse n'a pas été générée.
+ * C'est elle — et non la note — qui pilote la couleur de la ligne et de
+ * l'anneau : en parcourant une liste d'annonces, ce qu'on cherche est
+ * « achetable ou pas », pas « bien noté ou pas ». Un 7,5 surcoté doit donc
+ * apparaître en ambre ici, comme sur sa fiche.
+ */
+export function decisionToneOf(apt: ApartmentWithComputed): DecisionTone {
+  const analyse = apt.analyse_ia;
+  if (!analyse || analyse.score_global == null) return "inconnu";
+  return decisionFromAnalyse(analyse).decision;
 }
+
+// Habillage propre au tableau (fond, rail, dégradé). Le trait et le chiffre de
+// l'anneau viennent de `DECISION_RING_STYLES` (partagé avec la jauge de la
+// fiche).
+// `grad` : le même ton, en dégradé transparent→teinté — utilisé sous la cellule
+// Rendement pour prolonger la couleur en continu (transparent au prix → teinté
+// au score), plutôt qu'un second ton piloté par le rendement (qui créait une
+// double couleur sur la ligne). La couleur du TEXTE du rendement, elle, reste
+// pilotée par TONE_TEXT_CLASS (signal de rendement conservé).
+const DECISION_ROW_CLASSES: Record<DecisionTone, { bg: string; grad: string; rail: string }> = {
+  inconnu: { bg: "bg-ink-50", grad: "bg-gradient-to-r from-transparent to-ink-50", rail: "border-ink-200" },
+  achete: { bg: "bg-emerald-50", grad: "bg-gradient-to-r from-transparent to-emerald-50", rail: "border-emerald-400" },
+  negocie: { bg: "bg-amber-50", grad: "bg-gradient-to-r from-transparent to-amber-50", rail: "border-amber-400" },
+  passe: { bg: "bg-red-50", grad: "bg-gradient-to-r from-transparent to-red-50", rail: "border-red-400" },
+};
 
 export type SortKey =
   | "rendement_net"
@@ -96,7 +110,8 @@ export default function ApartmentsTable({
           {sorted.map((apt) => {
             const tone = rendementNetTone(apt.rendement_net, seuilsRendement);
             const score = apt.analyse_ia?.score_global ?? null;
-            const scoreTone = scoreToneClasses(score);
+            const decision = decisionToneOf(apt);
+            const scoreTone = DECISION_ROW_CLASSES[decision];
             return (
               <tr
                 key={apt.id}
@@ -150,16 +165,17 @@ export default function ApartmentsTable({
                       openRendementDetail(apt, seuilsRendement);
                     }}
                     title="Voir le détail du calcul"
-                    className={`font-mono text-base font-bold transition hover:underline hover:decoration-dotted hover:underline-offset-2 ${RENDEMENT_TEXT_CLASS[tone]}`}
+                    className={`font-mono text-base font-bold transition hover:underline hover:decoration-dotted hover:underline-offset-2 ${TONE_TEXT_CLASS[tone]}`}
                   >
                     {formatPercent(apt.rendement_net)}
                   </button>
                 </td>
-                {/* Cellule verdict : fond teinté selon le score, rail de couleur
-                    sur l'extrémité droite (border-r), et la suppression logée
-                    ici même — plus de colonne blanche dédiée à droite. */}
+                {/* Cellule verdict : fond teinté selon la DÉCISION d'achat, rail
+                    de couleur sur l'extrémité droite (border-r), et la
+                    suppression logée ici même — plus de colonne blanche dédiée
+                    à droite. */}
                 <td className={`relative border-r-[3px] py-3 pl-5 pr-4 ${scoreTone.bg} ${scoreTone.rail}`}>
-                  <ScoreRing score={score} />
+                  <ScoreRing score={score} decision={decision} />
                   <button
                     onClick={(e) => requestDelete(e, apt)}
                     disabled={deletingId === apt.id}
@@ -184,8 +200,10 @@ export default function ApartmentsTable({
 const RING_RADIUS = 17;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-export function ScoreRing({ score }: { score: number | null }) {
-  const tone = scoreToneClasses(score);
+/** Anneau de score de l'accueil. La couleur suit la DÉCISION (comme la jauge de
+ * la fiche, via `DECISION_RING_STYLES`), le remplissage suit le score. */
+export function ScoreRing({ score, decision }: { score: number | null; decision: DecisionTone }) {
+  const tone = DECISION_RING_STYLES[decision];
   const filled = score == null ? 0 : Math.max(0, Math.min(1, score / 10));
   const offset = RING_CIRCUMFERENCE * (1 - filled);
   return (

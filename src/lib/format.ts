@@ -7,6 +7,23 @@ export function formatEuros(value: number | null | undefined): string {
   }).format(value);
 }
 
+/**
+ * Montant SIGNÉ, pour tout flux qui peut être négatif (cash-flow avant tout).
+ * Source unique : trois composants en avaient chacun leur version, et une
+ * quatrième (`signe()` dans SimulationFinanciere) rendait le même montant avec
+ * un trait d'union ASCII et une espace ordinaire avant le « € ».
+ *
+ * Deux détails typographiques que `formatEuros` garantit et qu'une
+ * concaténation maison perd : le vrai signe moins (U+2212, pas le trait
+ * d'union) et l'espace insécable avant le « € », sans quoi le symbole peut
+ * partir seul à la ligne.
+ */
+export function formatEurosSigned(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  const rounded = Math.round(value) || 0; // normalise -0 → 0
+  return `${rounded >= 0 ? "+" : "−"} ${formatEuros(Math.abs(rounded))}`;
+}
+
 export function formatPercent(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   return new Intl.NumberFormat("fr-FR", {

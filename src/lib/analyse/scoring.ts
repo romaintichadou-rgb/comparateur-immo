@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, type AppSettings } from "../settings";
-import { BLOC_POIDS_SANS_PRIX, type AnalyseIA, type BlocAnalyse, type BlocKey, type Verdict } from "./types";
+import { BLOC_POIDS_SANS_PRIX, type AnalyseIA, type BlocAnalyse, type BlocKey, type Decision, type Verdict } from "./types";
 
 /**
  * Seuils de rendement net (objectif principal : la rentabilité locative), en
@@ -66,11 +66,109 @@ export function cashflowTone(
   return "alerte";
 }
 
+export function cashflowSeuilsFromSettings(settings: AppSettings): CashflowSeuils {
+  return { vert: settings.cashflowSeuilVertEuros, rouge: settings.cashflowSeuilRougeEuros };
+}
+
 /**
- * Couleur de bordure au survol, pour CHAQUE composant cliquable affichant un
- * rendement (tableau, carte, fiche détaillée, Analyse IA) : source unique
- * pour que cette bordure soit toujours dans la même teinte que la tonalité
+ * Classe de texte par tonalité — SOURCE UNIQUE. Toute valeur colorée par un
+ * seuil du profil investisseur (rendement, cash-flow, écart) passe par ici,
+ * pour qu'un même chiffre ne soit jamais peint différemment d'un écran à
+ * l'autre. Ne pas redéfinir cette table localement dans un composant.
+ */
+export const TONE_TEXT_CLASS: Record<RendementTone, string> = {
+  positif: "text-emerald-700",
+  attention: "text-amber-700",
+  alerte: "text-red-600",
+  neutral: "text-ink-900",
+};
+
+/**
+ * Variante SUR FOND TEINTÉ — panneaux de détail, cartes statistiques, pills.
+ * Distincte de `TONE_TEXT_CLASS` (texte sur blanc) parce que la lisibilité sur
+ * un fond `*-50` demande un cran de plus : c'est la règle « 600 sur blanc, 700
+ * sur teinte » (voir AGENTS.md), pas une seconde palette.
+ *
+ * Les quatre slots suivent la même marche pour les trois tonalités — le rouge
+ * ne fait pas exception (il restait un cran en dessous dans les copies locales
+ * de `RendementDetailPanel` / `CashflowDetailPanel`, corrigé).
+ *
+ * `sub` sert aux cartes à trois lignes (label / valeur / précision). Ne pas
+ * recréer de table teintée locale : c'était le cas dans les deux panneaux de
+ * détail (copies identiques), `ApartmentsMap` et `LoyerDetailPanel`.
+ */
+export interface TonePanelStyle {
+  wrap: string;
+  label: string;
+  value: string;
+  sub: string;
+}
+
+export const TONE_PANEL_STYLES: Record<RendementTone, TonePanelStyle> = {
+  neutral: { wrap: "bg-ink-50", label: "text-ink-500", value: "text-ink-900", sub: "text-ink-500" },
+  positif: { wrap: "bg-emerald-50", label: "text-emerald-700", value: "text-emerald-800", sub: "text-emerald-600" },
+  attention: { wrap: "bg-amber-50", label: "text-amber-700", value: "text-amber-800", sub: "text-amber-600" },
+  alerte: { wrap: "bg-red-50", label: "text-red-700", value: "text-red-800", sub: "text-red-600" },
+};
+
+/**
+ * Tonalité d'une note /10 — SOURCE UNIQUE, alignée sur les paliers de
+ * `scoreCategorie` (≥ 7 = "Opportunité solide" → vert). Utilisée par les
+ * sous-scores du verdict, les FlatSections et l'anneau de score du tableau :
+ * un 7,5 doit être vert PARTOUT, jamais vert sur une page et ambre sur une
+ * autre. Ne pas réintroduire de seuil local.
+ */
+export type ScoreTone = "emerald" | "amber" | "red" | "neutral";
+
+export function noteTone(note: number | null): ScoreTone {
+  if (note == null) return "neutral";
+  if (note >= 7) return "emerald";
+  if (note >= 5) return "amber";
+  return "red";
+}
+
+export const NOTE_TEXT_CLASS: Record<ScoreTone, string> = {
+  emerald: "text-emerald-700",
+  amber: "text-amber-700",
+  red: "text-red-600",
+  neutral: "text-ink-400",
+};
+
+/**
+ * Couleur des ANNEAUX DE SCORE — pilotée par la DÉCISION, pas par la note.
+ *
+ * L'anneau de l'accueil (`ScoreRing`) et la jauge de la fiche (`VerdictGauge`)
+ * sont le même objet visuel : un cercle, le score /10 au centre, rempli à
+ * `score / 10`. Ils doivent donc dire la même chose. Or score et décision ne
+ * coïncident pas : un bien à 7,5 surcoté est « Négocie », alors que sa note
+ * seule le ferait passer pour vert. C'est la DÉCISION qui prime — c'est
+ * l'information qu'on cherche en parcourant une liste d'annonces.
+ *
+ * Ne PAS recolorer ces anneaux avec `noteTone()` : ce dernier reste réservé aux
+ * notes affichées comme telles (sous-scores du verdict, FlatSections), qui ne
+ * portent pas de décision.
+ *
+ * Le fond de piste (`track`) n'est pas ici : il dépend du support (fond blanc
+ * du tableau vs carte teintée de la fiche), c'est de l'habillage local.
+ */
+export type DecisionTone = Decision | "inconnu";
+
+export const DECISION_RING_STYLES: Record<DecisionTone, { stroke: string; text: string; fill: string }> = {
+  achete: { stroke: "stroke-emerald-500", text: "text-emerald-700", fill: "fill-emerald-700" },
+  negocie: { stroke: "stroke-amber-400", text: "text-amber-700", fill: "fill-amber-700" },
+  passe: { stroke: "stroke-red-500", text: "text-red-600", fill: "fill-red-600" },
+  inconnu: { stroke: "stroke-ink-300", text: "text-ink-400", fill: "fill-ink-400" },
+};
+
+/**
+ * Anneau de survol pour un rendement cliquable, dans la teinte de la tonalité
  * affichée (jamais une couleur fixe comme indigo, sans rapport avec la box).
+ *
+ * Utilisé par les supports qui ont la place : carte mobile, popup de la carte,
+ * highlights de l'Analyse. Les contextes denses gardent une autre affordance —
+ * soulignement pointillé dans le tableau, fond + bordure sur les tuiles
+ * `ResultCard`. Ce qui est commun à tous, c'est que le survol reprend la
+ * TONALITÉ ; la forme, elle, suit le support (voir AGENTS.md).
  */
 export const RENDEMENT_HOVER_RING: Record<RendementTone, string> = {
   neutral: "hover:ring-2 hover:ring-inset hover:ring-ink-200",
@@ -218,7 +316,7 @@ export type ScoreCategorie = "excellent" | "solide" | "correct" | "fragile" | "d
 
 export interface ScoreCategorieInfo {
   label: string;
-  tone: "emerald" | "amber" | "red" | "neutral";
+  tone: ScoreTone;
 }
 
 const SCORE_CATEGORIES: Record<ScoreCategorie, ScoreCategorieInfo> = {

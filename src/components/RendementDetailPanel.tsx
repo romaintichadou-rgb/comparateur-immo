@@ -4,23 +4,13 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
-import { rendementNetTone, type RendementSeuils, type RendementTone } from "@/lib/analyse/scoring";
+import { TONE_PANEL_STYLES, rendementNetTone, type RendementSeuils, type RendementTone } from "@/lib/analyse/scoring";
 import { isAiEstimated } from "@/lib/estimates";
 import { AiEstimatedBadge, EstimatedBadge } from "@/components/form/Fields";
 
 // Doit rester synchronisé avec les classes `duration-300` ci-dessous
 // (Tailwind ne supporte pas les classes générées dynamiquement).
 const TRANSITION_MS = 300;
-
-// Mêmes 4 tonalités et mêmes couleurs que partout ailleurs dans l'app
-// (tableau, carte, fiche détaillée, Analyse IA) : le rendement net doit se
-// lire de la même façon, où qu'on l'ouvre depuis.
-const TONE_STYLES: Record<RendementTone, { wrap: string; label: string; value: string }> = {
-  neutral: { wrap: "bg-ink-50", label: "text-ink-500", value: "text-ink-900" },
-  positif: { wrap: "bg-emerald-50", label: "text-emerald-700", value: "text-emerald-800" },
-  attention: { wrap: "bg-amber-50", label: "text-amber-700", value: "text-amber-800" },
-  alerte: { wrap: "bg-red-50", label: "text-red-700", value: "text-red-700" },
-};
 
 export default function RendementDetailPanel({
   apartment,
@@ -235,7 +225,7 @@ function ResultTile({
   value: string;
   tone: RendementTone;
 }) {
-  const t = TONE_STYLES[tone];
+  const t = TONE_PANEL_STYLES[tone];
   return (
     <div className={`rounded-xl p-4 ${t.wrap}`}>
       <p className={`text-xs font-medium ${t.label}`}>{label}</p>

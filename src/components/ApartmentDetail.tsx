@@ -63,7 +63,7 @@ import {
 import AnalyseIA from "@/components/AnalyseIA";
 import OptimiserView from "@/components/OptimiserView";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
-import { rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
+import { cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
@@ -287,6 +287,7 @@ export default function ApartmentDetail({
 }) {
   const router = useRouter();
   const seuilsRendement = seuilsRendementFromSettings(settings);
+  const cashflowSeuils = cashflowSeuilsFromSettings(settings);
   const { open: openRendementDetail } = useRendementDetail();
   const { open: openLoyerDetail } = useLoyerDetail();
   // Après suppression depuis la fiche, on quitte vers l'accueil (la fiche
@@ -876,7 +877,7 @@ export default function ApartmentDetail({
         analysisPending ? (
           <AnalyseIASkeleton />
         ) : (
-          <AnalyseIA apartment={apt} seuilsRendement={seuilsRendement} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
+          <AnalyseIA apartment={apt} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
         )
       )}
 
@@ -887,7 +888,7 @@ export default function ApartmentDetail({
           <OptimiserView
             apartment={apt}
             seuilsRendement={seuilsRendement}
-            cashflowSeuils={{ vert: settings.cashflowSeuilVertEuros, rouge: settings.cashflowSeuilRougeEuros }}
+            cashflowSeuils={cashflowSeuils}
             onRelancer={handleRelancerAnalyse}
           />
         )

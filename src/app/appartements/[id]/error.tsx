@@ -14,7 +14,7 @@ import ErrorScreen from "@/components/ErrorScreen";
  *
  * Cause la plus probable, déjà corrigée séparément : un bien dont l'analyse
  * stockée provient d'un schéma antérieur à l'ajout d'un bloc ou d'un champ
- * (voir SyntheseView.tsx, l'onglet par défaut). Ce garde reste nécessaire
+ * (voir AnalyseIA.tsx, l'onglet par défaut). Ce garde reste nécessaire
  * pour toute AUTRE cause imprévue du même genre.
  */
 export default function ApartmentError({

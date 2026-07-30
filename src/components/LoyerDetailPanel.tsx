@@ -6,6 +6,7 @@ import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, sanitizeJustification } from "@/lib/format";
 import { isAiEstimated } from "@/lib/estimates";
+import { TONE_PANEL_STYLES, type RendementTone, type TonePanelStyle } from "@/lib/analyse/scoring";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 
 const TRANSITION_MS = 300;
@@ -276,8 +277,12 @@ export default function LoyerDetailPanel({
                 </div>
                 <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
+                    {/* Carte sœur de « Écart vs marché » : même gabarit, donc même
+                        échelle de teintes que TONE_PANEL_STYLES (label 700 /
+                        valeur 800 / sub 600), déclinée sur l'accent de marque.
+                        Les deux se lisent côte à côte — elles doivent s'accorder. */}
                     <div className="rounded-xl bg-accent-50 p-4">
-                      <p className="text-xs font-medium text-accent-600">Loyer mensuel CC</p>
+                      <p className="text-xs font-medium text-accent-700">Loyer mensuel CC</p>
                       <p className="mt-1 text-3xl font-bold text-accent-800">
                         {formatEuros(loyer)}
                       </p>
@@ -287,8 +292,8 @@ export default function LoyerDetailPanel({
                       </p>
                     </div>
                     {ecartPct != null ? (
-                      <div className={`rounded-xl p-4 ${ecartTone(ecartPct, "bg")}`}>
-                        <p className={`text-xs font-medium ${ecartTone(ecartPct, "text")}`}>Écart vs marché</p>
+                      <div className={`rounded-xl p-4 ${ecartTone(ecartPct, "wrap")}`}>
+                        <p className={`text-xs font-medium ${ecartTone(ecartPct, "label")}`}>Écart vs marché</p>
                         <p className={`mt-1 text-3xl font-bold font-mono ${ecartTone(ecartPct, "value")}`}>
                           {ecartPct > 0 ? "+" : ""}{ecartPct.toFixed(0)} %
                         </p>
@@ -327,22 +332,26 @@ export default function LoyerDetailPanel({
   );
 }
 
-function ecartTone(pct: number, slot: "bg" | "text" | "value" | "sub"): string {
-  // Au-dessus du marché (0 à +15%) = bon pour l'investisseur → vert
-  // Très au-dessus (>15%) = optimiste/risqué → rouge
-  // En-dessous du marché = mauvais → ambre (léger) ou rouge (fort)
-  let tone: "emerald" | "amber" | "red";
-  if (pct > 15) tone = "red";
-  else if (pct >= 0) tone = "emerald";
-  else if (pct >= -10) tone = "amber";
-  else tone = "red";
+/**
+ * Écart du loyer au marché — perspective INVESTISSEUR, logique volontairement
+ * inversée par rapport au locataire : au-dessus du marché = bon revenu.
+ * C'est la seule exception de ce composant, et elle porte sur les SEUILS.
+ * Ne JAMAIS inverser cette logique (voir AGENTS.md).
+ *
+ * Les COULEURS, elles, ne sont pas une exception : elles viennent de
+ * `TONE_PANEL_STYLES` comme toute carte statistique sur fond teinté. Une
+ * échelle locale (600/700/500) faisait que cette carte ne s'accordait ni aux
+ * panneaux de détail, ni à sa propre carte sœur posée juste à côté dans la
+ * même grille.
+ */
+function ecartTone(pct: number, slot: keyof TonePanelStyle): string {
+  let tone: RendementTone;
+  if (pct > 15) tone = "alerte";
+  else if (pct >= 0) tone = "positif";
+  else if (pct >= -10) tone = "attention";
+  else tone = "alerte";
 
-  const map = {
-    emerald: { bg: "bg-emerald-50", text: "text-emerald-600", value: "text-emerald-700", sub: "text-emerald-500" },
-    amber:   { bg: "bg-amber-50",   text: "text-amber-600",   value: "text-amber-700",   sub: "text-amber-500" },
-    red:     { bg: "bg-red-50",     text: "text-red-600",     value: "text-red-700",     sub: "text-red-500" },
-  };
-  return map[tone][slot];
+  return TONE_PANEL_STYLES[tone][slot];
 }
 
 function renderBold(text: string): ReactNode {
