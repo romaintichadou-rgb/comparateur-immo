@@ -634,7 +634,7 @@ function FlatSection({
 
           {/* DPE/GES scales */}
           {bloc.dpeGes && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2">
               <EnergyScale label="DPE (énergie)" value={bloc.dpeGes.dpe} palette={DPE_COLORS} />
               <EnergyScale label="GES (climat)" value={bloc.dpeGes.ges} palette={GES_COLORS} />
             </div>
@@ -727,7 +727,7 @@ function HighlightCard({
       type="button"
       onClick={() => openRendementDetail(apartment, seuilsRendement)}
       title="Voir le détail du calcul"
-      className={`rounded-xl p-4 text-left transition hover:border-accent-400 hover:shadow-[0_0_0_3px_var(--accent-50)] ${t.wrap}`}
+      className={`rounded-xl p-4 text-left transition hover:bg-ink-50 hover:border-ink-300 ${t.wrap}`}
     >
       {content}
     </button>

@@ -259,16 +259,119 @@ l'IA viole les consignes du prompt.
 - **Données récentes uniquement** : dernière année connue, pas de moyenne
   multi-années.
 
-## Couleurs sémantiques (perspective investisseur)
+## Couleurs sémantiques — référence complète
 
-La logique de couleur `ecartTone()` (`LoyerDetailPanel.tsx`) suit la
-perspective de l'investisseur, pas du locataire :
-- **Au-dessus du marché** (écart ≥ 0 %) = `emerald` (bon revenu locatif).
-- **En-dessous du marché** (écart -1 % à -10 %) = `amber` (revenu sous-optimal).
-- **Très au-dessus** (>15 %) ou **très en-dessous** (<-10 %) = `red` (irréaliste
-  ou problématique).
-Ne JAMAIS inverser cette logique (ci-dessus = vert parce que c'est bon pour
-l'investisseur).
+Trois fonctions canoniques pilotent les couleurs. Ne pas en créer de nouvelles
+ni coder des seuils inline — toujours réutiliser celles-ci.
+
+### `noteTone(note)` — couleur d'un score /10
+
+Utilisé pour les sous-scores du verdict, les scores de FlatSection, et les
+tags de catégorie. Source unique dans `scoring.ts`.
+
+| Score  | Tone    | Classe text      |
+|--------|---------|------------------|
+| ≥ 7    | emerald | `text-emerald-700` |
+| ≥ 5    | amber   | `text-amber-700`   |
+| < 5    | red     | `text-red-600`     |
+| null   | neutral | `text-ink-400`     |
+
+### `scoreCategorie(note)` — label qualitatif d'un score
+
+| Score  | Label                      | Tone    |
+|--------|----------------------------|---------|
+| ≥ 8.5  | Excellente opportunité     | emerald |
+| ≥ 7    | Opportunité solide         | emerald |
+| ≥ 5    | À négocier                 | amber   |
+| ≥ 3.5  | Investissement fragile     | red     |
+| < 3.5  | Investissement déconseillé | red     |
+| null   | Données insuffisantes      | neutral |
+
+Tags : `CATEGORIE_TAG_STYLES` dans `AnalyseIA.tsx` — emerald-50/700,
+amber-50/700, red-50/700, ink-100/500.
+
+### `rendementNetTone(rendement, seuils)` — couleur du rendement
+
+Seuils configurables dans le profil investisseur (défauts : vert 5.5 %,
+rouge 4.0 %).
+
+| Condition           | Tone      |
+|---------------------|-----------|
+| ≥ seuil vert (5.5%) | positif   |
+| ≥ seuil rouge (4%)  | attention |
+| < seuil rouge        | alerte    |
+
+### `cashflowTone(cashflow, seuils)` — couleur du cash-flow
+
+Seuils configurables dans le profil investisseur (défauts : vert 0 €,
+rouge −200 €).
+
+| Condition               | Tone      |
+|-------------------------|-----------|
+| ≥ seuil vert (0 €)      | positif   |
+| ≥ seuil rouge (−200 €)  | attention |
+| < seuil rouge            | alerte    |
+
+Mapping tone → classe : `positif` = `text-emerald-700`, `attention` =
+`text-amber-700`, `alerte` = `text-red-600`, `neutral` = `text-ink-900`.
+
+### `ecartTone(pct)` — écart loyer (perspective investisseur)
+
+`LoyerDetailPanel.tsx`. Logique **inversée** vs le locataire : au-dessus du
+marché = bon pour l'investisseur.
+
+| Écart       | Tone    | Raison                    |
+|-------------|---------|---------------------------|
+| > +15 %     | red     | Trop optimiste/irréaliste |
+| 0 % à +15 % | emerald | Bon revenu locatif        |
+| −10 % à 0 % | amber   | Revenu sous-optimal       |
+| < −10 %     | red     | Très sous le marché       |
+
+Ne JAMAIS inverser cette logique.
+
+### Gravité des faits (`GRAVITE_STYLES`)
+
+| Gravité   | Puce            | Valeur            |
+|-----------|-----------------|-------------------|
+| positif   | `bg-emerald-500` | `text-emerald-700` |
+| info      | `bg-ink-300`     | `text-ink-800`     |
+| attention | `bg-amber-500`   | `text-amber-700`   |
+| alerte    | `bg-red-500`     | `text-red-600`     |
+
+### Verdicts de blocs (`VERDICT_STYLES`)
+
+| Niveau    | Chip                         | Fond ligne      |
+|-----------|------------------------------|-----------------|
+| alerte    | `bg-red-100 text-red-700`    | `bg-red-50/80`  |
+| attention | `bg-amber-100 text-amber-700` | `bg-amber-50/80` |
+| positif   | `bg-emerald-100 text-emerald-700` | `bg-emerald-50/80` |
+
+### DPE — impact réglementaire dans MetricCards
+
+| DPE   | Sous-titre               | Tone      |
+|-------|--------------------------|-----------|
+| A-C   | Aucune restriction       | positif   |
+| D     | OK, pas d'échéance proche | neutral   |
+| E     | Interdit dès 2034        | attention |
+| F     | Interdit dès 2028        | alerte    |
+| G     | Interdit à la location   | alerte    |
+
+### Plafonds sur le score global (`computeScoreGlobal`)
+
+| Condition                          | Cap     | Impact verdict |
+|------------------------------------|---------|----------------|
+| Bloc risque ≤ 4/10                 | score ≤ 4 | → Passe       |
+| Rendement < seuil rédhibitoire (4%) | score ≤ 5 | → Passe       |
+
+### Pondérations des blocs (`BLOC_POIDS`)
+
+| Bloc       | Poids normal | Sans Prix |
+|------------|-------------|-----------|
+| Prix       | 30 %        | 0 %       |
+| Location   | 20 %        | 35 %      |
+| Risques    | 15 %        | 15 %      |
+| Potentiel  | 15 %        | 15 %      |
+| Simulation | 20 %        | 35 %      |
 
 # Taxe foncière — estimation commune + département
 
@@ -545,8 +648,25 @@ vers `"ia"` pour rétrocompatibilité.
   (`ecartPct <= 5`) ;
 - **négocie** sinon.
 
-`DECISION_STYLES` porte le dégradé, border, couleurs titre/caption/score/stroke,
-et `scoreFill` (classes `fill-*` pour le SVG de la jauge).
+`DECISION_STYLES` porte les styles visuels par décision :
+
+| Prop        | Achète          | Négocie         | Passe          |
+|-------------|-----------------|-----------------|----------------|
+| Dégradé     | white→emerald-50 | white→amber-50 | white→red-50   |
+| Border      | emerald-200     | amber-200       | red-200        |
+| Titre       | emerald-900     | amber-900       | red-900        |
+| Caption     | emerald-700     | amber-700       | red-700        |
+| Score text  | emerald-700     | amber-700       | red-600        |
+| Gauge stroke | emerald-500    | amber-400       | red-500        |
+| Gauge track | emerald-100     | amber-100       | red-100        |
+| Score fill  | fill-emerald-700 | fill-amber-700 | fill-red-600   |
+
+## MetricCards — tonalité des valeurs
+
+Couleur de la valeur : `METRIC_VALUE_CLASS` — `positif` = `text-emerald-700`,
+`attention` = `text-amber-700`, `alerte` = `text-red-600`, `neutral` =
+`text-ink-900`. Tags d'emphase (négocie/passe uniquement) : `Rédhibitoire`
+(`bg-red-100 text-red-700`) ou `À négocier` (`bg-amber-100 text-amber-700`).
 
 ## VerdictGauge (jauge circulaire)
 
