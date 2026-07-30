@@ -114,6 +114,18 @@ export interface Verdict {
   niveau: VerdictNiveau;
   titre: string;
   detail: string;
+  /**
+   * D'où vient le verdict :
+   *  - `critere` : jugement qui n'existe NULLE PART ailleurs dans l'écran —
+   *    seuil de rendement du profil investisseur, échéance loi Climat du DPE.
+   *  - `bloc` : dérivé mécaniquement de la note d'un bloc (`X faible (3/10)`),
+   *    donc pure redite de la carte affichée juste en dessous.
+   * Sert à l'AFFICHAGE seul (l'en-tête d'Analyse IA ne montre que `critere`) :
+   * `computeDecision` continue de lire TOUS les verdicts, ne jamais filtrer en
+   * amont sous peine de changer le verdict d'achat.
+   * Optionnel : absent des analyses générées avant son introduction.
+   */
+  origine?: "critere" | "bloc";
 }
 
 /** Décision d'achat à 3 niveaux (voir decision.ts, source unique). */

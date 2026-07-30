@@ -280,7 +280,7 @@ export default function SyntheseView({
 
         {/* Pied "analyse" : le radar des blocs + le lien vers l'analyse
             détaillée. Volontairement discret, subordonné au verdict. */}
-        <div className="mt-7 flex flex-wrap items-end justify-between gap-4">
+        <div className="mt-10 flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 sm:gap-x-8">
             {BLOCS_NOTES.map((cle) => {
               const bloc = analyse.blocs?.[cle];
@@ -368,8 +368,8 @@ export default function SyntheseView({
 }
 
 const EMPHASIS_CARD_CLASS: Record<"alerte" | "attention", string> = {
-  alerte: "border-red-200 bg-red-50/50",
-  attention: "border-amber-200 bg-amber-50/50",
+  alerte: "border-ink-200 bg-white",
+  attention: "border-ink-200 bg-white",
 };
 
 const EMPHASIS_TAG_CLASS: Record<"alerte" | "attention", string> = {

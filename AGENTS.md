@@ -516,87 +516,64 @@ La vacance locative s'applique comme facteur multiplicatif
 année par année (`simulation.ts`). Cela cascade automatiquement sur les
 frais de gestion (% du loyer), le résultat imposable, et le cash-flow.
 
-# Onglet "Synthèse" — écran de décision d'achat
+# Onglet "Analyse" — fusion Synthèse + Analyse IA
 
-L'onglet **"Synthèse"** (`src/components/SyntheseView.tsx`) est le **premier
-onglet et l'onglet par défaut** de la fiche bien (voir `TABS` et
-`resolvedInitialTab` dans `ApartmentDetail.tsx`). Objectif produit : trancher
-« dois-je acheter ce bien ? » en un coup d'œil, sans détail. Tout le détail
-vit dans les autres onglets, vers lesquels des liens discrets renvoient.
+L'ancien onglet "Synthèse" (`SyntheseView.tsx`) et l'ancien onglet "Analyse IA"
+ont été fusionnés en un seul onglet **"Analyse"** (`src/components/AnalyseIA.tsx`),
+premier onglet et onglet par défaut (tab key `"ia"`). `?tab=synthese` redirige
+vers `"ia"` pour rétrocompatibilité.
 
-- **Aucune donnée nouvelle, aucun appel API** : tout dérive de l'analyse
-  stockée (`apt.analyse_ia` : `score_global`, `verdicts`, bloc `prix`), des
-  champs calculés (`rendement_net`, `prix_m2`) et de la simulation client
-  (`simulate(apt, apt.simulation_inputs ?? defaultInputs())` → cash-flow an 1).
-- **États dégradés** : pas d'analyse / `score_global == null` → invitation à
-  lancer l'analyse (ou à saisir le prix si manquant, comme ailleurs).
+## Layout (de haut en bas)
 
-## Verdict (décision franche à 3 niveaux)
+1. **Carte verdict** — dégradé tonal (`from-white to-{emerald|amber|red}-50`),
+   score global à droite dans une jauge circulaire (`VerdictGauge`, anneau épais
+   100px, stroke 8), titre verdict en Fraunces (`text-4xl` / `sm:text-5xl`),
+   raison actionnable, puis ligne de sous-scores par bloc (couleurs `noteTone()` :
+   `emerald-700` / `amber-700` / `red-600`).
+2. **MetricCards** — 4 cartes (Cash-flow, Rendement net, Prix au m², DPE) en
+   grille, avec emphase conditionnelle sur négocie/passe.
+3. **Bloc synthèse** — narration IA sur fond `bg-ink-100/40`.
+4. **Sections plates** (`FlatSection`) — séparées par des `<hr>`, chaque bloc
+   d'analyse (Prix, Locatif, Risques, Potentiel, Simulation) avec note, verdicts,
+   highlights, faits, et narration.
 
-`Achète` / `Achète — si tu négocies` / `Passe ton chemin`, dérivé des signaux
-existants (jamais recalculé) :
+## Verdict (décision à 3 niveaux)
+
+`computeDecision(score, verdicts, ecartPct)` → `"achete"` | `"negocie"` | `"passe"` :
 - **passe** si un verdict `alerte` existe OU `score < 5` ;
 - **achète** si `score >= 7` ET aucun verdict `attention` ET pas de surcote
-  (`ecartPct <= 5`) — GO volontairement exigeant ;
+  (`ecartPct <= 5`) ;
 - **négocie** sinon.
 
-Le dégradé tonal de la carte (repris de la home : `from-white to-{emerald|
-amber|red}-50`) porte le verdict avant la lecture. La `raison` est un verbatim
-concret et actionnable (dire *quoi* + *quoi faire*), pas une tournure abstraite.
-Un **chip discret** « Analysé le … » près du titre porte la fraîcheur ; le
-**radar des 5 blocs notés** (Prix, Locatif, Risques, Potentiel, Simulation) +
-le lien « Analyse complète → » vivent en **pied de la carte verdict** (zone
-« analyse »), volontairement subordonnés. Pas de divider entre la raison et le
-radar (l'espacement suffit).
+`DECISION_STYLES` porte le dégradé, border, couleurs titre/caption/score/stroke,
+et `scoreFill` (classes `fill-*` pour le SVG de la jauge).
 
-## Les 4 chiffres du "comité"
+## VerdictGauge (jauge circulaire)
 
-Cartes `MetricCard` (Geist Mono, `tabular-nums`) : Cash-flow mensuel, Rendement
-net, **Prix au m²** (valeur principale : `prix_m2` en `€/m²`, sous-titre :
-écart % vs médiane DVF locale quand disponible, sinon "Pas de comparable DVF"),
-DPE.
-
-- **Carte unique** : la 3e carte est TOUJOURS "Prix au m²" (plus de condition
-  prix-vs-marché / prix-au-m²). L'écart DVF est en sous-titre, pas en valeur.
-- **Tonalité cash-flow calibrée** : `< CASHFLOW_ROUGE_SEUIL` (−200 €/mois) =
-  rouge (alerte), négatif léger = ambre, positif = vert.
-- **Emphase "pourquoi"** : sur négocie/passe uniquement, la/les métrique(s) qui
-  ont motivé le verdict sont teintées (rouge/ambre) + tag (`Rédhibitoire` en
-  passe, `À négocier` en négocie). Sur un GO franc : aucune emphase.
-- **CTA ancré en bas à droite** (`mt-auto self-end`) : les liens s'alignent
-  entre cartes malgré des sous-titres de longueurs différentes. Le soulignement
-  ne porte que sur le libellé, pas sur la flèche « → ». Les CTA sont des mots
-  uniques (« Simulation », « Détails », « Analyse », « Risques ») — pas de
-  phrases ("Voir l'analyse").
+Anneau épais (Option B) : `GAUGE_SIZE=100`, `GAUGE_STROKE=8`, score en
+Geist Mono 30px bold, centré avec `dominantBaseline="central"`. Couleur du
+score via `fill-*` classes (pas `text-*` — SVG utilise `fill`).
 
 ## Navigation vers la bonne section (ancres)
 
-Chaque CTA renvoie vers l'onglet **ET** la section concernée. `onGoTab(tab,
-anchor?)` est implémenté par `goToSection` dans `ApartmentDetail.tsx` : change
-d'onglet, `router.push(?tab=…, {scroll:false})`, puis scrolle vers l'`id` via
-un effet qui **attend le montage** du contenu (l'onglet Analyse IA est lourd →
-polling `requestAnimationFrame`) et **repasse à 250/650 ms** pour verrouiller la
-position malgré un reset de scroll post-navigation. Ne pas remplacer par un
-`setTimeout` fixe (le montage tardif casse l'ancrage).
+`goToSection` dans `ApartmentDetail.tsx` : change d'onglet,
+`router.push(?tab=…, {scroll:false})`, puis scrolle vers l'`id` via polling
+`requestAnimationFrame` + repasse à 250/650 ms.
 
-Ancres cibles (avec `scroll-mt-24` pour passer sous la navbar sticky) :
+Ancres cibles (avec `scroll-mt-24`) :
 
 | CTA | Onglet | Ancre (`id`) | Fichier de l'ancre |
 |---|---|---|---|
 | Cash-flow | Simulation financière | `sim-cashflow` | `SimulationFinanciere.tsx` |
 | Rendement net | Détails de l'opération | `fin-resultats` | `ApartmentDetail.tsx` |
-| Prix vs marché | Analyse IA | `bloc-prix` | `AnalyseIA.tsx` (`BlocCard`) |
+| Prix vs marché | Analyse | `bloc-prix` | `AnalyseIA.tsx` (`FlatSection`) |
 | Prix au m² (fallback) | Détails de l'opération | `fin-achat` | `ApartmentDetail.tsx` |
-| DPE | Analyse IA | `bloc-risque` | `AnalyseIA.tsx` (`BlocCard`) |
-
-`BlocCard` porte `id={`bloc-${bloc.cle}`}` — toute nouvelle ancre vers un bloc
-d'analyse suit ce schéma. `renderBold` (gras markdown `**…**`) est exporté
-depuis `AnalyseIA.tsx` pour être réutilisé.
+| DPE | Analyse | `bloc-risque` | `AnalyseIA.tsx` (`FlatSection`) |
 
 # Onglet "Optimiser" — recommandations prescriptives (lecture seule)
 
-L'onglet **"Optimiser"** (`src/components/OptimiserView.tsx`, 3e onglet, après
-Analyse IA) est orienté **DÉCISION + RENTABILITÉ, pas le score**. Deux modes
+L'onglet **"Optimiser"** (`src/components/OptimiserView.tsx`, 2e onglet, après
+Analyse) est orienté **DÉCISION + RENTABILITÉ, pas le score**. Deux modes
 selon le verdict actuel (Achète / Négocie / Passe) :
 
 - verdict ≠ **Achète** → « En faire un achat » : les actions pour faire basculer
@@ -610,7 +587,7 @@ score, verdicts intacts).
 
 L'écran affiche **UN SEUL levier**. Ce n'est PAS un écran de comparaison : le
 moteur a déjà classé les leviers (prix en tête, financement en dernier) et la vue
-d'ensemble vit dans l'onglet **Synthèse**. Empiler les quatre leviers en cartes
+d'ensemble vit dans l'onglet **Analyse**. Empiler les quatre leviers en cartes
 répétait quatre fois le même gabarit et repoussait les arguments derrière un
 clic — ne pas y revenir.
 
@@ -827,13 +804,13 @@ L'en-tête utilise un layout inline flex (pas de blocs empilés) :
 
 Chaque onglet a une icône Lucide et un label court pour mobile :
 
-| Tab | Icône | Label desktop | Label mobile |
+| Tab (key) | Icône | Label desktop | Label mobile |
 |-----|-------|---------------|--------------|
-| Synthèse | `Gauge` | Synthèse | Synthèse |
-| Analyse IA | `Sparkles` | Analyse IA | IA |
-| Description | `Home` | Description du bien | Bien |
-| Opération | `HandCoins` | Détails de l'opération | Opération |
-| Simulation | `Calculator` | Simulation financière | Simulation |
+| Analyse (`ia`) | `Sparkles` | Analyse | Analyse |
+| Optimiser (`optimiser`) | `Lightbulb` | Optimiser | Optim. |
+| Description (`donnees`) | `Home` | Description du bien | Bien |
+| Opération (`financiere`) | `HandCoins` | Détails de l'opération | Opération |
+| Simulation (`simulation`) | `Calculator` | Simulation financière | Simulation |
 
 Le label court est dans `shortLabel` (TABS). L'affichage utilise
 `<span className="sm:hidden">{shortLabel}</span>` /
@@ -842,16 +819,12 @@ scrolle horizontalement sur mobile (`overflow-x-auto`).
 
 ## Skeletons
 
-3 niveaux de skeleton fidèles à la structure réelle :
+2 niveaux de skeleton fidèles à la structure réelle :
 
 1. **Page-level** (`loading.tsx`) : Next.js Suspense, affiché pendant le
    chargement serveur. Reprend l'en-tête compact + tabs + verdict + cards.
-2. **SyntheseSkeleton** : affiché quand `analysisPending` sur l'onglet
-   Synthèse. Structure `flex-col-reverse` mobile / `flex-row` desktop,
-   5 sous-notes en pied, 4 MetricCards avec label + badge + valeur + CTA.
-3. **AnalyseIASkeleton** : affiché quand `analysisPending` sur l'onglet
-   Analyse IA. Score gauge circulaire, verdict chips, synthèse texte,
-   grille de 6 `SkeletonBloc`.
+2. **AnalyseIASkeleton** : affiché quand `analysisPending` sur l'onglet
+   Analyse. Verdict card skeleton, MetricCards, `SkeletonFlatSection` ×6.
 
 Les autres onglets (donnees, financiere, simulation) n'ont pas de skeleton
 global — ils rendent immédiatement avec les données déjà chargées. Les

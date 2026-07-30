@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   ClipboardList,
   ExternalLink,
-  Gauge,
   Home,
   KeyRound,
   Lightbulb,
@@ -62,7 +61,6 @@ import {
   TextField,
 } from "@/components/form/Fields";
 import AnalyseIA from "@/components/AnalyseIA";
-import SyntheseView from "@/components/SyntheseView";
 import OptimiserView from "@/components/OptimiserView";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
 import { rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
@@ -177,11 +175,10 @@ function EditableValue({
   );
 }
 
-type Tab = "synthese" | "ia" | "optimiser" | "donnees" | "financiere" | "simulation";
+type Tab = "ia" | "optimiser" | "donnees" | "financiere" | "simulation";
 
 const TABS: { key: Tab; label: string; shortLabel: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
-  { key: "synthese", label: "Synthèse", shortLabel: "Synthèse", icon: Gauge },
-  { key: "ia", label: "Analyse IA", shortLabel: "IA", icon: Sparkles },
+  { key: "ia", label: "Analyse", shortLabel: "Analyse", icon: Sparkles },
   { key: "optimiser", label: "Optimiser", shortLabel: "Optim.", icon: Lightbulb },
   { key: "donnees", label: "Description du bien", shortLabel: "Bien", icon: Home },
   { key: "financiere", label: "Détails de l'opération", shortLabel: "Opération", icon: HandCoins },
@@ -322,9 +319,9 @@ export default function ApartmentDetail({
   const searchParams = useSearchParams();
   const spTab = searchParams.get("tab");
   const spEdit = searchParams.get("edit") === "1";
-  const resolvedSpTab = TABS.some((t) => t.key === spTab) ? (spTab as Tab) : null;
+  const resolvedSpTab = spTab === "synthese" ? ("ia" as Tab) : TABS.some((t) => t.key === spTab) ? (spTab as Tab) : null;
 
-  const resolvedInitialTab = TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : "synthese";
+  const resolvedInitialTab = TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : "ia";
   const [activeTab, setActiveTab] = useState<Tab>(resolvedSpTab ?? resolvedInitialTab);
   const [editingDesc, setEditingDesc] = useState((resolvedSpTab ?? resolvedInitialTab) === "donnees" && (spEdit || !!initialEdit));
 
@@ -875,24 +872,11 @@ export default function ApartmentDetail({
         </nav>
       </div>
 
-      {activeTab === "synthese" && (
-        analysisPending ? (
-          <SyntheseSkeleton />
-        ) : (
-          <SyntheseView
-            apartment={apt}
-            seuilsRendement={seuilsRendement}
-            onGoTab={goToSection}
-            onRelancer={handleRelancerAnalyse}
-          />
-        )
-      )}
-
       {activeTab === "ia" && (
         analysisPending ? (
           <AnalyseIASkeleton />
         ) : (
-          <AnalyseIA apartment={apt} seuilsRendement={seuilsRendement} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} quotaNotice={quotaNotice} />
+          <AnalyseIA apartment={apt} seuilsRendement={seuilsRendement} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
         )
       )}
 
@@ -1490,51 +1474,6 @@ function ReadOnlyField({
   );
 }
 
-function SyntheseSkeleton() {
-  return (
-    <div className="space-y-4">
-      <section className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-9">
-        <div className="flex flex-col-reverse gap-8 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-3 w-16 rounded" />
-              <Skeleton className="h-4 w-28 rounded-full" />
-            </div>
-            <Skeleton className="h-8 w-64 max-w-full rounded sm:h-10" />
-            <Skeleton className="h-3.5 w-80 max-w-full rounded" />
-            <Skeleton className="h-3.5 w-60 max-w-full rounded" />
-          </div>
-          <div className="shrink-0 space-y-1.5">
-            <Skeleton className="h-12 w-20 rounded-lg" />
-            <Skeleton className="h-3 w-20 rounded" />
-          </div>
-        </div>
-        <div className="mt-7 flex flex-wrap items-baseline gap-x-4 gap-y-2 sm:gap-x-8">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-baseline gap-1.5">
-              <Skeleton className="h-3 w-20 rounded" />
-              <Skeleton className="h-4 w-6 rounded" />
-            </div>
-          ))}
-        </div>
-      </section>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-3 w-24 rounded" />
-              <Skeleton className="h-5 w-16 rounded-full" />
-            </div>
-            <Skeleton className="mt-3 h-7 w-28 rounded" />
-            <Skeleton className="mt-2 h-3 w-full rounded" />
-            <Skeleton className="mt-auto pt-3 h-3 w-16 rounded" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function OptimiserSkeleton() {
   return (
     <div className="space-y-4">
@@ -1579,125 +1518,73 @@ function OptimiserSkeleton() {
 
 function AnalyseIASkeleton() {
   return (
-    <div className="space-y-6">
-      {/* Score global — même structure que le vrai composant : gros chiffre
-          + « score global /10 » à gauche, libellé + synthèse, date-chip + Relancer. */}
-      <section className="overflow-hidden rounded-2xl border border-ink-200 bg-white">
-        <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-5">
-            <div className="shrink-0 space-y-1.5 text-center">
-              <Skeleton className="mx-auto h-11 w-16 rounded-lg" />
-              <Skeleton className="mx-auto h-3 w-20 rounded" />
-            </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-3 w-32 max-w-full" />
-              <Skeleton className="h-5 w-72 max-w-full" />
-            </div>
+    <div className="space-y-0">
+      {/* Verdict card */}
+      <section className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
+        <div className="flex items-center gap-5 sm:gap-6">
+          <div className="shrink-0 space-y-1.5 text-center">
+            <Skeleton className="mx-auto h-12 w-16 rounded-lg" />
+            <Skeleton className="mx-auto h-3 w-14 rounded" />
           </div>
-          <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end">
-            <Skeleton className="h-4 w-40 rounded-full" />
-            <Skeleton className="h-8 w-20 rounded-md" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3 w-28 rounded" />
+                <Skeleton className="h-7 w-16 rounded-md" />
+              </div>
+            </div>
+            <Skeleton className="h-7 w-56 max-w-full rounded" />
+            <Skeleton className="h-3.5 w-full max-w-md rounded" />
+            <Skeleton className="h-3.5 w-3/4 max-w-sm rounded" />
           </div>
-        </div>
-        <div className="flex flex-wrap gap-1.5 border-t border-ink-100 px-6 py-3">
-          <Skeleton className="h-6 w-28 rounded-full" />
-          <Skeleton className="h-6 w-36 rounded-full" />
-        </div>
-        <div className="space-y-1.5 border-t border-ink-100 px-6 py-4">
-          <Skeleton className="h-3.5 w-full" />
-          <Skeleton className="h-3.5 w-11/12" />
-          <Skeleton className="h-3.5 w-3/4" />
         </div>
       </section>
 
-      {/* Grille de blocs — 2 colonnes sur lg, 1 sur mobile */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Prix d'achat */}
-        <SkeletonBloc faitCount={3} />
-        {/* Potentiel locatif */}
-        <SkeletonBloc faitCount={3} hasHighlights />
-        {/* Simulation financière */}
-        <SkeletonBloc faitCount={4} hasHighlights />
-        {/* Potentiel */}
-        <SkeletonBloc faitCount={3} />
-        {/* Risques */}
-        <SkeletonBloc faitCount={4} hasDpeGes />
-        {/* Quartier */}
-        <SkeletonBloc faitCount={0} isQuartier />
+      {/* MetricCards */}
+      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
+            <Skeleton className="h-3 w-24 rounded" />
+            <Skeleton className="mt-2.5 h-7 w-28 rounded" />
+            <Skeleton className="mt-1.5 h-3 w-full rounded" />
+            <Skeleton className="mt-auto pt-3 h-3 w-16 self-end rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Synthesis block */}
+      <div className="mt-6 rounded-xl bg-ink-50 px-5 py-4 space-y-1.5">
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-11/12" />
+        <Skeleton className="h-3.5 w-3/4" />
+      </div>
+
+      {/* Flat section blocs */}
+      <div className="mt-16 flex flex-col">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <SkeletonFlatSection key={i} faitCount={i === 4 ? 0 : 3} isFirst={i === 0} isLast={i === 4} isQuartier={i === 4} />
+        ))}
       </div>
     </div>
   );
 }
 
-function SkeletonBloc({
-  faitCount,
-  hasHighlights,
-  hasDpeGes,
-  isQuartier,
-}: {
-  faitCount: number;
-  hasHighlights?: boolean;
-  hasDpeGes?: boolean;
-  isQuartier?: boolean;
-}) {
+function SkeletonFlatSection({ faitCount, isFirst, isLast, isQuartier }: { faitCount: number; isFirst: boolean; isLast: boolean; isQuartier?: boolean }) {
   return (
-    <section className="flex flex-col rounded-xl border border-ink-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-7 w-7 rounded-lg" />
-          <Skeleton className="h-3.5 w-28" />
+    <div className={`${isFirst ? "pt-0" : "pt-14"} ${isLast ? "pb-0" : "border-b border-ink-100 pb-14"}`}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="h-6 w-32 rounded" />
+          <Skeleton className="h-5 w-16 rounded-full" />
         </div>
-        {isQuartier ? (
-          <Skeleton className="h-7 w-20 rounded-full" />
-        ) : (
-          <Skeleton className="h-7 w-16 rounded-full" />
-        )}
+        {!isQuartier && <Skeleton className="h-8 w-12 rounded" />}
       </div>
-      <div className="mt-4 space-y-4">
-        {isQuartier ? (
-          <div className="space-y-1.5">
-            <Skeleton className="h-3.5 w-full" />
-            <Skeleton className="h-3.5 w-full" />
-            <Skeleton className="h-3.5 w-4/5" />
-          </div>
-        ) : (
-          <div className="space-y-1.5 rounded-lg bg-ink-50 px-3 py-2">
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-5/6" />
-          </div>
-        )}
-        {hasDpeGes && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <Skeleton className="mb-1 h-2.5 w-20" />
-              <div className="flex gap-0.5">
-                {Array.from({ length: 7 }, (_, i) => (
-                  <Skeleton key={i} className="h-7 flex-1 first:rounded-l last:rounded-r" />
-                ))}
-              </div>
-            </div>
-            <div>
-              <Skeleton className="mb-1 h-2.5 w-16" />
-              <div className="flex gap-0.5">
-                {Array.from({ length: 7 }, (_, i) => (
-                  <Skeleton key={i} className="h-7 flex-1 first:rounded-l last:rounded-r" />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        {hasHighlights && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-ink-50 p-4 space-y-2">
-              <Skeleton className="h-2.5 w-20" />
-              <Skeleton className="h-7 w-16" />
-            </div>
-            <div className="rounded-lg bg-ink-50 p-4 space-y-2">
-              <Skeleton className="h-2.5 w-20" />
-              <Skeleton className="h-7 w-16" />
-            </div>
-          </div>
-        )}
+      <div className="mt-3 space-y-3">
+        <div className="rounded-lg bg-ink-50 px-4 py-3 space-y-1.5">
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-5/6" />
+        </div>
         {faitCount > 0 && (
           <ul className="divide-y divide-ink-100">
             {Array.from({ length: faitCount }, (_, j) => (
@@ -1711,13 +1598,11 @@ function SkeletonBloc({
             ))}
           </ul>
         )}
-        <div className="border-t border-ink-100 pt-3">
-          <Skeleton className="h-2.5 w-32" />
-        </div>
       </div>
-    </section>
+    </div>
   );
 }
+
 
 /**
  * Affiche la miniature plutôt que l'URL brute : en mode lecture, une longue

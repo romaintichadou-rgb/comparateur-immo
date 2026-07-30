@@ -144,12 +144,14 @@ export function buildVerdicts(
         niveau: "alerte",
         titre: "Rendement insuffisant",
         detail: `Rendement net ~${pct} %, sous le seuil de ${(seuils.redhibitoire * 100).toFixed(0)} % : ce bien ne remplit pas l'objectif locatif principal. Après coût du crédit et fiscalité, le cash-flow risque d'être négatif.`,
+        origine: "critere",
       });
     } else if (rendementNet < seuils.modeste) {
       verdicts.push({
         niveau: "attention",
         titre: "Rendement modeste",
         detail: `Rendement net ~${pct} %, correct mais sans marge : à valider selon ton coût de financement et ta fiscalité.`,
+        origine: "critere",
       });
     }
   }
@@ -161,18 +163,21 @@ export function buildVerdicts(
       niveau: "alerte",
       titre: "DPE G — interdit à la location",
       detail: "Passoire thermique interdite à la location depuis le 1er janvier 2025 (loi Climat). Des travaux de rénovation énergétique sont obligatoires avant toute mise en location.",
+      origine: "critere",
     });
   } else if (dpeLabel === "F") {
     verdicts.push({
       niveau: "alerte",
       titre: "DPE F — interdiction de louer en 2028",
       detail: "Passoire thermique interdite à la location à partir de 2028 (loi Climat). Des travaux de rénovation énergétique coûteux seront nécessaires, impactant fortement la rentabilité.",
+      origine: "critere",
     });
   } else if (dpeLabel === "E") {
     verdicts.push({
       niveau: "attention",
       titre: "DPE E — interdiction de louer en 2034",
       detail: "Logement classé E, interdit à la location à partir de 2034 (loi Climat). Des travaux de rénovation énergétique seront nécessaires à moyen terme.",
+      origine: "critere",
     });
   }
 
@@ -183,6 +188,7 @@ export function buildVerdicts(
         niveau: b.note <= 4 ? "alerte" : "attention",
         titre: `${b.titre} faible (${b.note}/10)`,
         detail: "Un des critères est défavorable — voir le détail du bloc ci-dessous.",
+        origine: "bloc",
       });
     }
   }
@@ -197,10 +203,40 @@ export function buildVerdicts(
       niveau: "positif",
       titre: `${b.titre} (${b.note}/10)`,
       detail: "Point fort du bien — voir le détail du bloc ci-dessous.",
+      origine: "bloc",
     });
   }
 
   return verdicts;
+}
+
+/**
+ * Catégorie qualitative du score global, affichée en tag coloré dans l'en-tête
+ * de l'Analyse IA. Chaque palier correspond à un profil d'investissement.
+ */
+export type ScoreCategorie = "excellent" | "solide" | "correct" | "fragile" | "deconseille" | "inconnu";
+
+export interface ScoreCategorieInfo {
+  label: string;
+  tone: "emerald" | "amber" | "red" | "neutral";
+}
+
+const SCORE_CATEGORIES: Record<ScoreCategorie, ScoreCategorieInfo> = {
+  excellent: { label: "Excellente opportunité", tone: "emerald" },
+  solide: { label: "Opportunité solide", tone: "emerald" },
+  correct: { label: "À négocier", tone: "amber" },
+  fragile: { label: "Investissement fragile", tone: "red" },
+  deconseille: { label: "Investissement déconseillé", tone: "red" },
+  inconnu: { label: "Données insuffisantes", tone: "neutral" },
+};
+
+export function scoreCategorie(note: number | null): ScoreCategorieInfo {
+  if (note == null) return SCORE_CATEGORIES.inconnu;
+  if (note >= 8.5) return SCORE_CATEGORIES.excellent;
+  if (note >= 7) return SCORE_CATEGORIES.solide;
+  if (note >= 5) return SCORE_CATEGORIES.correct;
+  if (note >= 3.5) return SCORE_CATEGORIES.fragile;
+  return SCORE_CATEGORIES.deconseille;
 }
 
 export function clampNote(n: number): number {
