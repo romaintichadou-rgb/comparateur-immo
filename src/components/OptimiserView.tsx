@@ -3,19 +3,18 @@
 import { useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  ArrowRight,
   Banknote,
   Check,
   Hammer,
   KeyRound,
   Landmark,
 } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
 import type { Argument, Recommandation, RecommandationLevier } from "@/lib/analyse/types";
 import {
-  TONE_TEXT_CLASS,
   cashflowTone,
   rendementNetTone,
   type CashflowSeuils,
@@ -108,13 +107,9 @@ type Pair = {
   label: string;
   avant: string;
   apres: string;
-  apresClass: string;
+  tone: "positif" | "attention" | "alerte" | "neutral";
 };
 
-/**
- * Chiffres impactés — les CONSÉQUENCES du levier. On exclut la métrique déjà
- * portée par le pivot pour ne pas la répéter.
- */
 function buildPairs(
   reco: Recommandation,
   seuilsRendement: RendementSeuils,
@@ -127,7 +122,7 @@ function buildPairs(
       label: "Prix au m²",
       avant: fmtPrixM2(reco.prixM2Avant),
       apres: fmtPrixM2(reco.prixM2Apres),
-      apresClass: "text-emerald-700",
+      tone: "positif",
     });
   }
   if (reco.levier !== "loyer" && reco.loyerAvant != null && reco.loyerApres != null) {
@@ -136,7 +131,7 @@ function buildPairs(
       label: "Loyer /mois",
       avant: fmtEuros(reco.loyerAvant),
       apres: fmtEuros(reco.loyerApres),
-      apresClass: "text-emerald-700",
+      tone: "positif",
     });
   }
   pairs.push({
@@ -144,14 +139,14 @@ function buildPairs(
     label: "Rendement net",
     avant: fmtRendement(reco.rendementAvant),
     apres: fmtRendement(reco.rendementApres),
-    apresClass: TONE_TEXT_CLASS[rendementNetTone(reco.rendementApres, seuilsRendement)],
+    tone: rendementNetTone(reco.rendementApres, seuilsRendement),
   });
   pairs.push({
     kind: "cashflow",
     label: "Cash-flow /mois",
     avant: fmtCashflow(reco.cashflowAvant),
     apres: fmtCashflow(reco.cashflowApres),
-    apresClass: TONE_TEXT_CLASS[cashflowTone(reco.cashflowApres, cashflowSeuils)],
+    tone: cashflowTone(reco.cashflowApres, cashflowSeuils),
   });
   return pairs;
 }
@@ -369,12 +364,12 @@ function LevierPanel({
 
         <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {pairs.map((p) => (
-            <MetricCard
+            <StatCard
               key={p.kind}
               label={p.label}
               avant={p.avant}
-              apres={p.apres}
-              apresClass={p.apresClass}
+              value={p.apres}
+              tone={p.tone}
               onClick={onClickFor(p.kind)}
             />
           ))}
@@ -479,49 +474,7 @@ function PreuveItem({ arg }: { arg: Argument }) {
 /**
  * Reprend le gabarit exact de `MetricCard` (AnalyseIA.tsx) — rounded-xl,
  * p-4, label sans capitales, valeur `text-2xl font-bold` en mono, lien de
- * détail souligné + flèche ancré en bas à droite. Seul ajout : la valeur
- * "avant", puisque ce contexte est un avant/après et non une valeur seule.
  */
-function MetricCard({
-  label,
-  avant,
-  apres,
-  apresClass,
-  onClick,
-}: {
-  label: string;
-  avant: string;
-  apres: string;
-  apresClass: string;
-  onClick?: () => void;
-}) {
-  return (
-    <div className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
-      <p className="text-xs font-medium text-ink-500">{label}</p>
-      <p className="mt-1.5 flex items-baseline gap-2 font-mono tabular-nums">
-        <span className="text-sm text-ink-400">{avant}</span>
-        <ArrowRight className="h-3 w-3 shrink-0 self-center text-ink-300" aria-hidden />
-        <span className={`text-2xl font-bold ${apresClass}`}>{apres}</span>
-      </p>
-      {onClick && (
-        <button
-          type="button"
-          onClick={onClick}
-          title="Voir le détail du calcul"
-          className="group mt-auto self-end pt-3 text-xs text-ink-400 transition-colors hover:text-accent-600 focus-visible:outline-2 focus-visible:outline-accent-600"
-        >
-          <span className="underline underline-offset-2">détail</span>{" "}
-          <span
-            aria-hidden="true"
-            className="inline-block transition-transform group-hover:translate-x-0.5"
-          >
-            →
-          </span>
-        </button>
-      )}
-    </div>
-  );
-}
 
 function DegradedCard({
   titre,

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Download, MousePointerClick } from "lucide-react";
 import { buildBookmarkletHref } from "@/lib/bookmarklet";
 import { APP_NAME } from "@/lib/constants";
+import { SectionHeader } from "@/components/SectionHeader";
 
 export default function BookmarkletView() {
   const origin = window.location.origin;
@@ -33,10 +34,7 @@ export default function BookmarkletView() {
       </div>
 
       <div className="rounded-xl border border-ink-200 bg-white p-6">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Download className="h-3.5 w-3.5" /></span>
-          1. Installer le bookmarklet
-        </h2>
+        <SectionHeader icon={Download} title="1. Installer le bookmarklet" />
         <p className="mt-2 text-sm text-ink-600">
           Glisse ce bouton dans ta barre de favoris (affiche-la si besoin avec{" "}
           <kbd className="rounded border border-ink-300 bg-ink-50 px-1">⌘⇧B</kbd>) :
@@ -60,10 +58,7 @@ export default function BookmarkletView() {
       </div>
 
       <div className="rounded-xl border border-ink-200 bg-white p-6">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><MousePointerClick className="h-3.5 w-3.5" /></span>
-          2. Utiliser
-        </h2>
+        <SectionHeader icon={MousePointerClick} title="2. Utiliser" />
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-600">
           <li>Ouvre une annonce Leboncoin, SeLoger, PAP ou Orpi normalement dans ton navigateur</li>
           <li>Clique sur le favori &laquo;&nbsp;Importer dans {APP_NAME}&nbsp;&raquo;</li>

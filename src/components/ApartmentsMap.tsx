@@ -27,8 +27,7 @@ const pillClass = (tone: RendementTone): string =>
 // localisation exacte, même forme mais contour pointillé/rempli plus clair
 // pour une position approximative (centre de quartier), afin de ne jamais
 // laisser croire à une précision qu'on n'a pas.
-const PIN_RED = "#ff0000";
-const PIN_RED_STROKE = "#b30000";
+import { PIN_RED, PIN_RED_STROKE } from "@/lib/constants";
 const PIN_WIDTH = 20;
 const PIN_HEIGHT = 28;
 

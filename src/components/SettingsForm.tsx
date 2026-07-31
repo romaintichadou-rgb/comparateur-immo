@@ -149,7 +149,7 @@ function SeuilCard({
           <div className={`flex-1 ${valide ? "bg-amber-400" : "bg-ink-200"}`} />
           <div className={`flex-1 ${valide ? "bg-emerald-400" : "bg-ink-200"}`} />
         </div>
-        <div className="flex justify-between text-[11px] text-ink-500">
+        <div className="flex justify-between font-mono text-[11px] tabular-nums text-ink-500">
           <span>Rouge &lt; {formatValue(rouge)}</span>
           <span>Ambre</span>
           <span>Vert ≥ {formatValue(vert)}</span>

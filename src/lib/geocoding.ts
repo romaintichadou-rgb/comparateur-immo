@@ -93,5 +93,3 @@ export async function geocodeApartmentLocation(input: {
   return null;
 }
 
-// Compat : ancien nom de type utilisé ailleurs dans le code.
-export type GeocodeResult = BanResult;

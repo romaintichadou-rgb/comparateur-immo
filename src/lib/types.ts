@@ -30,7 +30,7 @@ export const PRECISIONS_LOCALISATION = ["exacte", "arrondissement"] as const;
 export type PrecisionLocalisation = (typeof PRECISIONS_LOCALISATION)[number];
 
 export const DPE_GES_VALEURS = ["A", "B", "C", "D", "E", "F", "G"] as const;
-export type DpeGesValeur = (typeof DPE_GES_VALEURS)[number];
+type DpeGesValeur = (typeof DPE_GES_VALEURS)[number];
 
 export const TYPES_BIEN = [
   "Studio",

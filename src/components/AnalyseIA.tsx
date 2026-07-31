@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock, Info, Loader2, Sparkles } from "lucide-react";
+import { StatCard, type StatCardTone } from "@/components/StatCard";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, VerdictNiveau } from "@/lib/analyse/types";
@@ -10,7 +11,6 @@ import {
   DECISION_RING_STYLES,
   NOTE_TEXT_CLASS,
   SEUILS_RENDEMENT_DEFAUT,
-  TONE_TEXT_CLASS,
   cashflowTone,
   noteTone,
   scoreCategorie,
@@ -40,8 +40,6 @@ const HIGHLIGHTS_CASHFLOW = new Set(["Cash-flow mensuel — année 1", "Cash-flo
 /** Les highlights ont un habillage identique quelle que soit la tonalité —
  * seule la couleur de la valeur varie, et elle vient de `TONE_TEXT_CLASS`
  * (source unique). Ne pas réintroduire une table par tonalité ici. */
-const HIGHLIGHT_WRAP = "bg-white border border-ink-200";
-const HIGHLIGHT_LABEL = "text-ink-500";
 
 const VERDICT_STYLES: Record<
   VerdictNiveau,
@@ -132,7 +130,6 @@ function VerdictGauge({
   );
 }
 
-type MetricTone = "positif" | "attention" | "alerte" | "neutral";
 
 const BLOC_ORDRE: BlocKey[] = ["prix", "location", "simulation", "potentiel", "risque"];
 
@@ -158,7 +155,7 @@ export function formatNote(note: number): string {
 }
 
 
-function dpeInfo(dpe: string): { sub: string; tone: MetricTone } {
+function dpeInfo(dpe: string): { sub: string; tone: StatCardTone } {
   switch (dpe.trim().toUpperCase()) {
     case "G": return { sub: "Interdit à la location", tone: "alerte" };
     case "F": return { sub: "Interdit dès 2028", tone: "alerte" };
@@ -191,6 +188,7 @@ export default function AnalyseIA({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { open: openCashflowDetail } = useCashflowDetail();
+  const { open: openRendementDetail } = useRendementDetail();
   const analyse = apartment.analyse_ia;
   const immeuble = isImmeuble(apartment.type_bien);
 
@@ -273,9 +271,9 @@ export default function AnalyseIA({
   const netTone = rendementNetTone(apartment.rendement_net, seuilsRendement);
   const dpe = dpeInfo(apartment.dpe);
 
-  const cfTone: MetricTone = cashflowTone(cashflow, cashflowSeuils);
+  const cfTone: StatCardTone = cashflowTone(cashflow, cashflowSeuils);
 
-  const ecartTone: MetricTone =
+  const ecartTone: StatCardTone =
     faitEcart?.gravite === "positif" ? "positif"
       : faitEcart?.gravite === "attention" ? "attention"
         : faitEcart?.gravite === "alerte" ? "alerte" : "neutral";
@@ -314,12 +312,6 @@ export default function AnalyseIA({
   };
 
   const styles = DECISION_STYLES[decision];
-
-  // Emphasis for MetricCards on negocie/passe
-  const emphasize = decision !== "achete";
-  const tagLabel = decision === "passe" ? "Rédhibitoire" : "À négocier";
-  const driver = (tone: MetricTone): { tone: "alerte" | "attention"; label: string } | undefined =>
-    emphasize && (tone === "alerte" || tone === "attention") ? { tone, label: tagLabel } : undefined;
 
   // Alertes de l'en-tête (critere only)
   const alertes = (analyse.verdicts ?? [])
@@ -370,7 +362,13 @@ export default function AnalyseIA({
               const colorClass = NOTE_TEXT_CLASS[noteTone(b.note)];
               return (
                 <span key={b.cle} className="text-xs text-ink-400">
-                  {b.titre}
+                  <button
+                    type="button"
+                    onClick={() => goTab("ia", `bloc-${b.cle}`)}
+                    className="rounded-sm transition-colors hover:text-ink-600 hover:underline hover:decoration-ink-300 hover:underline-offset-2"
+                  >
+                    {b.titre}
+                  </button>
                   <span className={`ml-1.5 font-mono font-bold tabular-nums ${colorClass}`}>
                     {b.note != null ? formatNote(b.note) : "—"}
                   </span>
@@ -399,43 +397,33 @@ export default function AnalyseIA({
 
       {/* ── 2. MetricCards ── */}
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard
+        <StatCard
           label="Cash-flow mensuel"
           value={formatEurosSigned(cashflow)}
-          sub={cashflow == null ? "Simulation incomplète" : "Année 1 · net en poche chaque mois"}
+          sub={cashflow == null ? "Données manquantes" : "Net, la première année"}
           tone={cfTone}
-          emphasis={driver(cfTone)}
-          linkLabel="Détail"
           onClick={() => openCashflowDetail(apartment, cashflowSeuils)}
         />
-        <MetricCard
+        <StatCard
           label="Rendement net"
           value={apartment.rendement_net == null ? "—" : formatPercent(apartment.rendement_net)}
-          sub="Loyers − charges − impôts"
+          sub="Net après charges et impôts"
           tone={netTone === "neutral" ? "neutral" : netTone}
-          emphasis={driver(netTone === "neutral" ? "neutral" : netTone)}
-          linkLabel="Détails"
-          onClick={() => goTab("financiere", "fin-resultats")}
+          onClick={() => openRendementDetail(apartment, seuilsRendement)}
         />
-        <MetricCard
+        <StatCard
           label="Prix au m²"
           value={apartment.prix_m2 == null ? "—" : `${formatEuros(apartment.prix_m2)}/m²`}
           sub={ecartDisponible
-            ? `${ecartPct! > 0 ? "+" : ""}${ecartPct} % vs médiane locale${medianeM2 != null ? ` (${formatEuros(medianeM2)}/m²)` : ""}`
-            : "Pas de comparable DVF"}
+            ? `${ecartPct! > 0 ? "+" : ""}${ecartPct} % vs marché local`
+            : "Pas de donnée de marché"}
           tone={ecartDisponible ? ecartTone : "neutral"}
-          emphasis={ecartDisponible ? driver(ecartTone) : undefined}
-          linkLabel={ecartDisponible ? "Analyse" : "Détails"}
-          onClick={() => ecartDisponible ? goTab("ia", "bloc-prix") : goTab("financiere", "fin-achat")}
         />
-        <MetricCard
+        <StatCard
           label="DPE"
           value={apartment.dpe.trim() === "" ? "—" : apartment.dpe.trim().toUpperCase()}
           sub={dpe.sub}
           tone={dpe.tone}
-          emphasis={driver(dpe.tone)}
-          linkLabel={apartment.dpe.trim() === "" ? "Compléter" : "Risques"}
-          onClick={() => apartment.dpe.trim() === "" ? goTab("donnees") : goTab("ia", "bloc-risque")}
         />
       </div>
 
@@ -484,55 +472,6 @@ function VerdictRow({ verdict }: { verdict: Verdict }) {
   );
 }
 
-/** Tag d'emphase d'une MetricCard : même pastille que le chip d'un verdict de
- * même niveau — c'est le même signal, il ne doit pas exister en deux exemplaires. */
-const EMPHASIS_TAG_CLASS: Record<"alerte" | "attention", string> = {
-  alerte: VERDICT_STYLES.alerte.chip,
-  attention: VERDICT_STYLES.attention.chip,
-};
-
-function MetricCard({
-  label,
-  value,
-  sub,
-  tone,
-  emphasis,
-  linkLabel,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone: MetricTone;
-  emphasis?: { tone: "alerte" | "attention"; label: string };
-  linkLabel: string;
-  onClick: () => void;
-}) {
-  return (
-    <div className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
-      <div className="flex min-h-[1.25rem] items-start justify-between gap-2">
-        <p className="text-xs font-medium text-ink-500">{label}</p>
-        {emphasis && (
-          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EMPHASIS_TAG_CLASS[emphasis.tone]}`}>
-            {emphasis.label}
-          </span>
-        )}
-      </div>
-      <p className={`mt-1.5 font-mono text-2xl font-bold tabular-nums ${TONE_TEXT_CLASS[tone]}`}>
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-ink-400">{sub}</p>
-      <button
-        type="button"
-        onClick={onClick}
-        className="group mt-auto self-end pt-3 text-xs text-ink-400 transition-colors hover:text-accent-600"
-      >
-        <span className="underline underline-offset-2">{linkLabel}</span>{" "}
-        <span aria-hidden="true" className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
-      </button>
-    </div>
-  );
-}
 
 // ── Flat Section (no card borders, divider-separated) ────────────────────────
 
@@ -600,7 +539,7 @@ function FlatSection({
   return (
     <section
       id={`bloc-${bloc.cle}`}
-      className={`scroll-mt-24 ${isFirst ? "pt-0" : "pt-14"} ${isLast ? "pb-0" : "border-b border-ink-100 pb-14"}`}
+      className={`scroll-mt-24 ${isFirst ? "pt-0" : "border-t border-ink-100/50 pt-14"} ${isLast ? "pb-0" : "pb-14"}`}
     >
       {/* Header: title + tag | score */}
       <div className="flex items-center justify-between gap-4">
@@ -657,14 +596,14 @@ function FlatSection({
           {bloc.highlights && bloc.highlights.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               {bloc.highlights.map((h, i) => (
-                <HighlightCard key={i} highlight={h} apartment={apartment} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
+                <HighlightStatCard key={i} highlight={h} apartment={apartment} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
               ))}
             </div>
           )}
 
           {/* Facts */}
           {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
-            <ul className="divide-y divide-ink-100">
+            <ul className="divide-y divide-ink-100/50">
               {bloc.faits.map((f, i) => (
                 <FaitRow key={i} fait={f} />
               ))}
@@ -711,7 +650,7 @@ function FlatSection({
   );
 }
 
-function HighlightCard({
+function HighlightStatCard({
   highlight,
   apartment,
   seuilsRendement,
@@ -724,43 +663,20 @@ function HighlightCard({
 }) {
   const { open: openRendementDetail } = useRendementDetail();
   const { open: openCashflowDetail } = useCashflowDetail();
-  const content = (
-    <>
-      <p className={`text-xs font-medium ${HIGHLIGHT_LABEL}`}>{highlight.label}</p>
-      <p className={`mt-1.5 font-mono text-[22px] font-bold tabular-nums ${TONE_TEXT_CLASS[highlight.tone]}`}>
-        {highlight.value}
-      </p>
-    </>
-  );
 
   const onClick = HIGHLIGHTS_RENDEMENT.has(highlight.label)
     ? () => openRendementDetail(apartment, seuilsRendement)
     : HIGHLIGHTS_CASHFLOW.has(highlight.label)
       ? () => openCashflowDetail(apartment, cashflowSeuils)
-      : null;
+      : undefined;
 
-  if (!onClick) {
-    return <div className={`rounded-xl p-4 ${HIGHLIGHT_WRAP}`}>{content}</div>;
-  }
-
-  // Survol : la bordure reste à 1px, seule sa COULEUR change (ink-200 → ink-300),
-  // identique quelle que soit la tonalité — décision produit assumée, voir
-  // AGENTS.md. La couleur sémantique est portée par la VALEUR ; le survol ne dit
-  // qu'une chose, « c'est cliquable ».
-  //
-  // Ni `hover:border-2` (épaissir rogne la zone de contenu d'1px et fait
-  // tressauter le texte), ni `hover:ring-inset` (l'anneau se superpose à la
-  // bordure et se voit comme un second liseré). Changer la seule couleur ne
-  // touche à aucune géométrie.
   return (
-    <button
-      type="button"
+    <StatCard
+      label={highlight.label}
+      value={highlight.value}
+      tone={highlight.tone}
       onClick={onClick}
-      title="Voir le détail du calcul"
-      className={`rounded-xl p-4 text-left transition-colors ${HIGHLIGHT_WRAP} hover:border-ink-300`}
-    >
-      {content}
-    </button>
+    />
   );
 }
 
@@ -769,7 +685,7 @@ function FaitRow({ fait }: { fait: Fait }) {
   const hasValue = fait.value != null && fait.value !== "";
 
   return (
-    <li className="flex items-start justify-between gap-3 py-2.5">
+    <li className="flex items-start justify-between gap-3 py-3.5">
       <div className="flex min-w-0 flex-1 gap-2">
         <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
         <div className="min-w-0">

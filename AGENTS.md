@@ -94,6 +94,74 @@ dans les boutons CTA.
   hover:text-accent-700`) plutôt qu'un gris neutre — le survol doit annoncer
   ce que devient le lien une fois actif.
 
+# Composants partagés & conventions UI
+
+## Inventaire des composants réutilisables (`src/components/`)
+
+| Composant | Fichier | Rôle |
+|---|---|---|
+| `StatCard` | `StatCard.tsx` | Carte métrique tonale (label/valeur/sub/tone). Mode simple ou avant→après. Affordance cliquable : pointillé sous la valeur + "Calcul →". |
+| `SectionHeader` | `SectionHeader.tsx` | En-tête de section : icon-pill accent + titre uppercase. Props : `icon`, `title`, `as` (h2/h3), `className`. Toujours préférer ce composant plutôt que recréer le pattern manuellement. |
+| `Skeleton` | `Skeleton.tsx` | Barre shimmer de chargement. |
+| `ConfirmDialog` | `ConfirmDialog.tsx` | Modale de confirmation destructive (titre, description, bouton rouge). |
+| `ErrorScreen` | `ErrorScreen.tsx` | Page d'erreur/not-found plein écran. |
+
+Formulaires (`form/Fields.tsx`) : `TextField`, `TextAreaField`, `NumberField`,
+`SelectField`, `BooleanField`, `AiEstimatedBadge`, `ManualBadge`,
+`EstimatedBadge`, `ExtractedBadge`.
+
+Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
+`CashflowDetailProvider` — montés dans `layout.tsx`, consommés via hooks.
+
+## Spacing
+
+Échelle Tailwind standard. Conventions canoniques :
+
+| Contexte | Valeur | Classe |
+|---|---|---|
+| Padding de carte section | 20px | `p-5` |
+| Padding de StatCard | 16px | `p-4` |
+| Gap dans une grille de cartes | 12px | `gap-3` |
+| Espacement entre sections (FlatSection) | 56px | `pt-14 pb-14` |
+| Séparateur de section | — | `border-t border-ink-100/50` |
+| Séparateur de faits | — | `divide-y divide-ink-100/50` |
+
+## Border radius
+
+| Contexte | Classe |
+|---|---|
+| Cartes de section, StatCard | `rounded-xl` |
+| Boutons, inputs, éléments interactifs | `rounded-lg` |
+| Badges, pills | `rounded-full` |
+| Carte verdict (hero) | `rounded-2xl` |
+| Petits éléments (tags, links) | `rounded-md` |
+
+## Dividers
+
+Opacité 50% partout pour un look épuré sans perdre les landmarks visuels :
+- Entre sections : `border-t border-ink-100/50`
+- Entre items de liste (faits) : `divide-y divide-ink-100/50`
+- Tab bar : `border-b border-ink-100` sur le `<nav>` (pleine opacité, fin)
+
+## Responsive
+
+Mobile-first (`sm:` = 640px est le breakpoint principal). Conventions :
+- Tables desktop → `hidden sm:block` + `ApartmentsCardList` en `sm:hidden`
+- Tab bar : scroll horizontal (`overflow-x-auto`), labels courts sur mobile
+- Grilles : `grid-cols-1 sm:grid-cols-2` (ou `lg:grid-cols-*` pour les layouts larges)
+- Mini carte : `hidden sm:block` (masquée sur mobile)
+- Zones de tap mobile : minimum 44px (`py-3 px-4` sur les onglets)
+
+## Icônes
+
+Librairie : **Lucide React** exclusivement. Taille standard `h-3.5 w-3.5`
+dans les section headers, `h-4 w-4` / `size-4` dans les onglets et les
+éléments inline. **Pas d'icônes dans les boutons CTA** (texte seul).
+
+## Constantes partagées (`src/lib/constants.ts`)
+
+`APP_NAME`, `PIN_RED`, `PIN_RED_STROKE` — ne pas redéfinir localement.
+
 # Modélisation "Immeuble" (bien de rapport multi-lots)
 
 Tout le modèle (`Apartment`, estimations, calculs, Analyse IA) suppose par

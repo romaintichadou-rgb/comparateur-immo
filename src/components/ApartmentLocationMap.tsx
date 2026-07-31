@@ -2,9 +2,7 @@
 
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import L from "leaflet";
-
-const PIN_RED = "#ff0000";
-const PIN_RED_STROKE = "#b30000";
+import { PIN_RED, PIN_RED_STROKE } from "@/lib/constants";
 const PIN_WIDTH = 22;
 const PIN_HEIGHT = 30;
 

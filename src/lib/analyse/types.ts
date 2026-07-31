@@ -249,17 +249,3 @@ export interface AnalyseIA {
 
 export const ANALYSE_VERSION = 4;
 
-/** Bloc vide "à venir", pour les phases pas encore implémentées. */
-export function blocIndisponible(cle: BlocKey, message: string): BlocAnalyse {
-  return {
-    cle,
-    titre: BLOC_LABELS[cle],
-    note: null,
-    poids: BLOC_POIDS[cle],
-    disponible: false,
-    faits: [],
-    sources: [],
-    narration: "",
-    messageIndisponible: message,
-  };
-}

@@ -17,6 +17,7 @@ import {
   type SimulationInputs,
 } from "@/lib/simulation";
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
+import { SectionHeader } from "@/components/SectionHeader";
 import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
 import { formatEurosSigned } from "@/lib/format";
@@ -199,10 +200,7 @@ export default function SimulationFinanciere({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Simulateur de crédit */}
         <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Landmark className="h-3.5 w-3.5" /></span>
-            Crédit immobilier
-          </h3>
+          <SectionHeader icon={Landmark} title="Crédit immobilier" as="h3" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <NumberField
               label="Montant emprunté"
@@ -236,11 +234,16 @@ export default function SimulationFinanciere({
               suffix="%/an"
             />
           </div>
+          {/* Chaque montant porte son HORIZON, parce que la ligne en mélange
+           * trois : deux mensuels, un cumul sur toute la durée du prêt
+           * (`coutCredit`), et un versement unique au départ (`apport`).
+           * Sans ces qualificatifs, le cumul sur 25 ans juste à côté contamine
+           * la lecture de l'apport, qu'on croit alors étalé lui aussi. */}
           <div className="rounded-lg bg-ink-50 px-4 py-3 text-sm text-ink-600">
             Mensualité hors assurance : <strong className="text-ink-900">{euros(result.mensualiteHorsAssurance)} €</strong>
-            {" · "}assurance : <strong className="text-ink-900">{euros(result.assuranceMensuelle)} €</strong>
-            {" · "}coût total du crédit : <strong className="text-ink-900">{euros(result.coutCredit)} €</strong>
-            {" · "}apport personnel : <strong className="text-ink-900">{euros(result.apport)} €</strong>
+            {" · "}assurance : <strong className="text-ink-900">{euros(result.assuranceMensuelle)} €</strong>/mois
+            {" · "}coût total du crédit sur {inputs.dureeAnnees} ans : <strong className="text-ink-900">{euros(result.coutCredit)} €</strong>
+            {" · "}apport personnel à l&apos;achat : <strong className="text-ink-900">{euros(result.apport)} €</strong>
           </div>
           <p className="text-xs text-ink-400">
             En mode <strong className="font-medium text-ink-500">auto</strong>, le montant emprunté
@@ -252,10 +255,7 @@ export default function SimulationFinanciere({
 
         {/* Détail mensuel année 1 — la "participation mensuelle" */}
         <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Banknote className="h-3.5 w-3.5" /></span>
-            Détail mensuel — année 1
-          </h3>
+          <SectionHeader icon={Banknote} title="Détail mensuel — année 1" as="h3" />
           <ul className="divide-y divide-ink-100 text-sm">
             <WaterfallRow
               label="Loyer (CC)"
@@ -284,10 +284,7 @@ export default function SimulationFinanciere({
 
       {/* Fiscalité LMNP */}
       <section className="space-y-5 rounded-xl border border-ink-200 bg-white p-5">
-        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><ReceiptText className="h-3.5 w-3.5" /></span>
-          Fiscalité — LMNP au réel
-        </h3>
+        <SectionHeader icon={ReceiptText} title="Fiscalité — LMNP au réel" as="h3" />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectField
@@ -345,10 +342,9 @@ export default function SimulationFinanciere({
 
       {/* Tableau année par année */}
       <section className="rounded-xl border border-ink-200 bg-white">
-        <h3 className="flex items-center gap-2 p-5 pb-3 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><Calculator className="h-3.5 w-3.5" /></span>
-          Cash-flow année par année
-        </h3>
+        <div className="p-5 pb-3">
+          <SectionHeader icon={Calculator} title="Cash-flow année par année" as="h3" />
+        </div>
         <div className="flex flex-wrap items-end gap-3 px-5 pb-4">
           <OptionalRateField
             label="Revalorisation du bien"
@@ -393,7 +389,7 @@ export default function SimulationFinanciere({
                 <th className="px-2 py-2 text-right font-medium sm:px-5">/mois</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-ink-50">
+            <tbody className="divide-y divide-ink-50 font-mono tabular-nums">
               {result.annees.map((a) => (
                 <tr key={a.annee} className="hover:bg-ink-50/60">
                   <td className="px-2 py-1.5 text-ink-500 sm:px-5">{a.annee}</td>
@@ -432,11 +428,8 @@ export default function SimulationFinanciere({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         {/* Financement du projet */}
-        <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><PieChart className="h-3.5 w-3.5" /></span>
-            Financement du projet
-          </h3>
+        <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-5">
+          <SectionHeader icon={PieChart} title="Financement du projet" as="h3" />
           <p className="text-xs text-ink-400">
             {`D'où vient l'argent qui couvre le coût total de l'opération sur ${inputs.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
           </p>
@@ -445,10 +438,7 @@ export default function SimulationFinanciere({
 
         {/* Évolution du patrimoine */}
         <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-400"><TrendingUp className="h-3.5 w-3.5" /></span>
-            Évolution du patrimoine
-          </h3>
+          <SectionHeader icon={TrendingUp} title="Évolution du patrimoine" as="h3" />
           <p className="text-xs text-ink-400">
             Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
             (valeur du bien au-delà de la dette et de l&apos;apport non récupéré), et l&apos;effort
@@ -742,43 +732,22 @@ export function ResultCard({
   loading?: boolean;
   onClick?: () => void;
 }) {
-  // Couleur de la valeur = le ton, partout (contexte comme verdict). Tons
-  // profonds pris DIRECTEMENT dans `TONE_PANEL_STYLES` : cette tuile ouvre au
-  // clic le panneau de détail, qui affiche la même valeur — une copie locale
-  // s'était déjà désynchronisée sur le rouge (700 ici, 800 là-bas).
   const valueTones = TONE_PANEL_STYLES;
 
-  // Conteneur : tuiles de contexte en fond transparent (seul le contour les
-  // délimite sur le fond de page) ; la tuile-verdict (emphase) prend le ton en
-  // aplat franc + bordure assortie. Aucun ombrage sur ces tuiles.
   const emphaseBg = {
     neutral: "border-ink-300 bg-ink-100/70",
     positif: "border-emerald-300 bg-emerald-100/70",
     attention: "border-amber-300 bg-amber-100/70",
     alerte: "border-red-300 bg-red-100/70",
   } as const;
-  const base = emphase ? emphaseBg[tone] : "border-ink-200 bg-transparent";
-
-  // Survol (uniquement si la tuile est cliquable) : on intensifie fond +
-  // bordure pour signaler l'interactivité, sans ombre.
-  // Tuile-verdict (fond déjà teinté) : le survol densifie juste l'aplat
-  // (-100/70 → -100 plein) et fonce la bordure d'un cran. Pas de saut à -200.
   const hoverEmphase = {
-    neutral: "hover:border-ink-400 hover:bg-ink-100",
-    positif: "hover:border-emerald-400 hover:bg-emerald-100",
-    attention: "hover:border-amber-400 hover:bg-amber-100",
-    alerte: "hover:border-red-400 hover:bg-red-100",
+    neutral: "hover:border-ink-500",
+    positif: "hover:border-emerald-500",
+    attention: "hover:border-amber-500",
+    alerte: "hover:border-red-500",
   } as const;
-  // Tuile de contexte (fond transparent) : un fond neutre (ink) au survol se
-  // confondrait avec le fond de page. On « fait surface » en blanc pour le ton
-  // neutre ; les tons colorés reçoivent un voile -50 léger.
-  const hoverContext = {
-    neutral: "hover:border-ink-300 hover:bg-white",
-    positif: "hover:border-emerald-300 hover:bg-emerald-50",
-    attention: "hover:border-amber-300 hover:bg-amber-50",
-    alerte: "hover:border-red-300 hover:bg-red-50",
-  } as const;
-  const hover = emphase ? hoverEmphase[tone] : hoverContext[tone];
+  const base = emphase ? emphaseBg[tone] : "border-ink-200 bg-white";
+  const hover = emphase ? hoverEmphase[tone] : "hover:border-ink-400";
 
   const content = (
     <>
@@ -791,24 +760,22 @@ export function ResultCard({
       <p className="mt-0.5 text-[11px] text-ink-400">{sub}</p>
     </>
   );
-  const className = `rounded-xl border-2 p-5 ${base}`;
+  const cardClass = `rounded-xl border p-5 ${base}`;
 
-  // Pendant le recalcul, la tuile n'est pas cliquable (la valeur n'est pas encore
-  // à jour — ouvrir son détail afficherait des chiffres périmés).
   if (onClick && !loading) {
     return (
       <button
         type="button"
         onClick={onClick}
         title="Voir le détail du calcul"
-        className={`w-full cursor-pointer text-left transition-colors ${className} ${hover}`}
+        className={`w-full text-left transition-colors ${cardClass} ${hover}`}
       >
         {content}
       </button>
     );
   }
 
-  return <div className={className}>{content}</div>;
+  return <div className={cardClass}>{content}</div>;
 }
 
 function WaterfallRow({

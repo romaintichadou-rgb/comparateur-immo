@@ -144,8 +144,9 @@ appliquée à l'ensemble de l'interface :
 - **Palette** — un fond neutre teinté violet ("Bruyère", `ink-50` à
   `ink-900`, remplace le `slate` par défaut de Tailwind), un accent unique
   violet d'encre (`accent-50` à `accent-900`, base `#3D3580`, remplace
-  `indigo`), et une couleur "signal" argile (`signal-*`, `#9C5A3C`) réservée
-  aux actions destructives (jamais utilisée comme couleur décorative). Les
+  `indigo`), et une couleur "signal" argile (`signal-*`, `#9C5A3C`) définie
+  mais **non utilisée actuellement** (les actions destructives utilisent
+  `red-*` Tailwind — voir `AGENTS.md` pour le détail). Les
   couleurs sémantiques de statut/score (vert/ambre/rouge) restent séparées
   de l'accent de marque.
 - **Typographie** — Fraunces (`font-display`) pour les titres, IBM Plex Sans

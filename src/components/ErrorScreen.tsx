@@ -31,10 +31,10 @@ export default function ErrorScreen({
       : { glow: "bg-accent-100/70", ring: "shadow-accent-100", icon: "text-accent-600", mark: "text-accent-300/20" };
 
   return (
-    <div className="relative mx-auto max-w-lg px-4 py-16 text-center sm:px-6 sm:py-20">
+    <div className="relative flex min-h-[calc(100vh-67px)] items-center justify-center px-4 text-center sm:px-6">
       <div className="bg-tech-grid pointer-events-none absolute inset-x-0 top-0 h-64" aria-hidden="true" />
 
-      <div className="relative">
+      <div className="relative max-w-lg">
         <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
           <AppMark className={`absolute h-28 w-28 ${toneClass.mark}`} />
           <span className={`absolute inset-0 rounded-full blur-xl ${toneClass.glow}`} aria-hidden="true" />
