@@ -50,6 +50,7 @@ import {
   TF_JUSTIF_COMMUNE_PREFIX,
 } from "@/lib/estimates";
 import { formatApartmentTitle, formatDate, formatEuros, formatPercent, sanitizeJustification } from "@/lib/format";
+import { ANALYSE_VERSION } from "@/lib/analyse/types";
 import {
   AiEstimatedBadge,
   BooleanField,
@@ -236,10 +237,11 @@ function computeRecalcNeeds(patch: ApartmentPatch): {
   };
 }
 
-type BannerPhase = "saving" | "success" | "error";
+type BannerPhase = "saving" | "success" | "error" | "outdated";
 interface BannerState {
   phase: BannerPhase;
   label: string;
+  action?: { label: string; onClick: () => void };
 }
 
 function useBanner() {
@@ -732,9 +734,19 @@ export default function ApartmentDetail({
   const hasCoords = Number.isFinite(apt.latitude) && Number.isFinite(apt.longitude);
   const localisationApproximative = apt.precision_localisation === "arrondissement";
 
+  const analyseOutdated = apt.analyse_ia != null && apt.analyse_ia.version < ANALYSE_VERSION;
+
   return (
     <>
-    {banner && <StickyBanner phase={banner.phase} label={banner.label} />}
+    {banner ? (
+      <StickyBanner phase={banner.phase} label={banner.label} />
+    ) : analyseOutdated ? (
+      <StickyBanner
+        phase="outdated"
+        label="L'algorithme d'analyse a évolué — relance pour des résultats à jour"
+        action={{ label: "Mettre à jour", onClick: handleRelancerAnalyse }}
+      />
+    ) : null}
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
       <Link
         href="/"
@@ -1417,22 +1429,33 @@ const BANNER_STYLES: Record<BannerPhase, { bg: string; border: string; text: str
   saving: { bg: "bg-accent-50/80", border: "border-accent-200", text: "text-accent-800", bar: "bg-accent-600" },
   success: { bg: "bg-emerald-50/80", border: "border-emerald-200", text: "text-emerald-800", bar: "bg-emerald-500" },
   error: { bg: "bg-red-50/80", border: "border-red-200", text: "text-red-800", bar: "bg-red-500" },
+  outdated: { bg: "bg-amber-50/80", border: "border-amber-200", text: "text-amber-800", bar: "bg-amber-500" },
 };
 
 const BANNER_ICON: Record<BannerPhase, typeof Loader2> = {
   saving: Loader2,
   success: CheckCircle2,
   error: XCircle,
+  outdated: RotateCcw,
 };
 
-function StickyBanner({ phase, label }: BannerState) {
+function StickyBanner({ phase, label, action }: BannerState) {
   const s = BANNER_STYLES[phase];
   const Icon = BANNER_ICON[phase];
   return (
     <div className={`sticky top-[67px] z-30 animate-banner-in border-b backdrop-blur ${s.bg} ${s.border}`}>
       <div className={`mx-auto flex max-w-6xl items-center gap-2.5 px-4 py-3 text-xs font-medium sm:px-6 ${s.text}`}>
         <Icon className={`h-3.5 w-3.5 shrink-0 ${phase === "saving" ? "animate-spin" : ""}`} />
-        <span>{label}</span>
+        <span className="flex-1">{label}</span>
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="shrink-0 rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-amber-700"
+          >
+            {action.label}
+          </button>
+        )}
       </div>
       {phase === "saving" && (
         <div className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-accent-100">

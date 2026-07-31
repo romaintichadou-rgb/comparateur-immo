@@ -8,7 +8,7 @@ export default function NotFound() {
     <ErrorScreen
       icon={SearchX}
       title="Page introuvable"
-      message="Cette page n'existe pas ou plus."
+      message="Cette adresse ne correspond à aucune page. Vérifie l'URL, ou reviens à l'accueil."
       actions={
         <Link
           href="/"

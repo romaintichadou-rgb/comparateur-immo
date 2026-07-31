@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import { AppMark } from "@/components/Navbar";
 
 /**
  * Gabarit plein-page pour les cas où une route ne peut pas se rendre : bien
@@ -26,23 +27,28 @@ export default function ErrorScreen({
 }) {
   const toneClass =
     tone === "amber"
-      ? { glow: "bg-amber-100/70", ring: "shadow-amber-100", icon: "text-amber-600" }
-      : { glow: "bg-accent-100/70", ring: "shadow-accent-100", icon: "text-accent-600" };
+      ? { glow: "bg-amber-100/70", ring: "shadow-amber-100", icon: "text-amber-600", mark: "text-amber-300/25" }
+      : { glow: "bg-accent-100/70", ring: "shadow-accent-100", icon: "text-accent-600", mark: "text-accent-300/20" };
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-20 text-center sm:px-6 sm:py-24">
-      <div className="relative mx-auto flex h-16 w-16 items-center justify-center">
-        <span className={`absolute inset-0 rounded-full blur-xl ${toneClass.glow}`} aria-hidden="true" />
-        <span
-          className={`relative flex h-14 w-14 items-center justify-center rounded-md border border-ink-200 bg-white shadow-lg ${toneClass.ring}`}
-        >
-          <Icon className={`h-7 w-7 ${toneClass.icon}`} aria-hidden="true" />
-        </span>
+    <div className="relative mx-auto max-w-lg px-4 py-16 text-center sm:px-6 sm:py-20">
+      <div className="bg-tech-grid pointer-events-none absolute inset-x-0 top-0 h-64" aria-hidden="true" />
+
+      <div className="relative">
+        <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+          <AppMark className={`absolute h-28 w-28 ${toneClass.mark}`} />
+          <span className={`absolute inset-0 rounded-full blur-xl ${toneClass.glow}`} aria-hidden="true" />
+          <span
+            className={`relative flex h-16 w-16 items-center justify-center rounded-xl border border-ink-200 bg-white shadow-lg ${toneClass.ring}`}
+          >
+            <Icon className={`h-8 w-8 ${toneClass.icon}`} aria-hidden="true" />
+          </span>
+        </div>
+        <h1 className="mt-7 font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">{title}</h1>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink-500 sm:text-base">{message}</p>
+        {reference && <p className="mt-2 font-mono text-xs text-ink-300">Référence : {reference}</p>}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">{actions}</div>
       </div>
-      <h1 className="mt-6 font-display text-2xl font-semibold text-ink-900">{title}</h1>
-      <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink-500">{message}</p>
-      {reference && <p className="mt-2 font-mono text-xs text-ink-300">Référence : {reference}</p>}
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">{actions}</div>
     </div>
   );
 }

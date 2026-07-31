@@ -7,13 +7,16 @@ import ErrorScreen from "@/components/ErrorScreen";
  * supprimé, ou lien copié/tronqué qui ne correspond plus à un ID existant.
  * Cas "normal" et attendu, pas un crash : tonalité neutre (accent), pas
  * d'échec technique à signaler.
+ *
+ * Le texte reste générique : Next.js ne passe aucun contexte à not-found.tsx,
+ * on ne peut pas distinguer un UUID malformé d'un bien supprimé.
  */
 export default function NotFound() {
   return (
     <ErrorScreen
       icon={SearchX}
-      title="Ce bien n'est plus disponible"
-      message="Il a peut-être été supprimé, ou le lien utilisé n'est plus valide."
+      title="Bien introuvable"
+      message="Ce lien ne correspond à aucun bien. Il a peut-être été supprimé, ou l'adresse est incorrecte."
       actions={
         <Link
           href="/"
