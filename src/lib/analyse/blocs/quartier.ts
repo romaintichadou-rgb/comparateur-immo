@@ -1,3 +1,4 @@
+import { formatNombre } from "@/lib/format";
 import type { RevenuCommune, ProfilCommune } from "../sources/demographie";
 import type { GareInfo, LanduseInfo, VieQuartierInfo } from "../sources/osm";
 import { BLOC_LABELS, type BlocAnalyse, type Fait, type Source } from "../types";
@@ -48,7 +49,7 @@ export function buildBlocQuartier(data: {
     sources.push(SRC_REVENU);
     faits.push({
       label: "Revenu médian disponible",
-      value: fmt(revenu.medianeDisponible),
+      value: formatNombre(revenu.medianeDisponible),
       unit: "€/an/UC",
       detail: "par unité de consommation, ménages fiscaux du secteur",
       perimetre: "arrondissement/commune",
@@ -65,7 +66,7 @@ export function buildBlocQuartier(data: {
     faits.push({
       label: "Typologie de la commune",
       value: profilCommune.typologie || "—",
-      detail: `${profilCommune.population.toLocaleString("fr-FR")} habitants · ${fmt(profilCommune.densite)} hab/km²`,
+      detail: `${profilCommune.population.toLocaleString("fr-FR")} habitants · ${formatNombre(profilCommune.densite)} hab/km²`,
       perimetre: "commune",
       source: SRC_COMMUNE.label,
       gravite: "info",
@@ -79,7 +80,7 @@ export function buildBlocQuartier(data: {
     if (!sources.includes(SRC_OSM)) sources.push(SRC_OSM);
     faits.push({
       label: "Gare ferroviaire la plus proche",
-      value: fmt(gare.distanceKm),
+      value: formatNombre(gare.distanceKm),
       unit: "km",
       detail: gare.nom,
       source: SRC_OSM.label,
@@ -130,7 +131,7 @@ export function buildBlocQuartier(data: {
         unit: vieQuartier.parcs > 1 ? "parcs/jardins" : "parc/jardin",
         detail:
           vieQuartier.parcLePlusProcheKm != null
-            ? `le plus proche à ${fmt(vieQuartier.parcLePlusProcheKm)} km`
+            ? `le plus proche à ${formatNombre(vieQuartier.parcLePlusProcheKm)} km`
             : undefined,
         perimetre: `rayon ${vieQuartier.rayonParcsM} m`,
         source: SRC_OSM.label,
@@ -186,8 +187,4 @@ export function buildBlocQuartier(data: {
     donneesManquantes,
     messageIndisponible: disponible ? undefined : "Données de quartier indisponibles pour ce bien.",
   };
-}
-
-function fmt(n: number): string {
-  return n.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
 }

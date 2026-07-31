@@ -996,20 +996,21 @@ export default function ApartmentDetail({
                         hint={!fraisNotaireManuel && fraisNotaireLive != null && <EstimatedBadge />}
                       />
                     </div>
-                    <ReadOnlyField label="Budget total (calculé)" value={formatEuros(live.budget_total)} />
-                    <ReadOnlyField label="Prix / m² — achat + travaux (calculé)" value={formatEuros(live.prix_m2)} />
+                    <ReadOnlyField mono label="Budget total (calculé)" value={formatEuros(live.budget_total)} />
+                    <ReadOnlyField mono label="Prix / m² — achat + travaux (calculé)" value={formatEuros(live.prix_m2)} />
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <ReadOnlyField label="Prix" value={formatEuros(apt.prix)} />
-                    <ReadOnlyField label="Travaux" value={apt.travaux != null ? formatEuros(apt.travaux) : "—"} />
+                    <ReadOnlyField mono label="Prix" value={formatEuros(apt.prix)} />
+                    <ReadOnlyField mono label="Travaux" value={apt.travaux != null ? formatEuros(apt.travaux) : "—"} />
                     <ReadOnlyField
+                      mono
                       label="Frais de notaire"
                       value={fraisNotaireLive == null ? "—" : formatEuros(fraisNotaireLive)}
                       badge={!fraisNotaireManuel && fraisNotaireLive != null && <EstimatedBadge />}
                     />
-                    <ReadOnlyField label="Budget total (calculé)" value={formatEuros(live.budget_total)} />
-                    <ReadOnlyField label="Prix / m² — achat + travaux (calculé)" value={formatEuros(live.prix_m2)} />
+                    <ReadOnlyField mono label="Budget total (calculé)" value={formatEuros(live.budget_total)} />
+                    <ReadOnlyField mono label="Prix / m² — achat + travaux (calculé)" value={formatEuros(live.prix_m2)} />
                   </div>
                 )}
           </section>
@@ -1464,10 +1465,18 @@ function ReadOnlyField({
   label,
   value,
   badge,
+  mono = false,
 }: {
   label: string;
   value: string;
   badge?: React.ReactNode;
+  /** `font-mono` + `tabular-nums`, réservé aux CHIFFRES CLÉS (prix, budget,
+   * prix/m²) comme l'impose la charte. Faux par défaut : un champ lu (ville,
+   * adresse, description) doit avoir la même police que le même champ en
+   * mode édition — `inputClass` ne pose aucune classe de police et hérite
+   * donc de `font-sans`. Deux polices pour un même champ selon qu'on le lit
+   * ou qu'on l'édite ne veut rien dire. */
+  mono?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1 text-sm">
@@ -1475,7 +1484,11 @@ function ReadOnlyField({
         {label}
         {badge}
       </span>
-      <div className="rounded-md border border-dashed border-ink-200 bg-ink-50 px-3 py-2 font-mono tabular-nums text-ink-500">
+      <div
+        className={`rounded-md border border-dashed border-ink-200 bg-ink-50 px-3 py-2 text-ink-500${
+          mono ? " font-mono tabular-nums" : ""
+        }`}
+      >
         {value}
       </div>
     </div>

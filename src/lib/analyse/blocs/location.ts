@@ -109,7 +109,10 @@ export function buildBlocLocation(
       .join(" · ");
     faits.push({
       label: immeuble ? "Loyer total de l'immeuble" : "Loyer du bien",
-      value: apt.loyer_retenu.toLocaleString("fr-FR"),
+      // Nombre BRUT, pas une chaîne pré-formatée : `FaitRow` groupe les
+      // milliers pour tout `Fait.value` numérique. Pré-formater ici remettrait
+      // une seconde règle d'affichage à côté de la sienne.
+      value: apt.loyer_retenu,
       unit: "€/mois CC",
       detail:
         ecart != null
@@ -132,7 +135,7 @@ export function buildBlocLocation(
     const perimetreLabel = perimetre === "rayon500" ? "rayon 500 m" : "arrondissement";
     faits.push({
       label: immeuble ? "Loyer de marché à surface équivalente" : "Loyer de marché médian",
-      value: median.toLocaleString("fr-FR"),
+      value: median,
       unit: "€/mois CC",
       detail: `${immeuble ? "surface totale en logement unique · " : ""}${loyerRef.nbObs.toLocaleString("fr-FR")} annonces · ${loyerRef.annee}`,
       perimetre: perimetreLabel,

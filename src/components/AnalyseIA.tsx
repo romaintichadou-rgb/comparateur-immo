@@ -11,6 +11,7 @@ import {
   DECISION_RING_STYLES,
   NOTE_TEXT_CLASS,
   SEUILS_RENDEMENT_DEFAUT,
+  blocCategorie,
   cashflowTone,
   noteTone,
   scoreCategorie,
@@ -23,7 +24,7 @@ import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/d
 import { simulate, defaultInputs } from "@/lib/simulation";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
-import { formatDateTime, formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
+import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderMarkdownBold } from "@/components/richText";
 
@@ -533,7 +534,7 @@ function FlatSection({
   isLast: boolean;
 }) {
   const isQuartier = bloc.cle === "quartier";
-  const categ = bloc.note != null ? scoreCategorie(bloc.note) : null;
+  const categ = bloc.note != null ? blocCategorie(bloc.note) : null;
   const tone = bloc.note != null ? noteTone(bloc.note) : "neutral";
 
   return (
@@ -703,7 +704,14 @@ function FaitRow({ fait }: { fait: Fait }) {
       </div>
       {hasValue && (
         <div className={`max-w-[45%] shrink-0 text-right font-mono text-base font-semibold tabular-nums ${style.value}`}>
-          {fait.value}
+          {/* Un `number` rendu tel quel passe par `String(n)` et sort SANS
+              séparateur de milliers (« 4706 »). Le groupage se fait donc ici,
+              au point de passage unique, plutôt que dans chaque bloc — c'est
+              ce qui manquait et qui faisait cohabiter « 1 849 » (bloc qui
+              pré-formatait en chaîne) et « 4706 » (bloc qui passait le nombre).
+              Les valeurs déjà en chaîne (fourchettes « 1 145 – 1 846 », lettres
+              de DPE) traversent intactes. */}
+          {typeof fait.value === "number" ? formatNombre(fait.value) : fait.value}
           {fait.unit && <span className="ml-0.5 text-xs font-normal opacity-70">{fait.unit}</span>}
         </div>
       )}

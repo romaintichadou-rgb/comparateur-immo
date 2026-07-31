@@ -113,7 +113,7 @@ export const TONE_PANEL_STYLES: Record<RendementTone, TonePanelStyle> = {
 
 /**
  * Tonalité d'une note /10 — SOURCE UNIQUE, alignée sur les paliers de
- * `scoreCategorie` (≥ 7 = "Opportunité solide" → vert). Utilisée par les
+ * `scoreCategorie` (≥ 7 = "Opportunité intéressante" → vert). Utilisée par les
  * sous-scores du verdict, les FlatSections et l'anneau de score du tableau :
  * un 7,5 doit être vert PARTOUT, jamais vert sur une page et ambre sur une
  * autre. Ne pas réintroduire de seuil local.
@@ -322,7 +322,7 @@ export interface ScoreCategorieInfo {
 
 const SCORE_CATEGORIES: Record<ScoreCategorie, ScoreCategorieInfo> = {
   excellent: { label: "Excellente opportunité", tone: "emerald" },
-  solide: { label: "Opportunité solide", tone: "emerald" },
+  solide: { label: "Opportunité intéressante", tone: "emerald" },
   correct: { label: "À négocier", tone: "amber" },
   fragile: { label: "Investissement fragile", tone: "red" },
   deconseille: { label: "Investissement déconseillé", tone: "red" },
@@ -336,6 +336,29 @@ export function scoreCategorie(note: number | null): ScoreCategorieInfo {
   if (note >= 5) return SCORE_CATEGORIES.correct;
   if (note >= 3.5) return SCORE_CATEGORIES.fragile;
   return SCORE_CATEGORIES.deconseille;
+}
+
+/**
+ * Catégorie qualitative d'un BLOC d'analyse (section individuelle),
+ * distincte du verdict global. Les labels décrivent la qualité du thème
+ * évalué, pas le profil d'investissement.
+ */
+const BLOC_CATEGORIES: Record<string, ScoreCategorieInfo> = {
+  excellent: { label: "Excellent", tone: "emerald" },
+  favorable: { label: "Favorable", tone: "emerald" },
+  moyen: { label: "Moyen", tone: "amber" },
+  faible: { label: "Faible", tone: "red" },
+  critique: { label: "Critique", tone: "red" },
+  inconnu: { label: "Données insuffisantes", tone: "neutral" },
+};
+
+export function blocCategorie(note: number | null): ScoreCategorieInfo {
+  if (note == null) return BLOC_CATEGORIES.inconnu;
+  if (note >= 8.5) return BLOC_CATEGORIES.excellent;
+  if (note >= 7) return BLOC_CATEGORIES.favorable;
+  if (note >= 5) return BLOC_CATEGORIES.moyen;
+  if (note >= 3.5) return BLOC_CATEGORIES.faible;
+  return BLOC_CATEGORIES.critique;
 }
 
 export function clampNote(n: number): number {

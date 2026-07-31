@@ -1,3 +1,4 @@
+import { formatNombre } from "@/lib/format";
 import type { Apartment, PrecisionLocalisation } from "@/lib/types";
 import type { DvfData } from "../sources/dvf";
 import type { Commodites } from "../sources/osm";
@@ -92,7 +93,7 @@ export function buildBlocPotentiel(
     sources.push(SRC_SSMSI);
     const cles = delinq.indicateurs
       .filter((i) => INDIC_CLES.some((c) => i.label.startsWith(c.slice(0, 20))))
-      .map((i) => `${i.label.replace(/ contre des personnes$/, "")} ${fmt(i.taux)}‰`);
+      .map((i) => `${i.label.replace(/ contre des personnes$/, "")} ${formatNombre(i.taux)}‰`);
 
     if (delinqVille && delinqVille.tauxAtteintesBiens > 0) {
       const ratio = delinq.tauxAtteintesBiens / delinqVille.tauxAtteintesBiens;
@@ -103,7 +104,7 @@ export function buildBlocPotentiel(
         label: "Sécurité — atteintes aux biens",
         value: `${ecartPct > 0 ? "+" : ""}${ecartPct}`,
         unit: "% vs ville",
-        detail: `${fmt(delinq.tauxAtteintesBiens)}‰ vs ${fmt(delinqVille.tauxAtteintesBiens)}‰ (moyenne ville)`,
+        detail: `${formatNombre(delinq.tauxAtteintesBiens)}‰ vs ${formatNombre(delinqVille.tauxAtteintesBiens)}‰ (moyenne ville)`,
         perimetre: "arrondissement",
         source: SRC_SSMSI.label,
         gravite: ratio <= 1.1 ? "positif" : ratio <= 1.5 ? "attention" : "alerte",
@@ -111,7 +112,7 @@ export function buildBlocPotentiel(
     } else {
       faits.push({
         label: "Sécurité — atteintes aux biens",
-        value: fmt(delinq.tauxAtteintesBiens),
+        value: formatNombre(delinq.tauxAtteintesBiens),
         unit: "‰",
         detail: cles.length ? cles.join(" · ") : undefined,
         perimetre: "commune",
@@ -168,8 +169,4 @@ export function buildBlocPotentiel(
     invite,
     messageIndisponible: disponible ? undefined : "Données de quartier indisponibles pour ce bien.",
   };
-}
-
-function fmt(n: number): string {
-  return n.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
 }

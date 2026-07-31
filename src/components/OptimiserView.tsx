@@ -280,11 +280,6 @@ function SelecteurLevier({
                 aria-hidden
               />
               {LEVIER_TAB_LABEL[r.levier]}
-              {r.flipVersAchat && (
-                <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  Achète
-                </span>
-              )}
             </button>
           );
         })}
@@ -349,18 +344,32 @@ function LevierPanel({
           )}
         </div>
 
-        <p className="mt-1.5 max-w-2xl text-sm text-ink-600">
+        {/* DEUX lignes, pas une. L'ancrage chiffré (le prix actuel, référence
+            du titre) et la raison du levier sont deux informations de nature
+            différente ; elles tenaient sur une seule ligne séparées par un
+            « · » en `ink-300` posé sur `accent-50`, invisible, si bien que
+            l'ensemble se lisait comme une phrase unique et bancale.
+
+            Le « : » remplace la juxtaposition « Prix affiché 270 000 € », où
+            le changement de police faisait seul office de séparateur. C'est
+            aussi la forme déjà employée ailleurs (« Mensualité hors
+            assurance : … » dans SimulationFinanciere) — pas une invention
+            locale. Le mono reste sur le montant : la charte le réserve aux
+            chiffres clés, et un prix en est un. */}
+        {/* L'écart au titre est porté par le CONTENEUR, pas par chaque ligne :
+            le levier financement n'a pas de pivot (son montant est une grandeur
+            sèche, déjà dans le titre) et n'affiche donc que la raison. Une marge
+            posée sur chaque `<p>` collait cette ligne 2px plus haut que sur les
+            leviers prix/loyer, selon celle qui se trouvait rendue en premier. */}
+        <div className="mt-1.5 space-y-1">
           {pivot?.avant && (
-            <>
-              <span className="whitespace-nowrap">
-                {pivot.label}{" "}
-                <span className="font-mono tabular-nums text-ink-500">{pivot.avant}</span>
-              </span>
-              {reco.pourquoi && <span className="px-1.5 text-ink-300">·</span>}
-            </>
+            <p className="whitespace-nowrap text-sm text-ink-500">
+              {pivot.label} :{" "}
+              <span className="font-mono tabular-nums text-ink-700">{pivot.avant}</span>
+            </p>
           )}
-          {reco.pourquoi}
-        </p>
+          {reco.pourquoi && <p className="max-w-2xl text-sm text-ink-600">{reco.pourquoi}</p>}
+        </div>
 
         <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {pairs.map((p) => (

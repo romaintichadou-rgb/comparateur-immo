@@ -4,6 +4,15 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Règle impérative — documentation à jour
+
+**Chaque changement de code doit impérativement mettre à jour `AGENTS.md` et
+tout fichier `.md` concerné** (README.md, etc.) pour que la documentation reste
+toujours synchronisée avec le code. Aucun merge ne doit créer de conflit entre
+le code et sa documentation. Cela inclut : ajout/suppression de composants,
+modification de conventions UI, changement de labels/scores, nouvelles
+fonctions utilitaires, nouvelles colonnes DB, etc.
+
 # Charte graphique — identité "Immoscore"
 
 Toute évolution UI doit respecter cette charte. Ne pas réintroduire les
@@ -359,8 +368,8 @@ catégorie **et l'anneau de score du tableau d'accueil** (`ScoreRing` /
 `scoreToneClasses` dans `ApartmentsTable.tsx`, qui n'apporte plus que le fond,
 le rail et l'anneau — jamais ses propres seuils). Source unique dans
 `scoring.ts`. Les paliers sont alignés sur `scoreCategorie` : ≥ 7 = « Opportunité
-solide » donc vert. Un 7,5 doit être vert PARTOUT — ne pas réintroduire un seuil
-à 8 côté tableau.
+intéressante » donc vert. Un 7,5 doit être vert PARTOUT — ne pas réintroduire un
+seuil à 8 côté tableau.
 
 | Score  | Tone    | Classe text (`NOTE_TEXT_CLASS`) |
 |--------|---------|------------------|
@@ -369,19 +378,38 @@ solide » donc vert. Un 7,5 doit être vert PARTOUT — ne pas réintroduire un 
 | < 5    | red     | `text-red-600`     |
 | null   | neutral | `text-ink-400`     |
 
-### `scoreCategorie(note)` — label qualitatif d'un score
+### `scoreCategorie(note)` — verdict global de l'investissement
+
+Utilisé uniquement pour le **tag du verdict global** (en-tête de l'Analyse IA).
+Les labels décrivent le profil d'investissement dans son ensemble.
 
 | Score  | Label                      | Tone    |
 |--------|----------------------------|---------|
 | ≥ 8.5  | Excellente opportunité     | emerald |
-| ≥ 7    | Opportunité solide         | emerald |
+| ≥ 7    | Opportunité intéressante   | emerald |
 | ≥ 5    | À négocier                 | amber   |
 | ≥ 3.5  | Investissement fragile     | red     |
 | < 3.5  | Investissement déconseillé | red     |
 | null   | Données insuffisantes      | neutral |
 
+### `blocCategorie(note)` — tag qualitatif d'un bloc d'analyse
+
+Utilisé pour les **tags des sections individuelles** (Prix d'achat, Potentiel
+locatif, etc.). Les labels décrivent la qualité du thème évalué, pas le profil
+d'investissement — ex. un Potentiel locatif à 5 est "Moyen", pas "À négocier".
+
+| Score  | Label                 | Tone    |
+|--------|-----------------------|---------|
+| ≥ 8.5  | Excellent             | emerald |
+| ≥ 7    | Favorable             | emerald |
+| ≥ 5    | Moyen                 | amber   |
+| ≥ 3.5  | Faible                | red     |
+| < 3.5  | Critique              | red     |
+| null   | Données insuffisantes | neutral |
+
 Tags : `CATEGORIE_TAG_STYLES` dans `AnalyseIA.tsx` — emerald-50/700,
-amber-50/700, red-50/700, ink-100/500.
+amber-50/700, red-50/700, ink-100/500. Partagé entre les deux fonctions
+(mêmes tones, styles identiques).
 
 ### `rendementNetTone(rendement, seuils)` — couleur du rendement
 
@@ -494,6 +522,38 @@ Avant de « corriger » un `red-700`, vérifier sur quel fond il est posé.
 cran en dessous. Les copies locales de `TONE_PANEL_STYLES` avaient `alerte.value`
 à `red-700` là où positif/attention étaient à `-800` ; c'était une asymétrie, pas
 une intention.
+
+### Séparateur de milliers : un nombre n'est JAMAIS rendu brut
+
+Tout nombre affiché passe par un formateur de `lib/format.ts` — `formatEuros`,
+`formatEurosSigned`, `formatPercent`, ou **`formatNombre`** quand l'unité est
+rendue à part (`Fait.unit` : « €/m² », « €/mois », « ventes »).
+
+⚠️ **`{n}` en JSX passe par `String(n)` et ne groupe RIEN.** C'est le piège :
+les blocs d'analyse qui pré-formataient leur valeur en chaîne affichaient
+« 1 849 » pendant que ceux qui passaient le nombre brut affichaient « 4706 » —
+deux rendus pour le même type de donnée, dans la même liste de faits.
+
+Le groupage se fait donc **au point de passage unique**, `FaitRow`
+(`AnalyseIA.tsx`), qui applique `formatNombre` à tout `Fait.value` numérique.
+Conséquence : **les blocs doivent passer un `number`, pas une chaîne
+pré-formatée** — pré-formater remettrait une seconde règle d'affichage à côté de
+la sienne. Seules les valeurs qui ne sont pas un nombre unique restent des
+chaînes (fourchette « 1 145 – 1 846 », lettre de DPE, libellé d'aléa).
+
+`sanitizeJustification` porte la même règle pour la prose IA (règle 5) : Gemini
+écrit « 1551 € » aussi souvent que « 1 551 € ». Le groupage y est **conditionné
+à un « € » qui suit** — dans du texte, un nombre à 4 chiffres est tout aussi
+souvent une année (« interdit en 2028 ») qu'un montant, et la grouper serait
+absurde. Ne pas élargir cette regex à tout nombre.
+
+Deux exclusions volontaires, à ne pas « corriger » :
+
+- **Les années** (`annee_construction`, « 2028 ») ne se groupent jamais.
+- **`apt.description`** (texte verbatim de l'annonce) est rendu tel quel, même
+  s'il contient « soit 1200 € annuel ». C'est la copie du vendeur, pas une
+  donnée calculée — et surtout le champ est éditable : le formater à l'affichage
+  seul recréerait un écart entre le mode lecture et le `<textarea>`.
 
 ### Montants signés : `formatEurosSigned`
 
@@ -993,7 +1053,14 @@ comportent d'ailleurs pas pareil — les onglets de page sont des liens qui
 changent l'URL, celui-ci est un état local ; leur ressemblance était donc aussi
 un mensonge sur le comportement. Il garde `role="tablist"` / `aria-selected`
 (c'est bien un sélecteur de panneaux), et défile horizontalement sur mobile.
-Un segment porte le badge « Achète » quand son levier fait basculer le verdict.
+
+Les segments ne portent **que** l'icône et le libellé du levier — **pas de badge
+« Achète »**. Un badge vert sur un segment le faisait ressembler à un état
+gagné, alors que le sélecteur ne sert qu'à choisir le panneau à lire ; et il
+répétait une information que le panneau lui-même porte déjà (verdict projeté,
+chiffres avant/après). `flipVersAchat` reste utilisé, mais **par le moteur
+seul** — porte de matérialité et tri — plus par l'UI. Ne pas le réintroduire
+dans le sélecteur.
 
 Ordre de lecture imposé, à ne pas réarranger :
 
@@ -1068,6 +1135,93 @@ colonne de chiffres, sans casser (dégradation silencieuse, pas d'invite).
 | **travaux** | DPE→D, loyer premium +12 % (`LOYER_BOOST_RENO`), coût ~350 €/m² (`COUT_RENO_M2`) | DPE ∈ {E,F,G} |
 | **loyer** | haut de fourchette ANIL, borné à une hausse réaliste **+15 %** (`LOYER_UPLIFT_MAX`) — un loyer ne bondit pas de +40 % d'un coup | loyer actuel < cible |
 | **financement** | apport pour cash-flow moyen ≥ 0 (dichotomie sur `montantEmprunte`) | cash-flow moyen < 0 & atteignable |
+
+La colonne « Affiché si » ci-dessus ne dit que la **faisabilité** (ce levier
+a-t-il un sens sur ce bien ?). Elle ne suffit pas — voir la porte de matérialité
+juste en dessous.
+
+## Porte de matérialité (`estMateriel`) — une reco doit RAPPORTER
+
+Les gardes internes de chaque `buildLevier*` portent toutes sur l'ENTRÉE
+(« la hausse de loyer dépasse-t-elle 2 % ? », « l'apport dépasse-t-il 500 € ? »)
+et jamais sur le RÉSULTAT. Un levier pouvait donc franchir sa garde sans rien
+apporter — cas réel observé : **1 662 € d'apport pour +9 €/mois** de cash-flow.
+Arithmétiquement exact, sans intérêt à proposer : ça occupe l'écran et dilue les
+leviers qui comptent.
+
+`estMateriel(reco)` (`recommandations.ts`) s'applique en **UN seul endroit**, sur
+les quatre leviers réunis, juste avant le tri. Faisabilité et intérêt sont deux
+questions distinctes — d'où deux endroits — mais l'intérêt n'a qu'une définition.
+
+Une reco est retenue si **l'une** de ces conditions tient :
+
+| # | Condition | Pourquoi cette échappatoire |
+|---|---|---|
+| A | `flipVersAchat` | Change la décision d'achat : décisif par définition, quelle que soit l'ampleur des chiffres. |
+| B | levier `travaux` | Ne se déclenche que sur DPE E/F/G. Sa valeur est **réglementaire** (G interdit à la location, F en 2028) et ne transite pas par le cash-flow. Un bien qu'on ne peut plus louer ne se juge pas au retour sur trésorerie. |
+| C | levier `prix` et remise ≥ **5 %** (`BAISSE_PRIX_MIN_PCT`) | La remise EST la valeur. Sans ça, un bien sans `loyer_retenu` (rendement et cash-flow nuls) verrait le levier central disparaître. |
+| D | Δcash-flow ≥ **25 €/mois** (`GAIN_CASHFLOW_MIN`) **ou** Δrendement ≥ **0,25 pt** (`GAIN_RENDEMENT_MIN`) | La barre chiffrée générale. |
+
+Et, **en plus de D**, si le levier immobilise de la trésorerie
+(`montantEngage > 0`) : le gain doit payer la mise —
+`Δcash-flow × 12 / montantEngage ≥ 3 %` (`RETOUR_CAPITAL_MIN`). Sans cette
+seconde condition, « immobilise 50 000 € pour gagner 30 €/mois » (0,7 %/an)
+passerait la barre absolue tout en étant un mauvais emploi de trésorerie.
+
+⚠️ **Ne pas soumettre `travaux` à la barre chiffrée** en croyant harmoniser : sa
+rentabilité cash-flow est souvent mauvaise à court terme alors que sa valeur
+(rendre le bien louable) est la plus élevée des quatre leviers.
+
+## Arrondis des cibles (`arrondiLisible`)
+
+Une cible prescriptive est une consigne qu'on répète à un vendeur ou qu'on vire
+à un notaire. « Négocie à 272 800 € » ne se retient pas et affiche une précision
+que le chiffre n'a pas : il sort d'une dichotomie, pas d'un relevé. Les quatre
+cibles chiffrées (prix, loyer, travaux, apport) passent donc par
+`arrondiLisible(n, sens)`.
+
+Pas selon l'ordre de grandeur (`pasArrondi`) — 10 000 € conviendrait à un prix
+d'achat et serait absurde sur un loyer :
+
+| Montant | Pas | Exemple |
+|---|---|---|
+| ≥ 100 000 | 10 000 | 272 800 → 270 000 |
+| ≥ 20 000 | 1 000 | 23 800 → 24 000 |
+| ≥ 2 000 | 100 | 8 750 → 8 800 |
+| ≥ 200 | 10 | 1 583 → 1 580 |
+| < 200 | 5 | |
+
+⚠️ **Le SENS de l'arrondi n'est pas cosmétique, il protège la promesse** :
+
+- **`"bas"` — ce qu'on espère OBTENIR** (prix négocié, loyer visé). Le prix cible
+  est le plus HAUT qui bascule encore à « Achète » : arrondir vers le haut
+  casserait cette garantie. Le loyer cible est déjà borné au haut de fourchette
+  ANIL et au plafond de hausse réaliste — deux maxima, que l'arrondi supérieur
+  ferait franchir.
+- **`"haut"` — ce qu'il faut ENGAGER** (travaux, apport). L'apport est le
+  MINIMUM qui ramène le cash-flow à l'équilibre : l'arrondir vers le bas
+  repasserait sous l'équilibre et rendrait le titre faux. Un budget travaux
+  sous-estimé est le même piège.
+
+Ne pas « harmoniser » les quatre sur un `Math.round` : les deux directions sont
+choisies, pas héritées.
+
+Deux conséquences à respecter en modifiant le moteur :
+
+- **Arrondir AVANT de dériver.** Dans le levier prix, la cible est arrondie au
+  tout début de `carte()`, avant `blocsAtPrice` : le patch, les arguments, le
+  prix/m² et le cash-flow affichés doivent décrire le prix réellement annoncé.
+  Sinon l'écran promet un impact calculé sur un prix qui n'est plus au titre.
+- **Redériver ce qui dépend du montant arrondi.** Côté financement,
+  `montantCible` est recalculé depuis l'apport arrondi
+  (`capitalActuel − apportSupp`), pas l'inverse.
+
+**Tout filtrer est un état valide** : `recommandations === []` affiche déjà
+« Rien de plus à optimiser » (positif) ou « Pistes indisponibles ». Ce n'est pas
+un cas à contourner.
+
+⚠️ Comme les recos sont **persistées**, les biens analysés avant ce changement
+gardent leurs leviers non-matériels jusqu'à la prochaine relance d'analyse.
 
 - **Ordre** : `[prix, ...milieu, financement]`. Le prix est TOUJOURS en tête
   (levier central), le financement TOUJOURS en dernier (levier d'appoint, pas une

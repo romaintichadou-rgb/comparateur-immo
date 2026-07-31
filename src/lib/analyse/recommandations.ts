@@ -51,7 +51,93 @@ const LOYER_BOOST_RENO = 0.12; // +12 % de loyer après rénovation haut de gamm
 // réaliste (on vise le haut de fourchette ANIL, borné à ce palier).
 const LOYER_UPLIFT_MAX = 0.15;
 
+// --- MATÉRIALITÉ : ce qui mérite d'être proposé -----------------------------
+// Les gardes des leviers portaient toutes sur l'ENTRÉE (« la hausse de loyer
+// est-elle > 2 % ? », « l'apport est-il > 500 € ? »), jamais sur le RÉSULTAT.
+// Un levier pouvait donc franchir sa garde et ne rien apporter : cas observé,
+// 1 662 € d'apport pour +9 €/mois de cash-flow — techniquement exact,
+// inutile à proposer. Une reco qui ne bouge rien coûte plus qu'elle ne
+// rapporte : elle occupe l'écran et dilue les leviers qui comptent.
+const GAIN_CASHFLOW_MIN = 25; // €/mois
+const GAIN_RENDEMENT_MIN = 0.0025; // +0.25 point de rendement net (fraction)
+/** Rendement annuel minimal du capital qu'on demande d'immobiliser. Sans lui,
+ * « immobilise 50 000 € pour gagner 30 €/mois » (0,7 %/an) passerait la barre
+ * en cash-flow tout en étant un mauvais emploi de trésorerie. */
+const RETOUR_CAPITAL_MIN = 0.03;
+/** Sous ce seuil, une négociation n'est plus un levier, c'est un arrondi. */
+const BAISSE_PRIX_MIN_PCT = 5;
+
+// --- ARRONDIS LISIBLES ------------------------------------------------------
+// Une cible prescriptive est une consigne qu'on répète à un vendeur ou qu'on
+// vire à un notaire : « négocie à 272 800 € » ne se retient pas et donne une
+// fausse impression de précision, alors que la cible sort d'une dichotomie et
+// n'a pas 6 chiffres significatifs. Le pas suit l'ordre de grandeur — 10 000 €
+// sur un prix d'achat serait absurde sur un loyer.
+function pasArrondi(n: number): number {
+  const a = Math.abs(n);
+  if (a >= 100_000) return 10_000;
+  if (a >= 20_000) return 1_000;
+  if (a >= 2_000) return 100;
+  if (a >= 200) return 10;
+  return 5;
+}
+
+/**
+ * Arrondi PRUDENT — le sens n'est jamais cosmétique, il protège la promesse :
+ *
+ * - `"bas"` pour ce qu'on espère OBTENIR (prix négocié, loyer visé). Le prix
+ *   cible est le plus HAUT qui bascule encore à « Achète » : arrondir vers le
+ *   haut casserait la garantie. Le loyer cible est déjà plafonné au réaliste :
+ *   l'arrondi supérieur le ferait sortir de la fourchette validée.
+ * - `"haut"` pour ce qu'il faut ENGAGER (travaux, apport). L'apport est le
+ *   minimum qui ramène le cash-flow à l'équilibre : arrondir vers le bas
+ *   manquerait la cible et rendrait la reco fausse. Un budget travaux
+ *   sous-estimé est un piège du même ordre.
+ */
+function arrondiLisible(n: number, sens: "bas" | "haut"): number {
+  const pas = pasArrondi(n);
+  return (sens === "bas" ? Math.floor(n / pas) : Math.ceil(n / pas)) * pas;
+}
+
 const fmtEuros = (n: number) => `${Math.round(n).toLocaleString("fr-FR")} €`;
+
+const delta = (avant: number | null, apres: number | null): number =>
+  avant == null || apres == null ? 0 : apres - avant;
+
+/**
+ * Une reco vaut-elle l'écran qu'elle occupe ?
+ *
+ * Chaque levier peut le prouver sur SON axe — les quatre ne se mesurent pas
+ * dans la même unité, et les forcer dans une seule formule aurait caché les
+ * deux leviers dont la valeur ne passe pas par le cash-flow.
+ */
+export function estMateriel(r: Recommandation): boolean {
+  // Fait basculer la décision à « Achète » : décisif par définition, quelle que
+  // soit l'ampleur des chiffres. C'est la seule question que pose l'écran.
+  if (r.flipVersAchat) return true;
+
+  // TRAVAUX : ne se déclenche que sur DPE E/F/G. Sa valeur est RÉGLEMENTAIRE
+  // (F interdit à la location en 2028, G l'est déjà) — elle ne passe pas par le
+  // cash-flow, et un bien qu'on ne peut plus louer ne se juge pas au retour sur
+  // trésorerie. Ne pas le soumettre à la barre chiffrée.
+  if (r.levier === "travaux") return true;
+
+  // PRIX : la remise EST la valeur, elle ne transite pas forcément par le
+  // cash-flow (qui suppose un loyer connu). Un bien sans loyer renseigné a un
+  // rendement et un cash-flow nuls, ce qui masquerait à tort le levier central.
+  if (r.levier === "prix" && (r.baissePct ?? 0) >= BAISSE_PRIX_MIN_PCT) return true;
+
+  const gainCashflow = delta(r.cashflowAvant, r.cashflowApres);
+  const gainRendement = delta(r.rendementAvant, r.rendementApres);
+  if (gainCashflow < GAIN_CASHFLOW_MIN && gainRendement < GAIN_RENDEMENT_MIN) return false;
+
+  // Le levier demande d'immobiliser de la trésorerie : le gain doit payer la
+  // mise, pas seulement franchir le seuil absolu.
+  if (r.montantEngage != null && r.montantEngage > 0) {
+    return (gainCashflow * 12) / r.montantEngage >= RETOUR_CAPITAL_MIN;
+  }
+  return true;
+}
 
 /** Quartier réel du bien, pour ancrer un argument dans le lieu plutôt que dire
  * « le secteur » en générique. `null` si non renseigné. */
@@ -184,7 +270,16 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     return (b.cashflowApres ?? -Infinity) - (a.cashflowApres ?? -Infinity);
   });
 
-  return [prixReco, ...milieu, financementReco].filter((r): r is Recommandation => r != null);
+  // La porte de matérialité s'applique en UN seul endroit, sur les quatre
+  // leviers réunis : les gardes internes de chaque `buildLevier*` portent sur
+  // la faisabilité (« ce levier a-t-il un sens ici ? »), celle-ci sur l'intérêt
+  // (« le résultat vaut-il d'être proposé ? »). Deux questions distinctes, d'où
+  // deux endroits — mais une seule définition de l'intérêt.
+  // Tout filtrer est un état valide : l'onglet affiche alors « rien de plus à
+  // optimiser », ce qui est une réponse, pas un vide.
+  return [prixReco, ...milieu, financementReco].filter(
+    (r): r is Recommandation => r != null && estMateriel(r)
+  );
 
   // --- Levier PRIX : le prix exact à négocier ----------------------------
   function buildLevierPrix(): Recommandation | null {
@@ -323,7 +418,14 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     };
 
     const carte = (prixCible: number, extra: Partial<Recommandation>): Recommandation => {
-      const cible = Math.min(Math.max(1000, prixCible), apt.prix! - 1000);
+      // Arrondi AVANT de dériver quoi que ce soit : `blocsAtPrice`, le patch,
+      // les arguments et le cash-flow affiché doivent tous décrire le prix
+      // réellement annoncé, sinon l'écran promet un impact calculé sur un prix
+      // qui n'est plus celui du titre.
+      const cible = arrondiLisible(
+        Math.min(Math.max(1000, prixCible), apt.prix! - 1000),
+        "bas"
+      );
       const { mod } = blocsAtPrice(cible);
       const baisse = apt.prix! - cible;
       const pct = Math.round((baisse / apt.prix!) * 100);
@@ -377,8 +479,11 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         if (decisionAtPrice(mid) === "achete") lo = mid;
         else hi = mid;
       }
-      const prixPourAchat = Math.floor(lo / 1000) * 1000; // arrondi bas → reste "achete"
-      return carte(prixPourAchat, {
+      // `lo` est brut : `carte` applique l'arrondi lisible, toujours vers le
+      // BAS — un prix plus bas que le seuil reste « Achète » (décision
+      // monotone), donc la garantie tient. Ne pas pré-arrondir ici : ça faisait
+      // deux pas d'arrondi concurrents (1 000 € ici, adaptatif là-bas).
+      return carte(lo, {
         verdictApres: "achete",
         flipVersAchat: true,
         pourquoi: "À ce prix, le bien passe en « Achète » : rendement, cash-flow et marché au vert.",
@@ -418,7 +523,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     )
       return null;
 
-    const coutTravaux = Math.round((COUT_RENO_M2 * apt.surface_m2) / 1000) * 1000;
+    const coutTravaux = arrondiLisible(COUT_RENO_M2 * apt.surface_m2, "haut");
     const dpeCible = "D";
     const gesCible = "D";
     const loyerCible = Math.round(apt.loyer_retenu * (1 + LOYER_BOOST_RENO));
@@ -531,7 +636,10 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     const loyerMaxAnil = Math.round(maxCC_m2 * apt.surface_m2);
     // On vise le haut de fourchette ANIL, mais borné à une hausse réaliste.
     const plafondRealiste = Math.round(apt.loyer_retenu * (1 + LOYER_UPLIFT_MAX));
-    const loyerCible = Math.min(loyerMaxAnil, plafondRealiste);
+    // Arrondi vers le BAS : les deux bornes (haut de fourchette ANIL, plafond
+    // de hausse réaliste) sont des maxima — les dépasser à l'arrondi ferait
+    // sortir la cible de ce que le moteur a validé.
+    const loyerCible = arrondiLisible(Math.min(loyerMaxAnil, plafondRealiste), "bas");
     if (loyerCible <= apt.loyer_retenu * 1.02) return null;
     const bornéParRealisme = loyerCible < loyerMaxAnil;
 
@@ -634,9 +742,14 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       if (cf(mid) >= 0) lo = mid;
       else hi = mid;
     }
-    const montantCible = Math.round(lo);
-    const apportSupp = capitalActuel - montantCible;
+    // L'apport est le MINIMUM qui ramène le cash-flow à l'équilibre : on
+    // l'arrondit vers le HAUT, donc on emprunte d'autant moins. Arrondir
+    // l'apport vers le bas repasserait sous l'équilibre et rendrait fausse la
+    // promesse du titre. `montantCible` est redérivé de l'apport arrondi pour
+    // que la simulation, le patch et l'affichage décrivent la même opération.
+    const apportSupp = arrondiLisible(capitalActuel - lo, "haut");
     if (apportSupp <= 500) return null;
+    const montantCible = Math.max(0, capitalActuel - apportSupp);
 
     const mod = computeDerived({
       ...apt,
