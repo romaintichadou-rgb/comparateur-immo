@@ -19,7 +19,7 @@ import { fetchRevenuMedian, fetchProfilCommune } from "./sources/demographie";
 import { narrateAll, type NarrationStatus } from "./narration";
 import { buildVerdicts, seuilsRendementFromSettings, withScoreGlobal } from "./scoring";
 import { buildRecommandations } from "./recommandations";
-import { ANALYSE_VERSION, type AnalyseIA } from "./types";
+import { ANALYSE_VERSION, empreinteBien, type AnalyseIA } from "./types";
 
 /**
  * Assemble l'Analyse IA complète d'un bien.
@@ -116,6 +116,13 @@ export async function runAnalyse(
     verdicts: [],
     synthese: "",
     blocs: { prix, location, risque, potentiel, quartier, simulation },
+    // Estampille du profil ayant servi au calcul : c'est ce qui permettra plus
+    // tard de détecter que les réglages ont changé (bandeau « obsolète »).
+    settings,
+    // Idem côté BIEN : loyer, charges et hypothèses de crédit se modifient par
+    // des chemins qui ne relancent pas l'analyse (`saveField`,
+    // `SimulationFinanciere`). L'empreinte est le seul moyen de le voir.
+    empreinteBien: empreinteBien(apt),
   };
 
   // Score global pondéré (avec plafonds) + verdicts, AVANT la narration (la

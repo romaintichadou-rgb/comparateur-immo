@@ -1,6 +1,6 @@
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
-import { defaultInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
+import { resolveInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
 import { cashflowSeuilsFromSettings, cashflowTone, clampNote } from "../scoring";
 import { formatEurosSigned } from "@/lib/format";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fait } from "../types";
@@ -23,11 +23,10 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fai
 const SRC_CALC = "Calcul — simulation LMNP";
 
 export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSettings): BlocAnalyse {
-  // Utilise les hypothèses réellement enregistrées par l'utilisateur dans
-  // l'onglet Simulation financière (crédit, revalorisations) quand elles
-  // existent, plutôt que toujours le scénario standard par défaut — pour que
-  // le score reflète ce que l'utilisateur a effectivement modélisé.
-  const result = simulate(apt, apt.simulation_inputs ?? defaultInputs());
+  // Utilise les hypothèses réellement enregistrées sur le bien, complétées par
+  // le profil emprunteur pour tout ce qui n'y est pas surchargé — pour que le
+  // score reflète ce que l'utilisateur a effectivement modélisé.
+  const result = simulate(apt, resolveInputs(apt.simulation_inputs, settings));
 
   if (!result) {
     return {

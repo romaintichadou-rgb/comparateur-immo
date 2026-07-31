@@ -1,4 +1,5 @@
 import type { ApartmentWithComputed } from "./types";
+import type { AppSettings, FinancementMode } from "./settings";
 import { defaultQuotePartTerrain } from "./taxeFonciereData";
 
 /**
@@ -12,23 +13,31 @@ import { defaultQuotePartTerrain } from "./taxeFonciereData";
  * Tout est déterministe et recalculé en direct côté client.
  */
 
+/**
+ * Hypothèses STOCKÉES sur un bien (`apartments.simulation_inputs`).
+ *
+ * Les quatre champs du profil emprunteur (taux, durée, assurance, TMI) valent
+ * `null` — ou sont absents — tant qu'ils ne sont pas surchargés sur ce bien
+ * précis : ils sont alors HÉRITÉS du Profil investisseur. Ne jamais les lire
+ * directement pour calculer : passer par `resolveInputs`, qui produit le
+ * `InputsResolus` attendu par `simulate`.
+ */
 export interface SimulationInputs {
   /**
-   * Capital emprunté (€). null = automatique : suit en temps réel le prix
-   * d'achat + les travaux (hors frais de notaire, par défaut non financés —
-   * pratique bancaire courante, les notaires étant plutôt couverts par
-   * l'apport), y compris les modifications en cours de saisie. Une valeur
-   * saisie fige le montant.
+   * Capital emprunté (€). null = automatique : suit en temps réel le coût de
+   * l'opération, selon le mode de financement du profil (`cout_total` ou
+   * `hors_notaire`), y compris pendant la saisie. Une valeur saisie fige le
+   * montant — c'est le « montant libre », propre au bien.
    */
   montantEmprunte: number | null;
-  /** Taux nominal annuel du crédit, en % (ex. 3.5). */
-  tauxCreditPct: number;
-  /** Durée du crédit en années. */
-  dureeAnnees: number;
-  /** Taux d'assurance emprunteur, en % du capital initial par an (ex. 0.3). */
-  tauxAssurancePct: number;
-  /** Tranche marginale d'imposition, en % (11/30/41/45). */
-  tmiPct: number;
+  /** Taux nominal annuel du crédit, en % (ex. 3.5). null = hérite du profil. */
+  tauxCreditPct: number | null;
+  /** Durée du crédit en années. null = hérite du profil. */
+  dureeAnnees: number | null;
+  /** Assurance emprunteur, en % du capital initial par an. null = hérite du profil. */
+  tauxAssurancePct: number | null;
+  /** Tranche marginale d'imposition, en % (11/30/41/45). null = hérite du profil. */
+  tmiPct: number | null;
   /** Revalorisation annuelle du bien, en %. null = désactivée (hypothèse par défaut, la plus prudente). */
   revalorisationBienPct: number | null;
   /** Revalorisation annuelle du loyer, en % (indexation type IRL). null = désactivée. */
@@ -83,10 +92,16 @@ export interface FinancementProjet {
 }
 
 export interface SimulationResult {
-  /** Montant effectivement emprunté (saisi, ou automatique = budget total). */
+  /** Montant effectivement emprunté, APRÈS plafonnement au coût de l'opération. */
   montantEmprunte: number;
-  /** true si le montant suit automatiquement le budget total du bien. */
+  /** true si le montant suit automatiquement le coût de l'opération. */
   montantAutomatique: boolean;
+  /**
+   * true si un montant SAISI a dû être ramené au coût de l'opération. Sans ce
+   * drapeau, le plafond de `capitalEffectif` s'appliquait en silence : l'écran
+   * affichait un montant différent de celui saisi, sans jamais dire pourquoi.
+   */
+  montantPlafonne: boolean;
   /** Mensualité de crédit hors assurance (€). */
   mensualiteHorsAssurance: number;
   /** Assurance emprunteur mensuelle (€). */
@@ -126,19 +141,68 @@ export const REVALORISATION_LOYER_DEFAUT_PCT = 1;
 export const INDEXATION_CHARGES_DEFAUT_PCT = 2;
 export const VACANCE_LOCATIVE_DEFAUT_PCT = 5;
 
+/**
+ * Forme STOCKÉE par défaut d'un bien : tout est hérité ou désactivé, rien n'est
+ * figé. Ne contient donc AUCUNE valeur d'emprunteur — celles-ci vivent dans le
+ * Profil investisseur. Sert aussi de référence de comparaison « non modifié »
+ * dans l'onglet Simulation.
+ */
 export function defaultInputs(): SimulationInputs {
   return {
-    montantEmprunte: null, // auto : suit le budget total en temps réel
-    tauxCreditPct: 3.5,
-    dureeAnnees: 25,
-    tauxAssurancePct: 0.3,
-    tmiPct: 30,
+    montantEmprunte: null, // auto : suit le coût de l'opération en temps réel
+    // Hérités du profil investisseur tant qu'ils ne sont pas surchargés.
+    tauxCreditPct: null,
+    dureeAnnees: null,
+    tauxAssurancePct: null,
+    tmiPct: null,
     // Désactivées par défaut : hypothèse la plus prudente (aucune inflation
     // supposée) tant que l'utilisateur ne les active pas explicitement.
     revalorisationBienPct: null,
     revalorisationLoyerPct: null,
     indexationChargesPct: null,
     vacanceLocativePct: null,
+  };
+}
+
+/**
+ * Hypothèses RÉSOLUES, prêtes à calculer : le profil emprunteur y est déjà
+ * remplacé par des nombres. C'est ce que `simulate` consomme — il n'a jamais
+ * connaissance du profil ni de l'héritage.
+ */
+export interface InputsResolus extends Omit<
+  SimulationInputs,
+  "tauxCreditPct" | "dureeAnnees" | "tauxAssurancePct" | "tmiPct"
+> {
+  tauxCreditPct: number;
+  dureeAnnees: number;
+  tauxAssurancePct: number;
+  tmiPct: number;
+  financementMode: FinancementMode;
+}
+
+/**
+ * Applique l'héritage du Profil investisseur — POINT DE PASSAGE UNIQUE.
+ *
+ * Remplace l'ancien idiome `apt.simulation_inputs ?? defaultInputs()`, qui
+ * retombait sur des constantes codées en dur et ignorait donc le profil.
+ *
+ * `null` ET `undefined` valent « hérite » : la migration 0006 SUPPRIME les clés
+ * plutôt que de les mettre à `null`, et un bien créé avant elle n'a pas du tout
+ * le champ. Utiliser `??` (et non `||`) — un taux à 0 % ou une TMI à 0 % sont
+ * des valeurs légitimes qu'il ne faut pas écraser par le profil.
+ */
+export function resolveInputs(
+  stored: SimulationInputs | null | undefined,
+  settings: AppSettings
+): InputsResolus {
+  const base = stored ?? defaultInputs();
+  return {
+    ...base,
+    tauxCreditPct: base.tauxCreditPct ?? settings.tauxCreditPct,
+    dureeAnnees: base.dureeAnnees ?? settings.dureeAnnees,
+    tauxAssurancePct: base.tauxAssurancePct ?? settings.tauxAssurancePct,
+    tmiPct: base.tmiPct ?? settings.tmiPct,
+    financementMode: settings.financementMode,
   };
 }
 
@@ -165,19 +229,21 @@ export function capitalEffectif(
   return Math.min(Math.max(0, montantSaisi ?? montantAuto), Math.max(0, coutTotal));
 }
 
-export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): SimulationResult | null {
+export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): SimulationResult | null {
   const loyerMensuel = apt.loyer_retenu;
   if (loyerMensuel == null || loyerMensuel <= 0) return null;
 
   // Base revalorisable : prix + travaux, hors frais de notaire (qui ne créent
   // pas de valeur patrimoniale), même convention que le simulateur de référence.
   const valeurBienInitiale = (apt.prix ?? 0) + (apt.travaux ?? 0);
-  // Montant emprunté par défaut : achat + travaux, SANS les frais de notaire
-  // (pratique bancaire courante — le notaire est plutôt couvert par l'apport,
-  // pas financé à crédit).
-  const montantAuto = Math.round(valeurBienInitiale);
   // Coût total RÉEL de l'opération (achat + notaire + travaux).
   const coutTotalReel = Math.round(apt.budget_total ?? apt.prix ?? 0);
+  // Ce que l'emprunt couvre en mode auto, selon le profil investisseur :
+  //  - `hors_notaire` : achat + travaux, le notaire est couvert par l'apport
+  //    (pratique bancaire courante, comportement historique de l'app) ;
+  //  - `cout_total`   : tout, y compris le notaire — le prêt « à 110 % ».
+  const montantAuto =
+    inputs.financementMode === "cout_total" ? coutTotalReel : Math.round(valeurBienInitiale);
   const capital = capitalEffectif(inputs.montantEmprunte, montantAuto, coutTotalReel);
   // Apport personnel = coût total − montant emprunté (jamais négatif). Inclut
   // les frais de notaire par défaut, puisqu'ils ne sont pas dans le capital.
@@ -324,6 +390,7 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
   return {
     montantEmprunte: capital,
     montantAutomatique: inputs.montantEmprunte == null,
+    montantPlafonne: inputs.montantEmprunte != null && capital !== inputs.montantEmprunte,
     apport,
     financementProjet,
     mensualiteHorsAssurance,

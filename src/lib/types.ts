@@ -2,12 +2,21 @@ import { z } from "zod";
 import type { AnalyseIA } from "./analyse/types";
 import type { SimulationInputs } from "./simulation";
 
+// Les quatre champs du profil emprunteur sont `.nullable().optional()` : `null`
+// comme l'absence de clé valent « hérité du Profil investisseur » (la migration
+// 0006 SUPPRIME les clés au lieu de les mettre à null). Voir `resolveInputs`.
+const heriteDuProfil = z
+  .number()
+  .nullable()
+  .optional()
+  .transform((v) => v ?? null);
+
 const simulationInputsSchema = z.object({
   montantEmprunte: z.number().nullable(),
-  tauxCreditPct: z.number(),
-  dureeAnnees: z.number(),
-  tauxAssurancePct: z.number(),
-  tmiPct: z.number(),
+  tauxCreditPct: heriteDuProfil,
+  dureeAnnees: heriteDuProfil,
+  tauxAssurancePct: heriteDuProfil,
+  tmiPct: heriteDuProfil,
   revalorisationBienPct: z.number().nullable(),
   revalorisationLoyerPct: z.number().nullable(),
   indexationChargesPct: z.number().nullable(),
@@ -19,6 +28,9 @@ export const PLATEFORMES = [
   "SeLoger",
   "PAP",
   "Orpi",
+  "BienIci",
+  "LogicImmo",
+  "LuxResidence",
   "Manuel",
 ] as const;
 export type Plateforme = (typeof PLATEFORMES)[number];

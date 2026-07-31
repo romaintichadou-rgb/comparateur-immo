@@ -1,7 +1,7 @@
 import type { Apartment, ApartmentWithComputed, PrecisionLocalisation } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { computeDerived } from "@/lib/calculations";
-import { defaultInputs, simulate } from "@/lib/simulation";
+import { capitalEffectif, resolveInputs, simulate } from "@/lib/simulation";
 import { buildVerdicts, computeScoreGlobal, type RendementSeuils } from "./scoring";
 import { computeDecision, ecartPrixMarche } from "./decision";
 import { buildBlocPrix } from "./blocs/prix";
@@ -222,11 +222,22 @@ function argGeorisques(gr: GeorisquesData | null): Argument | null {
 export function buildRecommandations(apt: Apartment, ctx: RecommandationContext): Recommandation[] {
   if (ctx.baseScore == null) return [];
 
-  const inputs = apt.simulation_inputs ?? defaultInputs();
-  // Emprunt de référence (montant saisi, ou auto = prix + travaux). Sert aux
-  // leviers qui font varier le montant financé (prix négocié → on emprunte
-  // moins ; travaux → on finance leur coût).
-  const loanAvant = inputs.montantEmprunte ?? Math.round((apt.prix ?? 0) + (apt.travaux ?? 0));
+  // Hypothèses résolues : le profil emprunteur (taux, durée, assurance, TMI,
+  // mode de financement) complète ce qui n'est pas surchargé sur le bien.
+  const inputs = resolveInputs(apt.simulation_inputs, ctx.settings);
+  // Emprunt de référence. Sert aux leviers qui font varier le montant financé
+  // (prix négocié → on emprunte moins ; travaux → on finance leur coût). Passe
+  // par `capitalEffectif` pour appliquer le mode de financement du profil ET le
+  // plafond au coût de l'opération — sans quoi on repartirait d'une base que la
+  // simulation, elle, aurait déjà corrigée.
+  const budgetAvant = Math.round(computeDerived(apt).budget_total ?? apt.prix ?? 0);
+  const loanAvant = capitalEffectif(
+    inputs.montantEmprunte,
+    inputs.financementMode === "cout_total"
+      ? budgetAvant
+      : Math.round((apt.prix ?? 0) + (apt.travaux ?? 0)),
+    budgetAvant
+  );
   // Utilise les hypothèses de crédit PROPRES au scénario (le levier financement
   // modifie `simulation_inputs.montantEmprunte`) — sinon le cash-flow projeté
   // ignorerait l'apport supplémentaire. Mirroir de `buildBlocSimulation`.
@@ -234,7 +245,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
   // l'onglet Analyse. La colonne "avant" décrit le bien RÉEL non modifié — elle
   // doit afficher exactement le chiffre déjà lu sur l'écran précédent.
   const cashflowOf = (mod: ApartmentWithComputed): number | null => {
-    const s = simulate(mod, mod.simulation_inputs ?? inputs);
+    const s = simulate(mod, resolveInputs(mod.simulation_inputs, ctx.settings));
     return s ? s.cashflowMensuelAn1 : null;
   };
 
@@ -727,7 +738,8 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
   // --- Levier FINANCEMENT : renforcer l'apport ---------------------------
   function buildLevierFinancement(): Recommandation | null {
     if (cashflowAvant == null || cashflowAvant >= 0) return null;
-    const capitalActuel = inputs.montantEmprunte ?? Math.round((apt.prix ?? 0) + (apt.travaux ?? 0));
+    // Même base que `loanAvant` : mode de financement du profil + plafond.
+    const capitalActuel = loanAvant;
     const cf = (montant: number): number => {
       const s = simulate(aptBase, { ...inputs, montantEmprunte: Math.round(montant) });
       return s ? s.cashflowMensuelAn1 : -Infinity;

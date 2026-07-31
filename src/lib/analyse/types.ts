@@ -1,3 +1,5 @@
+import type { AppSettings } from "@/lib/settings";
+
 /**
  * Contrat de données de l'Analyse IA.
  *
@@ -245,7 +247,77 @@ export interface AnalyseIA {
   /** Recommandations d'optimisation prescriptives (lecture seule). Absent des
    * analyses générées avant la v2 → l'onglet "Optimiser" invite à relancer. */
   recommandations?: Recommandation[];
+  /**
+   * Instantané du Profil investisseur AYANT SERVI au calcul (seuils + profil
+   * emprunteur). Permet de détecter qu'une analyse stockée a été produite avec
+   * d'autres réglages, et d'afficher le bandeau « analyse obsolète ».
+   *
+   * Sans lui, seule la version du CODE était comparée : changer son taux de
+   * crédit ou un seuil de rendement laissait chaque bien afficher un score
+   * périmé, sans le moindre signal. Optionnel — absent des analyses < v5.
+   */
+  settings?: AppSettings;
+  /**
+   * Empreinte des DONNÉES DU BIEN ayant servi au calcul (voir `empreinteBien`).
+   * Pendant du champ `settings`, côté bien : permet de détecter qu'un loyer, une
+   * charge ou une hypothèse de crédit a changé depuis l'analyse.
+   * Optionnel — absent des analyses < v6.
+   */
+  empreinteBien?: string;
 }
 
-export const ANALYSE_VERSION = 4;
+export const ANALYSE_VERSION = 6;
+
+/**
+ * Champs du bien dont dépend l'analyse stockée. Sert à fabriquer l'empreinte
+ * ci-dessous — PAS à décider d'un recalcul automatique (voir `ANALYSIS_FIELDS`
+ * dans `ApartmentDetail`, qui répond à une autre question).
+ *
+ * Recensés depuis ce que consomment réellement `computeDerived` (prix, surface,
+ * travaux, notaire, loyer, charges, TF, assurance, gestion) et `simulate`
+ * (quote-part terrain, hypothèses de crédit), plus les champs lus par les blocs
+ * (DPE/GES, type de bien, localisation).
+ */
+const CHAMPS_EMPREINTE = [
+  "prix", "travaux", "frais_notaire_estimes", "surface_m2",
+  "loyer_retenu", "charges_copro_annuelles", "taxe_fonciere",
+  "assurance_annuelle", "hypothese_gestion_pct", "quote_part_terrain_pct",
+  "dpe", "ges", "type_bien", "nb_lots",
+  "ville", "quartier", "code_postal", "adresse",
+] as const;
+
+/**
+ * Signature stable des données du bien qui nourrissent l'analyse.
+ *
+ * Pourquoi une empreinte plutôt qu'une liste de champs déclencheurs : sept
+ * champs (loyer, charges, taxe foncière, assurance, gestion, quote-part
+ * terrain, hypothèses de crédit) alimentent le score SANS figurer dans
+ * `ANALYSIS_FIELDS` — et surtout, ils sont enregistrés par `saveField` /
+ * `SimulationFinanciere`, deux chemins qui ne consultent JAMAIS cette liste.
+ * Allonger la liste n'aurait donc rien corrigé. L'empreinte, elle, attrape
+ * toute modification quel que soit l'écran d'origine.
+ *
+ * Clés triées et sérialisation explicite : l'ordre des clés d'un objet
+ * reconstruit n'est pas garanti, `JSON.stringify` produirait de faux positifs
+ * permanents (même leçon que `memeProfil`).
+ */
+type ChampEmpreinte = (typeof CHAMPS_EMPREINTE)[number];
+
+export function empreinteBien(
+  apt: { [K in ChampEmpreinte]?: unknown } & { simulation_inputs?: unknown }
+): string {
+  const parts = CHAMPS_EMPREINTE.map((k) => `${k}=${apt[k] ?? ""}`);
+  const si = apt.simulation_inputs as Record<string, unknown> | null | undefined;
+  parts.push(
+    `simulation_inputs=${
+      si == null
+        ? ""
+        : Object.keys(si)
+            .sort()
+            .map((k) => `${k}:${si[k] ?? ""}`)
+            .join(",")
+    }`
+  );
+  return parts.join("|");
+}
 

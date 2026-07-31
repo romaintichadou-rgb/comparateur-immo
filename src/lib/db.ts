@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 import { Apartment, ApartmentInput, emptyApartment } from "./types";
-import { AppSettings, DEFAULT_SETTINGS } from "./settings";
+import { AppSettings, DEFAULT_SETTINGS, type FinancementMode } from "./settings";
 
 /**
  * Couche d'accès isolée à la source de données (Supabase/Postgres). Toute la
@@ -84,7 +84,7 @@ export async function deleteApartment(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-// --- Réglages (seuils vert/ambre/rouge) : une seule ligne, id fixe. ---
+// --- Réglages (seuils + profil emprunteur) : une seule ligne, id fixe. ---
 
 interface SettingsRow {
   id: number;
@@ -92,8 +92,21 @@ interface SettingsRow {
   rendement_seuil_rouge_pct: number;
   cashflow_seuil_vert_euros: number;
   cashflow_seuil_rouge_euros: number;
+  // Ajoutées par la migration 0006 — absentes tant qu'elle n'est pas exécutée.
+  taux_credit_pct?: number | null;
+  duree_annees?: number | null;
+  taux_assurance_pct?: number | null;
+  tmi_pct?: number | null;
+  financement_mode?: FinancementMode | null;
 }
 
+/**
+ * Les colonnes du profil emprunteur retombent sur `DEFAULT_SETTINGS` quand elles
+ * sont absentes ou nulles. Les migrations de ce projet sont exécutées À LA MAIN
+ * sur chaque projet Supabase : sans ce filet, lancer l'app avant d'avoir appliqué
+ * la 0006 propagerait des `undefined` jusque dans `simulate()` — donc des `NaN`
+ * dans toute la simulation, au lieu de simplement retomber sur les défauts.
+ */
 function rowToSettings(row: SettingsRow | null): AppSettings {
   if (!row) return DEFAULT_SETTINGS;
   return {
@@ -101,6 +114,11 @@ function rowToSettings(row: SettingsRow | null): AppSettings {
     rendementSeuilRougePct: row.rendement_seuil_rouge_pct,
     cashflowSeuilVertEuros: row.cashflow_seuil_vert_euros,
     cashflowSeuilRougeEuros: row.cashflow_seuil_rouge_euros,
+    tauxCreditPct: row.taux_credit_pct ?? DEFAULT_SETTINGS.tauxCreditPct,
+    dureeAnnees: row.duree_annees ?? DEFAULT_SETTINGS.dureeAnnees,
+    tauxAssurancePct: row.taux_assurance_pct ?? DEFAULT_SETTINGS.tauxAssurancePct,
+    tmiPct: row.tmi_pct ?? DEFAULT_SETTINGS.tmiPct,
+    financementMode: row.financement_mode ?? DEFAULT_SETTINGS.financementMode,
   };
 }
 
@@ -126,6 +144,11 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
       rendement_seuil_rouge_pct: updated.rendementSeuilRougePct,
       cashflow_seuil_vert_euros: updated.cashflowSeuilVertEuros,
       cashflow_seuil_rouge_euros: updated.cashflowSeuilRougeEuros,
+      taux_credit_pct: updated.tauxCreditPct,
+      duree_annees: updated.dureeAnnees,
+      taux_assurance_pct: updated.tauxAssurancePct,
+      tmi_pct: updated.tmiPct,
+      financement_mode: updated.financementMode,
     });
   if (error) throw new Error(error.message);
 

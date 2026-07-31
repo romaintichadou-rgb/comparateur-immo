@@ -21,7 +21,8 @@ import {
   type ScoreTone,
 } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/decision";
-import { simulate, defaultInputs } from "@/lib/simulation";
+import { simulate, resolveInputs } from "@/lib/simulation";
+import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
 import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
@@ -171,6 +172,7 @@ type GoTab = (tab: "ia" | "optimiser" | "donnees" | "financiere" | "simulation",
 
 export default function AnalyseIA({
   apartment,
+  settings,
   seuilsRendement = SEUILS_RENDEMENT_DEFAUT,
   cashflowSeuils = CASHFLOW_SEUILS_DEFAUT,
   onAnalysed,
@@ -179,6 +181,9 @@ export default function AnalyseIA({
   quotaNotice = false,
 }: {
   apartment: ApartmentWithComputed;
+  /** Profil investisseur — nécessaire pour résoudre le profil emprunteur hérité
+   * avant de rejouer la simulation (MetricCard cash-flow). */
+  settings: AppSettings;
   seuilsRendement?: RendementSeuils;
   cashflowSeuils?: CashflowSeuils;
   onAnalysed: (apt: ApartmentWithComputed) => void;
@@ -264,7 +269,7 @@ export default function AnalyseIA({
   const faitMediane = faits.find((f) => f.label === "Prix/m² médian comparable");
   const medianeM2 = typeof faitMediane?.value === "number" ? faitMediane.value : null;
 
-  const simu = simulate(apartment, apartment.simulation_inputs ?? defaultInputs());
+  const simu = simulate(apartment, resolveInputs(apartment.simulation_inputs, settings));
   // Année 1 : c'est LA définition du "cash-flow mensuel" non qualifié dans
   // toute l'app (MetricCards, Optimiser, recommandations). Le cash-flow moyen
   // reste affiché à côté, mais toujours explicitement libellé "moyen".
@@ -406,7 +411,7 @@ export default function AnalyseIA({
           value={formatEurosSigned(cashflow)}
           sub={cashflow == null ? "Données manquantes" : "Net, la première année"}
           tone={cfTone}
-          onClick={() => openCashflowDetail(apartment, cashflowSeuils)}
+          onClick={() => openCashflowDetail(apartment, cashflowSeuils, settings)}
         />
         <StatCard
           label="Rendement net"
@@ -445,6 +450,7 @@ export default function AnalyseIA({
             key={bloc.cle}
             bloc={bloc}
             apartment={apartment}
+            settings={settings}
             seuilsRendement={seuilsRendement}
             cashflowSeuils={cashflowSeuils}
             isFirst={i === 0}
@@ -524,6 +530,7 @@ function EnergyScale({ label, value, palette }: { label: string; value: string; 
 function FlatSection({
   bloc,
   apartment,
+  settings,
   seuilsRendement,
   cashflowSeuils,
   isFirst,
@@ -531,6 +538,7 @@ function FlatSection({
 }: {
   bloc: BlocAnalyse;
   apartment: ApartmentWithComputed;
+  settings: AppSettings;
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
   isFirst: boolean;
@@ -600,7 +608,7 @@ function FlatSection({
           {bloc.highlights && bloc.highlights.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               {bloc.highlights.map((h, i) => (
-                <HighlightStatCard key={i} highlight={h} apartment={apartment} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
+                <HighlightStatCard key={i} highlight={h} apartment={apartment} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
               ))}
             </div>
           )}
@@ -657,11 +665,13 @@ function FlatSection({
 function HighlightStatCard({
   highlight,
   apartment,
+  settings,
   seuilsRendement,
   cashflowSeuils,
 }: {
   highlight: BlocHighlight;
   apartment: ApartmentWithComputed;
+  settings: AppSettings;
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
 }) {
@@ -671,7 +681,7 @@ function HighlightStatCard({
   const onClick = HIGHLIGHTS_RENDEMENT.has(highlight.label)
     ? () => openRendementDetail(apartment, seuilsRendement)
     : HIGHLIGHTS_CASHFLOW.has(highlight.label)
-      ? () => openCashflowDetail(apartment, cashflowSeuils)
+      ? () => openCashflowDetail(apartment, cashflowSeuils, settings)
       : undefined;
 
   return (

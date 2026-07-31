@@ -22,7 +22,8 @@ export function extractOpenGraphBase($: cheerio.CheerioAPI): ParsedListing {
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
       const json = JSON.parse($(el).contents().text());
-      const candidates = Array.isArray(json) ? json : [json];
+      const graph = json && typeof json === "object" && Array.isArray(json["@graph"]) ? json["@graph"] : null;
+      const candidates = Array.isArray(json) ? json : (graph ?? [json]);
       for (const item of candidates) {
         mergeJsonLdCandidate(data, item);
       }
@@ -43,7 +44,8 @@ function mergeJsonLdCandidate(data: ParsedListing, item: unknown): void {
   }
 
   const offers = obj.offers as Record<string, unknown> | undefined;
-  const price = offers?.price ?? obj.price;
+  const priceSpec = offers?.priceSpecification as Record<string, unknown> | undefined;
+  const price = offers?.price ?? priceSpec?.price ?? offers?.lowPrice ?? obj.price;
   const parsedPrice = toNumber(price);
   if (parsedPrice && !data.prix) data.prix = parsedPrice;
 
@@ -70,6 +72,59 @@ function mergeJsonLdCandidate(data: ParsedListing, item: unknown): void {
     const rooms = toNumber(obj.numberOfRooms);
     if (rooms) data.nb_pieces = rooms;
   }
+
+  if (typeof obj.numberOfBedrooms !== "undefined" && !data.nb_chambres) {
+    const bedrooms = toNumber(obj.numberOfBedrooms);
+    if (bedrooms) data.nb_chambres = bedrooms;
+  }
+
+  if (typeof obj.itemCondition === "string" && !data.etat_bien) {
+    const ic = obj.itemCondition.toLowerCase();
+    if (ic.includes("new")) data.etat_bien = "Neuf";
+    else if (ic.includes("used") || ic.includes("refurbished")) data.etat_bien = "Bon état";
+  }
+
+  const itemOffered = obj.itemOffered as Record<string, unknown> | undefined;
+  if (itemOffered && typeof itemOffered === "object") {
+    if (typeof itemOffered.floorSize === "object" && itemOffered.floorSize && !data.surface_m2) {
+      const fs = itemOffered.floorSize as Record<string, unknown>;
+      const surface = toNumber(fs.value);
+      if (surface) data.surface_m2 = surface;
+    }
+    if (typeof itemOffered.numberOfRooms !== "undefined" && !data.nb_pieces) {
+      const rooms = toNumber(itemOffered.numberOfRooms);
+      if (rooms) data.nb_pieces = rooms;
+    }
+    if (typeof itemOffered.numberOfBedrooms !== "undefined" && !data.nb_chambres) {
+      const bedrooms = toNumber(itemOffered.numberOfBedrooms);
+      if (bedrooms) data.nb_chambres = bedrooms;
+    }
+  }
+
+  const additionalProperty = obj.additionalProperty;
+  if (Array.isArray(additionalProperty)) {
+    for (const prop of additionalProperty) {
+      if (!prop || typeof prop !== "object") continue;
+      const p = prop as Record<string, unknown>;
+      const name = typeof p.name === "string" ? p.name.toLowerCase() : "";
+      if (name.includes("surface") && !data.surface_m2) {
+        const s = toNumber(p.value);
+        if (s) data.surface_m2 = s;
+      }
+      if ((name.includes("pièce") || name.includes("piece")) && !data.nb_pieces) {
+        const n = toNumber(p.value);
+        if (n) data.nb_pieces = n;
+      }
+      if (name.includes("chambre") && !data.nb_chambres) {
+        const n = toNumber(p.value);
+        if (n) data.nb_chambres = n;
+      }
+      if (name.includes("ascenseur") && data.ascenseur === undefined) {
+        const val = String(p.value).toLowerCase();
+        data.ascenseur = val === "oui" || val === "true" || val === "1";
+      }
+    }
+  }
 }
 
 export function cleanText(text: string): string {
@@ -83,6 +138,7 @@ export function toNumber(value: unknown): number | undefined {
   const cleaned = value
     .replace(/ /g, " ")
     .replace(/[^\d,.\-]/g, "")
+    .replace(/\.(\d{3})(?=[.,]|$)/g, "$1")
     .replace(",", ".");
   if (!cleaned) return undefined;
   const parsed = parseFloat(cleaned);
@@ -124,29 +180,30 @@ export function extractFromFreeText(text: string): ParsedListing {
   const chambres = firstMatch(text, /(\d+)\s?chambres?\b/i);
   if (chambres) data.nb_chambres = toNumber(chambres);
 
-  const etage = firstMatch(text, /(\d+)(?:er|e|ème)?\s?étage/i);
+  const etage = firstMatch(text, /(\d+)(?:er|e|[eè]me)?\s?[eé](?:tage|t\.)/i)
+    ?? firstMatch(text, /[eé](?:tage|t\.)\s*[:\-]?\s*(\d+)/i);
   if (etage) data.etage = etage;
   else if (/rez[\s-]?de[\s-]?chauss[ée]e/i.test(text)) data.etage = "RDC";
 
   if (/sans ascenseur/i.test(text)) data.ascenseur = false;
   else if (/\bascenseur\b/i.test(text)) data.ascenseur = true;
 
-  const dpe = firstMatch(text, /\b(?:dpe|consommation\s+[ée]nerg[ée]tique|classe\s+[ée]nergie)\s*[:\-]?\s*([A-G])\b/i)
+  const dpe = firstMatch(text, /\(DPE\)\s*([A-G])/i)
+    ?? firstMatch(text, /\b(?:dpe|consommation\s+[ée]nerg[ée]tique|classe\s+[ée]nergie)\s*[:\-]?\s*([A-G])\b/i)
     ?? firstMatch(text, /consommation[^A-G]{0,40}classe\s+([A-G])\b/i);
   if (dpe) data.dpe = dpe.toUpperCase();
 
-  const ges = firstMatch(text, /\b(?:ges|gaz\s+[àa]\s+effet|climat|[ée]missions?)\s*[:\-]?\s*([A-G])\b/i)
+  const ges = firstMatch(text, /\(GES\)\s*([A-G])/i)
+    ?? firstMatch(text, /\b(?:ges|gaz\s+[àa]\s+effet|climat|[ée]missions?)\s*[:\-]?\s*([A-G])\b/i)
     ?? firstMatch(text, /[ée]missions?[^A-G]{0,40}classe\s+([A-G])\b/i);
   if (ges) data.ges = ges.toUpperCase();
 
-  const annee = firstMatch(text, /construit\w* en (\d{4})/i);
+  const annee = firstMatch(text, /construit\w* en (\d{4})/i)
+    ?? firstMatch(text, /ann[eé]e de construction\s*[:\-]?\s*(\d{4})/i)
+    ?? firstMatch(text, /(?:immeuble|r[eé]sidence|b[aâ]timent)\s+(?:de|du)\s+(\d{4})/i)
+    ?? firstMatch(text, /(?:b[aâ]ti|[eé]difi[eé]|[eé]rig[eé]|livr[eé])\w*\s+en\s+(\d{4})/i)
+    ?? firstMatch(text, /dat\w+\s+(?:de|du)\s+(\d{4})/i);
   if (annee) data.annee_construction = toNumber(annee);
-
-  const charges = firstMatch(
-    text,
-    /charges?\s+(?:de\s+)?copropri[ée]t[ée][^\d]{0,20}(\d[\d\s]*)\s?€/i
-  );
-  if (charges) data.charges_copro_annuelles = toNumber(charges);
 
   const codePostal = firstMatch(text, /\b(\d{5})\b/);
   if (codePostal) data.code_postal = codePostal;

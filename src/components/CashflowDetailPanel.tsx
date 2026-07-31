@@ -5,7 +5,8 @@ import { X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatEurosSigned } from "@/lib/format";
 import { TONE_PANEL_STYLES, cashflowTone, type CashflowSeuils, type RendementTone } from "@/lib/analyse/scoring";
-import { defaultInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
+import { resolveInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
+import type { AppSettings } from "@/lib/settings";
 
 const TRANSITION_MS = 300;
 
@@ -16,16 +17,24 @@ const fmtSigned = formatEurosSigned;
 export default function CashflowDetailPanel({
   apartment,
   seuils,
+  settings,
   onClose,
 }: {
   apartment: ApartmentWithComputed | null;
   seuils: CashflowSeuils;
+  /** Profil investisseur : le panneau rejoue `simulate()`, il lui faut de quoi
+   * résoudre le profil emprunteur hérité par le bien. */
+  settings: AppSettings;
   onClose: () => void;
 }) {
-  const [displayed, setDisplayed] = useState<{ apartment: ApartmentWithComputed; seuils: CashflowSeuils } | null>(null);
+  const [displayed, setDisplayed] = useState<{
+    apartment: ApartmentWithComputed;
+    seuils: CashflowSeuils;
+    settings: AppSettings;
+  } | null>(null);
   const [show, setShow] = useState(false);
 
-  if (apartment && apartment !== displayed?.apartment) setDisplayed({ apartment, seuils });
+  if (apartment && apartment !== displayed?.apartment) setDisplayed({ apartment, seuils, settings });
   if (!apartment && show) setShow(false);
 
   useEffect(() => {
@@ -59,7 +68,7 @@ export default function CashflowDetailPanel({
   if (!displayed) return null;
 
   const apt = displayed.apartment;
-  const result = simulate(apt, apt.simulation_inputs ?? defaultInputs());
+  const result = simulate(apt, resolveInputs(apt.simulation_inputs, displayed.settings));
 
   // Moyennes mensuelles sur toute la durée du crédit (indicateur du cash-flow
   // moyen) : loyers − charges d'exploitation − crédit − impôt = cash-flow.

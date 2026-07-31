@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import type { ApartmentWithComputed } from "@/lib/types";
+import type { AppSettings } from "@/lib/settings";
 import { isImmeuble } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
 import type { Argument, Recommandation, RecommandationLevier } from "@/lib/analyse/types";
@@ -153,11 +154,15 @@ function buildPairs(
 
 export default function OptimiserView({
   apartment: apt,
+  settings,
   seuilsRendement,
   cashflowSeuils,
   onRelancer,
 }: {
   apartment: ApartmentWithComputed;
+  /** Profil investisseur — le popup de cash-flow rejoue `simulate()` sur le bien
+   * MODIFIÉ par le levier, il lui faut de quoi résoudre le profil emprunteur. */
+  settings: AppSettings;
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
   onRelancer: () => void;
@@ -224,6 +229,7 @@ export default function OptimiserView({
       cashflowSeuils={cashflowSeuils}
       onOpenRendement={openRendementDetail}
       onOpenCashflow={openCashflowDetail}
+      settings={settings}
       selecteur={<SelecteurLevier recos={recos} index={index} onSelect={setActif} />}
     />
   );
@@ -291,6 +297,7 @@ function SelecteurLevier({
 function LevierPanel({
   reco,
   apt,
+  settings,
   seuilsRendement,
   cashflowSeuils,
   onOpenRendement,
@@ -302,7 +309,8 @@ function LevierPanel({
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
   onOpenRendement: (apt: ApartmentWithComputed, seuils: RendementSeuils) => void;
-  onOpenCashflow: (apt: ApartmentWithComputed, seuils: CashflowSeuils) => void;
+  onOpenCashflow: (apt: ApartmentWithComputed, seuils: CashflowSeuils, settings: AppSettings) => void;
+  settings: AppSettings;
   /** Sélecteur de levier, rendu DANS le bandeau (voir SelecteurLevier). */
   selecteur: ReactNode;
 }) {
@@ -319,7 +327,7 @@ function LevierPanel({
   const modApt = reco.patch ? computeDerived({ ...apt, ...reco.patch }) : apt;
   const onClickFor = (kind: PairKind): (() => void) | undefined => {
     if (kind === "rendement") return () => onOpenRendement(modApt, seuilsRendement);
-    if (kind === "cashflow") return () => onOpenCashflow(modApt, cashflowSeuils);
+    if (kind === "cashflow") return () => onOpenCashflow(modApt, cashflowSeuils, settings);
     return undefined;
   };
 

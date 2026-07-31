@@ -3,10 +3,11 @@
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Banknote, Calculator, Info, Landmark, PieChart, Plus, ReceiptText, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
-import type { AppSettings } from "@/lib/settings";
+import { FINANCEMENT_MODE_COURT, type AppSettings } from "@/lib/settings";
 import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
   defaultInputs,
+  resolveInputs,
   simulate,
   LMNP,
   INDEXATION_CHARGES_DEFAUT_PCT,
@@ -20,7 +21,7 @@ import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fi
 import { SectionHeader } from "@/components/SectionHeader";
 import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
-import { formatEurosSigned } from "@/lib/format";
+import { formatEurosSigned, formatNombre } from "@/lib/format";
 
 /**
  * Onglet "Simulation financière" : cash-flow mensuel réel en LMNP réel,
@@ -33,6 +34,79 @@ import { formatEurosSigned } from "@/lib/format";
 
 /** Petit contrôle "+" discret pour activer une hypothèse optionnelle
  * (désactivée par défaut = la plus prudente), avec une valeur de repli au clic. */
+/** Pastille d'origine d'une valeur (accent, discrète), à côté du libellé. */
+function Pastille({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Champ HÉRITÉ du Profil investisseur, avec surcharge possible sur ce bien.
+ *
+ * Miroir d'`OptionalRateField`, sens inversé : là où une hypothèse optionnelle
+ * est absente par défaut et s'active, celle-ci a TOUJOURS une valeur (celle du
+ * profil) et c'est la surcharge qui s'active.
+ *
+ * En mode hérité on affiche la valeur en LECTURE SEULE plutôt qu'un champ
+ * pré-rempli : un input éditable laisserait croire que le chiffre est stocké sur
+ * le bien, alors qu'il suit le profil et changera avec lui.
+ */
+function ChampHerite({
+  label,
+  suffix,
+  override,
+  resolu,
+  format,
+  onChange,
+}: {
+  label: string;
+  suffix: string;
+  /** Valeur propre au bien. `null` = héritée. */
+  override: number | null;
+  /** Valeur effectivement utilisée par le calcul (profil ou surcharge). */
+  resolu: number;
+  format: (v: number) => string;
+  onChange: (v: number | null) => void;
+}) {
+  if (override == null) {
+    return (
+      <div className="flex flex-col gap-1 text-sm">
+        <span className="flex items-center gap-1.5 font-medium text-ink-700">
+          {label}
+          <Pastille>profil</Pastille>
+        </span>
+        <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-ink-200 bg-ink-50 px-3 py-2">
+          <span className="font-mono tabular-nums text-ink-500">{format(resolu)}</span>
+          <button
+            type="button"
+            onClick={() => onChange(resolu)}
+            className="shrink-0 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-accent-600"
+          >
+            Modifier
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-end gap-1">
+      <NumberField label={label} value={override} onChange={(v) => onChange(v ?? 0)} suffix={suffix} />
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        title="Revenir à la valeur du profil investisseur"
+        aria-label={`${label} : revenir au profil`}
+        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 function OptionalRateField({
   label,
   value,
@@ -116,7 +190,12 @@ export default function SimulationFinanciere({
   const [saving, setSaving] = useState(false);
   const dirty = JSON.stringify(inputs) !== JSON.stringify(savedInputs ?? defaultInputs());
 
-  const result = useMemo(() => simulate(apartment, inputs), [apartment, inputs]);
+  // `inputs` = ce qui est STOCKÉ sur le bien (profil emprunteur en `null` tant
+  // qu'il n'est pas surchargé). `resolus` = ce que la simulation consomme, une
+  // fois l'héritage du Profil investisseur appliqué. Les champs lisent `resolus`
+  // pour AFFICHER, et écrivent dans `inputs` pour créer un override.
+  const resolus = useMemo(() => resolveInputs(inputs, settings), [inputs, settings]);
+  const result = useMemo(() => simulate(apartment, resolus), [apartment, resolus]);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
@@ -189,7 +268,7 @@ export default function SimulationFinanciere({
           emphase
         />
         <ResultCard
-          label={`Cash-flow mensuel moyen — ${inputs.dureeAnnees} ans`}
+          label={`Cash-flow mensuel moyen — ${resolus.dureeAnnees} ans`}
           sub="après impôt LMNP"
           value={`${formatEurosSigned(cfMoyen)}/mois`}
           tone={cashflowTone(cfMoyen, cashflowSeuils)}
@@ -209,29 +288,39 @@ export default function SimulationFinanciere({
               suffix="€"
               hint={
                 result.montantAutomatique ? (
-                  <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
-                    auto
+                  // Dit AUSSI d'où vient le calcul : sans le mode, « auto »
+                  // n'explique pas pourquoi le montant inclut ou non le notaire.
+                  <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
+                ) : result.montantPlafonne ? (
+                  <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                    ramené au coût total
                   </span>
                 ) : undefined
               }
             />
-            <NumberField
+            <ChampHerite
               label="Taux du crédit"
-              value={inputs.tauxCreditPct}
-              onChange={(v) => set("tauxCreditPct", v ?? 0)}
               suffix="%/an"
+              override={inputs.tauxCreditPct}
+              resolu={resolus.tauxCreditPct}
+              format={(v) => `${formatNombre(v)} %`}
+              onChange={(v) => set("tauxCreditPct", v)}
             />
-            <NumberField
+            <ChampHerite
               label="Durée"
-              value={inputs.dureeAnnees}
-              onChange={(v) => set("dureeAnnees", Math.max(1, Math.min(35, v ?? 25)))}
               suffix="ans"
+              override={inputs.dureeAnnees}
+              resolu={resolus.dureeAnnees}
+              format={(v) => `${formatNombre(v)} ans`}
+              onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
             />
-            <NumberField
+            <ChampHerite
               label="Assurance emprunteur"
-              value={inputs.tauxAssurancePct}
-              onChange={(v) => set("tauxAssurancePct", v ?? 0)}
               suffix="%/an"
+              override={inputs.tauxAssurancePct}
+              resolu={resolus.tauxAssurancePct}
+              format={(v) => `${formatNombre(v)} %`}
+              onChange={(v) => set("tauxAssurancePct", v)}
             />
           </div>
           {/* Chaque montant porte son HORIZON, parce que la ligne en mélange
@@ -242,7 +331,7 @@ export default function SimulationFinanciere({
           <div className="rounded-lg bg-ink-50 px-4 py-3 text-sm text-ink-600">
             Mensualité hors assurance : <strong className="text-ink-900">{euros(result.mensualiteHorsAssurance)} €</strong>
             {" · "}assurance : <strong className="text-ink-900">{euros(result.assuranceMensuelle)} €</strong>/mois
-            {" · "}coût total du crédit sur {inputs.dureeAnnees} ans : <strong className="text-ink-900">{euros(result.coutCredit)} €</strong>
+            {" · "}coût total du crédit sur {resolus.dureeAnnees} ans : <strong className="text-ink-900">{euros(result.coutCredit)} €</strong>
             {" · "}apport personnel à l&apos;achat : <strong className="text-ink-900">{euros(result.apport)} €</strong>
           </div>
           <p className="text-xs text-ink-400">
@@ -287,14 +376,40 @@ export default function SimulationFinanciere({
         <SectionHeader icon={ReceiptText} title="Fiscalité — LMNP au réel" as="h3" />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectField
-            label="Tranche marginale d'imposition (TMI)"
-            value={String(inputs.tmiPct) as (typeof TMI_OPTIONS)[number]}
-            onChange={(v) => set("tmiPct", Number(v))}
-            options={TMI_OPTIONS}
-            allowEmpty={false}
-            hint={<span className="text-xs font-normal text-ink-400">+ {LMNP.prelevementsSociauxPct} % de prélèvements sociaux</span>}
-          />
+          {/* Même héritage que les champs de crédit, mais sur un <select> : la
+              TMI est une tranche légale, pas une saisie libre. On garde donc le
+              select éditable et on signale seulement l'ORIGINE de la valeur. */}
+          <div className="flex items-end gap-1">
+            <div className="flex-1">
+              <SelectField
+                label="Tranche marginale d'imposition (TMI)"
+                value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
+                onChange={(v) => set("tmiPct", Number(v))}
+                options={TMI_OPTIONS}
+                allowEmpty={false}
+                hint={
+                  inputs.tmiPct == null ? (
+                    <Pastille>profil</Pastille>
+                  ) : (
+                    <span className="text-xs font-normal text-ink-400">
+                      + {LMNP.prelevementsSociauxPct} % de prélèvements sociaux
+                    </span>
+                  )
+                }
+              />
+            </div>
+            {inputs.tmiPct != null && (
+              <button
+                type="button"
+                onClick={() => set("tmiPct", null)}
+                title="Revenir à la valeur du profil investisseur"
+                aria-label="TMI : revenir au profil"
+                className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
           <NumberField
             label="Quote-part terrain"
             value={result.quotePartTerrainPct}
@@ -411,7 +526,7 @@ export default function SimulationFinanciere({
           </table>
         </div>
         <p className="px-5 py-3 text-xs text-ink-400">
-          Total impôts sur {inputs.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer{" "}
+          Total impôts sur {resolus.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer{" "}
           {inputs.revalorisationLoyerPct != null
             ? `revalorisé à ${inputs.revalorisationLoyerPct} %/an`
             : "supposé constant (pas de revalorisation)"}{" "}
@@ -431,7 +546,7 @@ export default function SimulationFinanciere({
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-5">
           <SectionHeader icon={PieChart} title="Financement du projet" as="h3" />
           <p className="text-xs text-ink-400">
-            {`D'où vient l'argent qui couvre le coût total de l'opération sur ${inputs.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
+            {`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolus.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
           </p>
           <FinancementDonut financement={result.financementProjet} />
         </section>

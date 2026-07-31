@@ -50,7 +50,7 @@ import {
   TF_JUSTIF_COMMUNE_PREFIX,
 } from "@/lib/estimates";
 import { formatApartmentTitle, formatDate, formatEuros, formatPercent, sanitizeJustification } from "@/lib/format";
-import { ANALYSE_VERSION } from "@/lib/analyse/types";
+import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
 import {
   AiEstimatedBadge,
   BooleanField,
@@ -67,7 +67,7 @@ import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanci
 import { cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { renderBoldInline } from "@/components/richText";
 import { SectionHeader } from "@/components/SectionHeader";
-import type { AppSettings } from "@/lib/settings";
+import { memeProfil, type AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
@@ -735,16 +735,47 @@ export default function ApartmentDetail({
   const hasCoords = Number.isFinite(apt.latitude) && Number.isFinite(apt.longitude);
   const localisationApproximative = apt.precision_localisation === "arrondissement";
 
-  const analyseOutdated = apt.analyse_ia != null && apt.analyse_ia.version < ANALYSE_VERSION;
+  // Une analyse stockée est périmée pour DEUX raisons distinctes, et le message
+  // doit dire laquelle : le code a changé (nouveaux blocs, nouveau scoring), ou
+  // le Profil investisseur a changé depuis le calcul. Le second cas passait
+  // totalement inaperçu jusqu'ici — modifier un seuil ou son taux de crédit
+  // laissait chaque bien afficher un score calculé sur les anciens réglages.
+  // `settings` est absent des analyses < v5 : dans ce cas la comparaison est
+  // inutile, le test de version suffit déjà à les marquer obsolètes.
+  const profilChange =
+    apt.analyse_ia?.settings != null && !memeProfil(apt.analyse_ia.settings, settings);
+  // Données du bien modifiées depuis le calcul. Nécessaire EN PLUS de
+  // `ANALYSIS_FIELDS` (qui déclenche un recalcul auto) : sept champs nourrissent
+  // le score sans y figurer — loyer, charges, taxe foncière, assurance, gestion,
+  // quote-part terrain, hypothèses de crédit — et surtout ils passent par
+  // `saveField` / `SimulationFinanciere`, deux chemins qui ne consultent jamais
+  // cette liste. Allonger `ANALYSIS_FIELDS` n'aurait donc rien changé.
+  const donneesChangees =
+    apt.analyse_ia?.empreinteBien != null &&
+    empreinteBien(apt) !== apt.analyse_ia.empreinteBien;
+  const analyseOutdated =
+    apt.analyse_ia != null &&
+    (apt.analyse_ia.version < ANALYSE_VERSION || donneesChangees || profilChange);
+
+  // Un seul bandeau, mais le motif doit être NOMMÉ — « relance » sans dire
+  // pourquoi n'aide pas à décider. Ordre : la version prime (elle invalide tout),
+  // puis les données du bien (le geste le plus fréquent), puis le profil.
+  const motifObsolete = !analyseOutdated
+    ? null
+    : apt.analyse_ia!.version < ANALYSE_VERSION
+      ? "L'algorithme d'analyse a évolué — relance pour des résultats à jour"
+      : donneesChangees
+        ? "Les données du bien ont changé — relance pour des résultats à jour"
+        : "Ton profil investisseur a changé — relance pour des résultats à jour";
 
   return (
     <>
     {banner ? (
       <StickyBanner phase={banner.phase} label={banner.label} />
-    ) : analyseOutdated ? (
+    ) : motifObsolete ? (
       <StickyBanner
         phase="outdated"
-        label="L'algorithme d'analyse a évolué — relance pour des résultats à jour"
+        label={motifObsolete}
         action={{ label: "Mettre à jour", onClick: handleRelancerAnalyse }}
       />
     ) : null}
@@ -891,7 +922,7 @@ export default function ApartmentDetail({
         analysisPending ? (
           <AnalyseIASkeleton />
         ) : (
-          <AnalyseIA apartment={apt} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
+          <AnalyseIA apartment={apt} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
         )
       )}
 
@@ -901,6 +932,7 @@ export default function ApartmentDetail({
         ) : (
           <OptimiserView
             apartment={apt}
+            settings={settings}
             seuilsRendement={seuilsRendement}
             cashflowSeuils={cashflowSeuils}
             onRelancer={handleRelancerAnalyse}

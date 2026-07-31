@@ -59,16 +59,18 @@ export function TextAreaField({
   value,
   onChange,
   onBlur,
+  hint,
   rows = 4,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   onBlur?: () => void;
+  hint?: ReactNode;
   rows?: number;
 }) {
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} hint={hint}>
       <textarea
         className={inputClass}
         rows={rows}
@@ -158,6 +160,7 @@ export function SelectField<T extends string>({
   options,
   hint,
   allowEmpty = true,
+  optionLabel,
 }: {
   label: string;
   value: T | "";
@@ -165,6 +168,10 @@ export function SelectField<T extends string>({
   options: readonly T[];
   hint?: ReactNode;
   allowEmpty?: boolean;
+  /** Libellé affiché pour une option, quand la valeur stockée n'est pas
+   * présentable telle quelle (ex. `"hors_notaire"`). Par défaut la valeur
+   * elle-même — c'est le cas de tous les usages historiques (TMI, DPE…). */
+  optionLabel?: (v: T) => string;
 }) {
   return (
     <FieldShell label={label} hint={hint}>
@@ -176,7 +183,7 @@ export function SelectField<T extends string>({
         {allowEmpty && <option value="">—</option>}
         {options.map((opt) => (
           <option key={opt} value={opt}>
-            {opt}
+            {optionLabel ? optionLabel(opt) : opt}
           </option>
         ))}
       </select>
@@ -188,13 +195,15 @@ export function BooleanField({
   label,
   value,
   onChange,
+  hint,
 }: {
   label: string;
   value: boolean | null;
   onChange: (v: boolean | null) => void;
+  hint?: ReactNode;
 }) {
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} hint={hint}>
       <select
         className={inputClass}
         value={value === null ? "" : value ? "oui" : "non"}
@@ -212,7 +221,7 @@ export function BooleanField({
 
 export function EstimatedBadge() {
   return (
-    <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700">
+    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700">
       Estimé
     </span>
   );
@@ -220,7 +229,7 @@ export function EstimatedBadge() {
 
 export function ManualBadge() {
   return (
-    <span className="inline-flex items-center rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-500">
+    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-500">
       Manuel
     </span>
   );
@@ -228,7 +237,7 @@ export function ManualBadge() {
 
 export function ExtractedBadge() {
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
+    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
       Détecté auto
     </span>
   );
@@ -242,7 +251,7 @@ export function ExtractedBadge() {
 export function AiEstimatedBadge() {
   return (
     <span
-      className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700"
+      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700"
       title="Estimation par IA (recherche web), non vérifiée — à confirmer avant de s'y fier"
     >
       Estimation IA

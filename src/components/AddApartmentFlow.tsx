@@ -409,7 +409,7 @@ export default function AddApartmentFlow() {
                   <SectionIcon icon={Home} />
                   Description du bien
                 </h2>
-                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="mt-6 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
                   <SelectField
                     label="Plateforme"
                     value={form.plateforme}
@@ -445,23 +445,27 @@ export default function AddApartmentFlow() {
                   <NumberField label="Nb pièces" value={form.nb_pieces} onChange={(v) => set("nb_pieces", v)} hint={extrait("nb_pieces") && <ExtractedBadge />} />
                   <NumberField label="Nb chambres" value={form.nb_chambres} onChange={(v) => set("nb_chambres", v)} hint={extrait("nb_chambres") && <ExtractedBadge />} />
                   <TextField label="Étage" value={form.etage} onChange={(v) => set("etage", v)} hint={extrait("etage") && <ExtractedBadge />} />
-                  <BooleanField label="Ascenseur" value={form.ascenseur} onChange={(v) => set("ascenseur", v)} />
+                  <BooleanField label="Ascenseur" value={form.ascenseur} onChange={(v) => set("ascenseur", v)} hint={extrait("ascenseur") && <ExtractedBadge />} />
                   <NumberField
                     label="Année de construction"
                     value={form.annee_construction}
                     onChange={(v) => set("annee_construction", v)}
+                    hint={extrait("annee_construction") && <ExtractedBadge />}
                   />
                   <SelectField
                     label="État du bien"
                     value={form.etat_bien as (typeof ETATS_BIEN)[number] | ""}
                     onChange={(v) => set("etat_bien", v)}
                     options={ETATS_BIEN}
+                    hint={extrait("etat_bien") && <ExtractedBadge />}
                   />
-                  <SelectField label="DPE" value={form.dpe as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => set("dpe", v)} options={DPE_GES_VALEURS} />
-                  <SelectField label="GES" value={form.ges as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => set("ges", v)} options={DPE_GES_VALEURS} />
+                  <SelectField label="DPE" value={form.dpe as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => set("dpe", v)} options={DPE_GES_VALEURS} hint={extrait("dpe") && <ExtractedBadge />} />
+                  <SelectField label="GES" value={form.ges as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => set("ges", v)} options={DPE_GES_VALEURS} hint={extrait("ges") && <ExtractedBadge />} />
                   <TextField label="Photo (URL)" value={form.photo_url} onChange={(v) => set("photo_url", v)} hint={extrait("photo_url") && <ExtractedBadge />} />
                 </div>
-                <TextAreaField label="Description" value={form.description} onChange={(v) => set("description", v)} />
+                <div className="mt-4">
+                  <TextAreaField label="Description" value={form.description} onChange={(v) => set("description", v)} hint={extrait("description") && <ExtractedBadge />} />
+                </div>
               </section>
 
               <section className="space-y-8 rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
@@ -479,7 +483,7 @@ export default function AddApartmentFlow() {
                 </div>
 
                 <Subsection title="Achat" accent="bg-ink-400">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
                     <NumberField
                       label="Prix"
                       value={form.prix}
@@ -504,7 +508,7 @@ export default function AddApartmentFlow() {
                 </Subsection>
 
                 <Subsection title="Charges annuelles" accent="bg-amber-400">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
                     <NumberField
                       label={
                         isImmeuble(form.type_bien)
