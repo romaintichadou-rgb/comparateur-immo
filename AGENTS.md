@@ -13,19 +13,6 @@ le code et sa documentation. Cela inclut : ajout/suppression de composants,
 modification de conventions UI, changement de labels/scores, nouvelles
 fonctions utilitaires, nouvelles colonnes DB, etc.
 
-# Vérifier la charte AVANT de coder
-
-**Pour tout changement UI** : lire `AGENTS.md` — section "Charte graphique" et
-les patterns concernés (boutons, bannières, couleurs, typographie, etc.) —
-AVANT d'écrire le code. Ne pas supposer que les pratiques générales
-s'appliquent ici. Par exemple :
-- Pas d'icônes dans les boutons CTA (même si c'est courant ailleurs)
-- Couleurs tonales spécifiques pour les états (émeraude/ambre/rouge, jamais slate/indigo)
-- Tailles et paddings standards documentés pour chaque type de composant
-
-Ce document est le **guide d'implémentation unique** — le respecter prévient les
-allers-retours et les corrections après coup.
-
 # Charte graphique — identité "Immoscore"
 
 Toute évolution UI doit respecter cette charte. Ne pas réintroduire les
