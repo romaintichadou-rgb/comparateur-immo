@@ -1,19 +1,67 @@
 "use client";
 
-import { useState } from "react";
-import { Banknote, TrendingUp } from "lucide-react";
-import type { AppSettings } from "@/lib/settings";
-import { NumberField } from "@/components/form/Fields";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Banknote, Landmark, TrendingUp, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import {
+  FINANCEMENT_MODE_INFOS,
+  type AppSettings,
+  type FinancementMode,
+} from "@/lib/settings";
+import { NumberField, SelectField } from "@/components/form/Fields";
+
+/** Mêmes options que l'onglet Simulation financière — une TMI est une tranche
+ * légale, pas une saisie libre. */
+const TMI_OPTIONS = ["11", "30", "41", "45"] as const;
+const FINANCEMENT_MODES = ["hors_notaire", "cout_total"] as const satisfies readonly FinancementMode[];
+
+type BannerPhase = "saving" | "success" | "error";
+
+interface BannerState {
+  phase: BannerPhase;
+  label: string;
+}
+
+function useBanner() {
+  const [banner, setBanner] = useState<BannerState | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const show = useCallback(() => {
+    clearTimeout(timerRef.current);
+    setBanner({ phase: "saving", label: "Enregistrement en cours…" });
+  }, []);
+
+  const dismiss = useCallback(() => {
+    clearTimeout(timerRef.current);
+    setBanner(null);
+  }, []);
+
+  const resolve = useCallback((ok: boolean, label?: string) => {
+    clearTimeout(timerRef.current);
+    const phase: BannerPhase = ok ? "success" : "error";
+    setBanner({
+      phase,
+      label: label ?? (ok ? "Profil enregistré avec succès." : "Échec de l'enregistrement."),
+    });
+    timerRef.current = setTimeout(dismiss, ok ? 3000 : 6000);
+  }, [dismiss]);
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  return { banner, show, resolve, dismiss } as const;
+}
 
 export default function SettingsForm({ initial }: { initial: AppSettings }) {
   const [values, setValues] = useState<AppSettings>(initial);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { banner, show: showBanner, resolve: resolveBanner } = useBanner();
 
   function set<K extends keyof AppSettings>(key: K, v: number | null) {
     setValues((s) => ({ ...s, [key]: v ?? 0 }));
-    setSaved(false);
+  }
+
+  /** Champs non numériques (mode de financement) — `set` coerce `null → 0`. */
+  function setMode(v: FinancementMode) {
+    setValues((s) => ({ ...s, financementMode: v }));
   }
 
   const rendementValide = values.rendementSeuilVertPct > values.rendementSeuilRougePct;
@@ -21,7 +69,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
 
   async function handleSave() {
     setSaving(true);
-    setError(null);
+    showBanner();
     try {
       const res = await fetch("/api/settings", {
         method: "PATCH",
@@ -31,26 +79,134 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
       const data = await res.json();
       if (res.ok) {
         setValues(data.settings);
-        setSaved(true);
+        resolveBanner(true, "Profil enregistré avec succès.");
       } else {
-        setError(data.error ?? "Échec de l'enregistrement.");
+        resolveBanner(false, data.error ?? "Échec de l'enregistrement.");
       }
     } catch {
-      setError("Erreur réseau pendant l'enregistrement.");
+      resolveBanner(false, "Erreur réseau pendant l'enregistrement.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
+    <>
+      {banner && <SettingsBanner phase={banner.phase} label={banner.label} />}
+      <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
       <div>
         <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
         <p className="mt-1 text-sm text-ink-500">
-          Seuils personnels utilisés pour colorer le rendement net et le cash-flow mensuel,
-          partout dans l&apos;app (tableau, carte, Analyse IA, Simulation financière).
+          Tes conditions d&apos;emprunt et tes seuils personnels. Chaque bien en hérite —
+          tu peux surcharger une valeur bien par bien depuis sa Simulation financière.
         </p>
       </div>
+
+      <section className="rounded-xl border border-ink-200 bg-white p-5">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <Landmark className="h-4 w-4 text-accent-600" />
+          Profil emprunteur
+        </h2>
+        <p className="mt-1.5 text-sm text-ink-500">
+          Appliqué par défaut à tous tes biens, présents et futurs. Changer une de ces
+          valeurs rend les analyses déjà calculées obsolètes — chaque bien te proposera
+          de les relancer.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <NumberField
+            label="Taux du crédit"
+            value={values.tauxCreditPct}
+            onChange={(v) => set("tauxCreditPct", v)}
+            suffix="%/an"
+          />
+          <NumberField
+            label="Assurance emprunteur"
+            value={values.tauxAssurancePct}
+            onChange={(v) => set("tauxAssurancePct", v)}
+            suffix="%/an"
+          />
+          <NumberField
+            label="Durée du crédit"
+            value={values.dureeAnnees}
+            // Mêmes bornes que l'onglet Simulation financière (1–35 ans).
+            onChange={(v) => set("dureeAnnees", Math.max(1, Math.min(35, v ?? 25)))}
+            suffix="ans"
+          />
+          <SelectField
+            label="Tranche marginale d'imposition (TMI)"
+            value={String(values.tmiPct) as (typeof TMI_OPTIONS)[number]}
+            onChange={(v) => set("tmiPct", Number(v))}
+            options={TMI_OPTIONS}
+            allowEmpty={false}
+          />
+        </div>
+        {/* Cartes radio, PAS un <select> : les deux modes s'excluent et se
+            comparent — les enfermer dans une liste déroulante cache l'option
+            concurrente au moment précis où il faut trancher. À deux options
+            décrites en trois lignes chacune, le coût en hauteur est nul. */}
+        <fieldset className="mt-5">
+          <legend className="text-sm font-medium text-ink-700">
+            Ce que couvre l&apos;emprunt
+          </legend>
+          <p className="mt-1 text-xs text-ink-400">
+            Base du montant emprunté tant que tu ne le saisis pas à la main sur un bien.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {FINANCEMENT_MODES.map((mode) => {
+              const info = FINANCEMENT_MODE_INFOS[mode];
+              const actif = values.financementMode === mode;
+              return (
+                <label key={mode} className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="financementMode"
+                    value={mode}
+                    checked={actif}
+                    onChange={() => setMode(mode)}
+                    className="peer sr-only"
+                    // Sans ça, le nom accessible est la concaténation brute des
+                    // trois spans — « les travauxLes frais de notaire… », sans
+                    // séparation ni ponctuation. On le dicte, ponctué, en
+                    // gardant la conséquence sur l'apport : c'est elle qui fait
+                    // choisir.
+                    aria-label={`${info.titre}. ${info.detail} ${info.apport}.`}
+                  />
+                  <span
+                    className={`flex h-full gap-2.5 rounded-lg border p-4 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-600 ${
+                      actif
+                        ? "border-accent-600 bg-accent-50"
+                        : "border-ink-200 bg-white hover:border-ink-300"
+                    }`}
+                  >
+                    {/* Puce radio dessinée : l'input est en `sr-only` pour que la
+                        carte entière soit la cible de clic, mais l'état doit
+                        rester visible sans dépendre du seul fond. */}
+                    <span
+                      aria-hidden
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                        actif ? "border-accent-600" : "border-ink-300"
+                      }`}
+                    >
+                      {actif && <span className="h-2 w-2 rounded-full bg-accent-600" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-sm font-medium ${actif ? "text-accent-800" : "text-ink-800"}`}>
+                        {info.titre}
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-ink-500">
+                        {info.detail}
+                      </span>
+                      <span className={`mt-2 block font-mono text-xs font-semibold tabular-nums ${actif ? "text-accent-700" : "text-ink-400"}`}>
+                        {info.apport}
+                      </span>
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      </section>
 
       <SeuilCard
         icon={TrendingUp}
@@ -82,17 +238,44 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         valide={cashflowValide}
       />
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleSave}
-          disabled={saving || !rendementValide || !cashflowValide}
-          className="rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50"
-        >
-          {saving ? "Enregistrement..." : "Enregistrer"}
-        </button>
-        {saved && <span className="text-sm text-emerald-600">Enregistré.</span>}
-        {error && <span className="text-sm text-red-600">{error}</span>}
+      <button
+        onClick={handleSave}
+        disabled={saving || !rendementValide || !cashflowValide}
+        className="w-full rounded-lg bg-accent-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {saving ? "Enregistrement..." : "Enregistrer"}
+      </button>
       </div>
+    </>
+  );
+}
+
+const BANNER_STYLES: Record<BannerPhase, { bg: string; border: string; text: string }> = {
+  saving: { bg: "bg-accent-50/80", border: "border-accent-200", text: "text-accent-800" },
+  success: { bg: "bg-emerald-50/80", border: "border-emerald-200", text: "text-emerald-800" },
+  error: { bg: "bg-red-50/80", border: "border-red-200", text: "text-red-800" },
+};
+
+const BANNER_ICON: Record<BannerPhase, typeof Loader2> = {
+  saving: Loader2,
+  success: CheckCircle2,
+  error: AlertCircle,
+};
+
+function SettingsBanner({ phase, label }: BannerState) {
+  const s = BANNER_STYLES[phase];
+  const Icon = BANNER_ICON[phase];
+  return (
+    <div className={`fixed top-0 left-0 right-0 z-40 animate-banner-in border-b backdrop-blur ${s.bg} ${s.border}`}>
+      <div className={`mx-auto flex max-w-6xl items-center gap-2.5 px-4 py-3 text-xs font-medium sm:px-6 ${s.text}`}>
+        <Icon className={`h-3.5 w-3.5 shrink-0 ${phase === "saving" ? "animate-spin" : ""}`} />
+        <span className="flex-1">{label}</span>
+      </div>
+      {phase === "saving" && (
+        <div className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-accent-100">
+          <span className="progress-indeterminate block h-full w-full bg-accent-600" />
+        </div>
+      )}
     </div>
   );
 }
