@@ -69,7 +69,10 @@ dans les boutons CTA.
   plus petites (`px-3 py-1.5 text-xs`), de même que le CTA de la navbar
   (contrainte de hauteur du header) — mais tous les CTA de page pleine
   largeur ou en pied de formulaire doivent utiliser la taille standard,
-  jamais plus grands.
+  jamais plus grands. Les boutons en pied de formulaire full-width
+  (`SettingsForm.tsx`) utilisent `w-full py-3` pour l'emphase, sans `px` (width couvre).
+  **Aucune icône à l'intérieur d'un CTA** — texte seul, même pour le bouton
+  "Enregistrer" qui dispose d'une bannière pour les retours d'état (succès/erreur).
 - **Fonds décoratifs** (hero, bannières) : dégradé subtil en `accent-50` /
   `white`, jamais de bleu/indigo Tailwind par défaut. Pour une touche "tech
   luxe", un filigrane du logo (`AppMark`) en très faible opacité peut
@@ -117,7 +120,16 @@ dans les boutons CTA.
 
 Formulaires (`form/Fields.tsx`) : `TextField`, `TextAreaField`, `NumberField`,
 `SelectField`, `BooleanField`, `AiEstimatedBadge`, `ManualBadge`,
-`EstimatedBadge`, `ExtractedBadge`.
+`EstimatedBadge`, `ExtractedBadge`. Tous les composants de champ acceptent
+un prop `hint` (y compris `BooleanField` et `TextAreaField`).
+
+**Badge "Détecté auto"** : le badge `ExtractedBadge` doit apparaître sur
+**tous** les champs pré-remplis par le bookmarklet ou le scraping serveur.
+Champs couverts : `ville`, `quartier`, `adresse`, `code_postal`, `surface_m2`,
+`nb_pieces`, `nb_chambres`, `etage`, `ascenseur`, `annee_construction`,
+`etat_bien`, `dpe`, `ges`, `photo_url`, `description`, `prix`,
+`charges_copro_annuelles`, `contact_telephone`, `contact_email`. Ne jamais
+ajouter un champ extractible dans `ParsedListing` sans câbler son badge.
 
 Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 `CashflowDetailProvider` — montés dans `layout.tsx`, consommés via hooks.
@@ -890,6 +902,11 @@ contrôlent les skeletons des sections impactées pendant le recalcul.
 (rouge, auto-dismiss 6 s). Utilisée par `save()`, `saveField()`,
 `estimateFieldAI()`, et `runRecalc()`.
 
+**Réutilisable** — ce pattern s'applique à tout formulaire qui doit afficher
+un feedback d'enregistrement. Implémenté dans `SettingsForm.tsx` pour le
+Profil investisseur : hook `useBanner()` + composant `SettingsBanner` affiche
+les messages de succès/erreur à la place des simples `<span>` inactifs.
+
 ## `fireEstimation` (analyse IA uniquement)
 
 `fireEstimation(url, msgs, setPending, onSuccess?)` reste utilisé par
@@ -938,6 +955,135 @@ Composant `EditableValue` : `NumberField` éditable avec deux boutons :
 Le champ "Frais de gestion locative" (`hypothese_gestion_pct`) utilise aussi
 le pattern Display/Edit avec save/cancel mais sans badge ni bouton
 "Estimer avec IA" — c'est un paramètre utilisateur, pas un champ estimé.
+
+# Profil investisseur — seuils + profil emprunteur (héritage)
+
+`AppSettings` (`src/lib/settings.ts`, table `app_settings`, une seule ligne)
+porte DEUX familles de réglages :
+
+1. les **seuils** vert/ambre/rouge (rendement, cash-flow) ;
+2. le **profil emprunteur** : `tauxCreditPct`, `dureeAnnees`, `tauxAssurancePct`,
+   `tmiPct`, `financementMode`. Ce sont des propriétés de la PERSONNE, pas du
+   bien — une TMI est une tranche d'imposition, elle ne peut pas varier d'un
+   appartement à l'autre.
+
+**Migration `0006_profil_emprunteur.sql` requise** — comme les autres, à exécuter
+à la main sur CHAQUE projet Supabase (prod et dev). Elle ajoute les 5 colonnes et
+fait table rase des 4 clés emprunteur dans `apartments.simulation_inputs`.
+
+## Héritage : `resolveInputs`, point de passage unique
+
+Dans `SimulationInputs`, les 4 champs emprunteur sont `number | null` : `null`
+(ou clé absente) = **hérité du profil**. Ne JAMAIS les lire directement pour
+calculer — passer par :
+
+```ts
+resolveInputs(apt.simulation_inputs, settings) → InputsResolus
+```
+
+`simulate()` consomme `InputsResolus` et ne connaît ni le profil ni l'héritage.
+Ce résolveur remplace l'ancien idiome `apt.simulation_inputs ?? defaultInputs()`,
+qui retombait sur des constantes codées en dur et **ignorait donc le profil**. Ne
+pas le réintroduire : `defaultInputs()` ne décrit plus que la forme STOCKÉE par
+défaut (tout à `null`), il ne fournit plus aucune valeur de calcul.
+
+`null` ET `undefined` valent « hérite » — la migration SUPPRIME les clés. Utiliser
+`??`, jamais `||` : un taux à 0 % est une valeur légitime.
+
+⚠️ **Ne pas recopier le profil dans `simulation_inputs` à la création d'un bien** :
+ça figerait les valeurs au moment de la saisie et un changement ultérieur du
+profil ne se propagerait plus. C'est tout l'intérêt de l'héritage.
+
+## Modes de financement
+
+`financementMode` décide de ce que couvre l'emprunt EN MODE AUTO
+(`montantEmprunte == null`) :
+
+| Mode | Montant auto | Sens |
+|---|---|---|
+| `hors_notaire` *(défaut)* | prix + travaux | le notaire est couvert par l'apport — pratique bancaire courante, comportement historique |
+| `cout_total` | `budget_total` | prêt dit « à 110 % » |
+
+Un montant SAISI reste prioritaire : c'est le « montant libre », propre au bien.
+Le plafond de `capitalEffectif` couvre déjà `cout_total` — ne pas le resserrer.
+`SimulationResult.montantPlafonne` signale qu'un montant saisi a dû être ramené
+au coût de l'opération : sans ce drapeau le plafond s'appliquait en silence.
+
+## UI : `ChampHerite` (Simulation financière)
+
+Miroir d'`OptionalRateField`, **sens inversé** : une hypothèse optionnelle est
+absente par défaut et s'active ; un champ hérité a toujours une valeur (celle du
+profil) et c'est la SURCHARGE qui s'active.
+
+- hérité → valeur en **lecture seule** + pastille « profil » + « Modifier » ;
+- surchargé → `NumberField` + `✕` (revenir au profil).
+
+La lecture seule est délibérée : un input pré-rempli laisserait croire que le
+chiffre est stocké sur le bien alors qu'il suit le profil. Les champs AFFICHENT
+`resolus.*` et ÉCRIVENT dans `inputs.*` — ne pas afficher `inputs.*`, qui vaut
+`null` en mode hérité.
+
+## Obsolescence d'une analyse — TROIS causes
+
+L'analyse stockée porte deux estampilles, posées dans `run.ts` :
+`AnalyseIA.settings` (instantané du profil) et `AnalyseIA.empreinteBien`
+(signature des données du bien). `ApartmentDetail` en dérive un motif :
+
+| Cause | Test | Libellé du bandeau |
+|---|---|---|
+| Le code a changé | `version < ANALYSE_VERSION` | « L'algorithme d'analyse a évolué… » |
+| Les données du bien ont changé | `empreinteBien(apt) !== analyse.empreinteBien` | « Les données du bien ont changé… » |
+| Le profil a changé | `!memeProfil(analyse.settings, settings)` | « Ton profil investisseur a changé… » |
+
+L'ordre de priorité est celui du tableau — la version invalide tout, puis vient
+le geste le plus fréquent. Un bandeau qui dit « relance » sans nommer la cause
+n'aide pas à décider : garder les trois libellés distincts.
+
+### Pourquoi une EMPREINTE et pas `ANALYSIS_FIELDS`
+
+`ANALYSIS_FIELDS` (`ApartmentDetail`) répond à une autre question — « faut-il
+relancer AUTOMATIQUEMENT après cette édition ? » — et ne pouvait pas combler ce
+trou, pour deux raisons cumulées :
+
+1. **Sept champs** nourrissent le score sans y figurer : `loyer_retenu`,
+   `charges_copro_annuelles`, `taxe_fonciere`, `assurance_annuelle`,
+   `hypothese_gestion_pct`, `quote_part_terrain_pct`, `simulation_inputs`.
+2. Surtout, ils sont enregistrés par **`saveField`** et
+   **`SimulationFinanciere.handleSaveInputs`**, deux chemins qui font un PATCH
+   direct et **ne consultent jamais `computeRecalcNeeds`**. Les y ajouter
+   n'aurait donc rien déclenché du tout.
+
+L'empreinte attrape toute modification quel que soit l'écran d'origine. Elle ne
+relance rien : elle SIGNALE, l'utilisateur décide. C'est volontaire — relancer
+une analyse coûte un appel LLM, on ne le déclenche pas à chaque ajustement de
+TMI.
+
+`empreinteBien` (`analyse/types.ts`) sérialise `CHAMPS_EMPREINTE` **clés triées**
+pour `simulation_inputs`, pas via `JSON.stringify` — même leçon que `memeProfil`,
+l'ordre des clés d'un objet reconstruit n'est pas garanti. Ajouter un champ à
+`CHAMPS_EMPREINTE` invalide automatiquement les analyses antérieures.
+
+`memeProfil` compare de même **champ par champ** à partir des clés de
+`DEFAULT_SETTINGS`. Corollaire volontaire : tout nouveau champ ajouté à
+`AppSettings` invalide les analyses, sans code supplémentaire.
+
+`ANALYSE_VERSION` est passée à **6** : les analyses antérieures n'ont ni
+`settings` ni `empreinteBien` et sont marquées obsolètes par le test de version.
+
+## Où circulent les settings
+
+Pas de provider global : `layout.tsx` est un composant serveur SYNCHRONE, le
+rendre `async` pour y charger les réglages rendrait TOUTES les pages dynamiques.
+Ils sont passés en props depuis `appartements/[id]/page.tsx` → `ApartmentDetail`
+→ `AnalyseIA` / `OptimiserView` / `SimulationFinanciere`, et jusqu'au popup de
+cash-flow via `openCashflowDetail(apt, seuils, settings)` — même convention que
+les seuils, déjà passés par l'appelant.
+
+`rowToSettings` (`db.ts`) retombe sur `DEFAULT_SETTINGS` champ par champ si les
+colonnes 0006 sont absentes : sans ce filet, lancer l'app avant d'avoir appliqué
+la migration propagerait des `undefined` jusque dans `simulate()`, donc des `NaN`
+partout. La LECTURE dégrade proprement ; l'ÉCRITURE échoue avec un message
+explicite tant que la migration n'est pas passée.
 
 # Simulation financière — hypothèses optionnelles
 
@@ -1488,4 +1634,120 @@ bas de page sont des estimations ou prix voisins). S'applique au bookmarklet
 ET aux parsers serveur (`common.ts`).
 
 **Plateformes détectées** : Leboncoin, SeLoger, PAP, Orpi, BienIci, LogicImmo,
-ou "Manuel" (fallback). La détection se fait sur `location.hostname`.
+LuxResidence, ou "Manuel" (fallback). La détection se fait sur
+`location.hostname`. Toutes ces valeurs sont dans l'enum `PLATEFORMES`
+(`src/lib/types.ts`) et acceptées par la validation Zod — ne pas ajouter une
+détection dans le bookmarklet sans ajouter la valeur dans l'enum.
+
+## JSON-LD — `itemOffered` (SeLoger)
+
+SeLoger utilise `@type: "RealEstateListing"` avec les propriétés (surface,
+pièces, chambres) imbriquées dans `itemOffered` au lieu de la racine. Le
+bookmarklet et `common.ts` (`mergeJsonLdCandidate`) vérifient les deux niveaux.
+
+## JSON-LD — `priceSpecification` (BienIci)
+
+BienIci place le prix dans `offers.priceSpecification.price` au lieu de
+`offers.price`. Le bookmarklet et `common.ts` vérifient les deux chemins :
+`offers.price ?? priceSpecification.price ?? offers.lowPrice ?? obj.price`.
+
+## JSON-LD — `additionalProperty` (PAP)
+
+PAP fournit surface, pièces, chambres, ascenseur via un tableau
+`additionalProperty` de `PropertyValue` (schema.org). Le bookmarklet et
+`common.ts` itèrent ce tableau et matchent par `name.toLowerCase()` :
+`"surface"` → `surface_m2`, `"pièce"/"piece"` → `nb_pieces`,
+`"chambre"` → `nb_chambres`, `"ascenseur"` → `ascenseur` (oui/true/1).
+
+## JSON-LD — `@graph`
+
+Le bookmarklet et `common.ts` gèrent tous deux `json['@graph']` (tableau
+d'entités schema.org groupées). Ne pas ajouter un seul côté.
+
+## JSON-LD — `itemCondition` (état du bien)
+
+Le bookmarklet et `common.ts` extraient `etat_bien` depuis `itemCondition`
+(schema.org) : `NewCondition` → `"Neuf"`, `UsedCondition` ou
+`RefurbishedCondition` → `"Bon état"`. Pas toutes les annonces incluent ce
+champ — quand absent, `etat_bien` reste vide (pas de valeur inventée).
+
+## Année de construction — extraction multi-pattern
+
+Le free-text (bookmarklet `F()` et `common.ts` `extractFromFreeText`) cherche
+l'année de construction avec 5 patterns chaînés en fallback :
+1. `construit(e) en 1975`
+2. `année de construction : 1982`
+3. `résidence de 2008` / `immeuble du 1935` / `bâtiment de 1960`
+4. `bâti en 1920` / `édifié en 1890` / `livré en 2023`
+5. `datant de 1955` / `datant du 1870`
+
+## Parsing numérique — point-milieu (notation européenne)
+
+`N()` (bookmarklet) et `toNumber()` (`common.ts`) suppriment les points
+suivis de exactement 3 chiffres avant la fin ou une virgule
+(`/\.(\d{3})(?=[.,]|$)/g` → `$1`). Cela corrige `"267.000 €"` → 267000
+sans casser `"45.00 m²"` → 45.0 (2 chiffres après le point, pas 3).
+
+## Sélecteurs CSS plateforme — BienIci
+
+Bloc `if(pf==='BienIci')` dans le bookmarklet :
+- **DPE** : `.dpe-line__classification` — contient juste la lettre (ex. "B"),
+  sans le mot "DPE". Validé par `/^[A-G]$/i`.
+- **GES** : `.ges-line__classification` — même pattern.
+- **Description** : `[class*="see-more-description"]` — contenu complet après
+  expansion (2400+ chars typiques). Aussi ajouté au bloc cross-plateforme.
+
+## Sélecteurs CSS plateforme — PAP
+
+Bloc `if(pf==='PAP')` dans le bookmarklet :
+- **DPE** : `.energy-indice .active` / `.energy-indice li.active` — PAP affiche
+  toutes les lettres A-G, la lettre active a la classe `.active`. Validé par
+  `/^[A-G]$/i`.
+- **GES** : `.ges-indice .active` — même pattern.
+- **Description** : `.item-description` — contenu complet. Aussi ajouté au bloc
+  cross-plateforme.
+- **Features** : `.item-tags li` — scan des `<li>` pour surface, pièces,
+  chambres, étage (mêmes regex que SeLoger features).
+
+## DPE/GES — scan générique cross-plateforme
+
+Après les blocs plateforme dédiés, un scan générique cherche DPE/GES dans
+les éléments `[class*="dpe"],[class*="energy"],[class*="diagnostic"],
+[class*="etiquette"]` avec les regex `(DPE)`, `Énergie`, `Consommation`,
+`GES`, `Gaz`, `Climat`, `Émission`. Ce scan sert de filet pour les
+plateformes sans bloc dédié (Orpi, LogicImmo, LuxResidence). Il ne
+s'exécute que si `!d.dpe` ou `!d.ges` — pas de conflit avec les blocs
+plateforme qui passent en premier.
+
+## DPE/GES — extraction SeLoger
+
+SeLoger concatène la lettre directement après la parenthèse : `"(DPE)D"`,
+`"(GES)B"` sans séparateur. Regex prioritaire : `/\(DPE\)\s*([A-G])/i` et
+`/\(GES\)\s*([A-G])/i`. Sélecteur SeLoger :
+`[data-testid="cdp-energy-certificate-preview"]` ou `[data-testid="cdp-energy"]`.
+
+## Description — capture post-expansion
+
+Après `expandVoir()` (clic automatique des boutons "Voir plus"), le bookmarklet
+cherche la description complète dans le DOM via les sélecteurs
+`[class*="DescriptionTexts"]`, `[class*="Description_text"]`,
+`[data-testid*="description"]`, `[itemprop="description"]`, etc. La description
+DOM longue (>80 chars) remplace la courte `og:description` initiale.
+
+## Charges copropriété — extraction conservatrice
+
+Les charges copropriété ne sont **jamais** extraites du free-text
+(`body.innerText`) — trop de faux positifs (ex: "charge du vendeur" sur
+SeLoger). Seules les sources structurées sont fiables : `__NEXT_DATA__`
+(Leboncoin : `charges_included`) ou sélecteurs CSS spécifiques par plateforme.
+Si non trouvées, le champ reste vide — ne pas inventer de valeur.
+
+## Étage — extraction multi-pattern
+
+Deux patterns complémentaires (bookmarklet + `common.ts`) :
+1. Nombre avant "étage" : `(\d+)(?:er|e|ème)?\s?é(tage|t\.)` — "3ème étage", "1er ét."
+2. Nombre après "étage" : `é(tage|t\.)\s*[:\-]?\s*(\d+)` — "Étage : 3", "ét. 5"
+3. "rez-de-chaussée" → `RDC`
+
+SeLoger : sélecteurs supplémentaires `[class*="floor"]`, `[class*="Summary"]`
+pour trouver l'étage dans la grille de caractéristiques.
