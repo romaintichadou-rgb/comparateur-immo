@@ -292,7 +292,7 @@ export default function AnalyseIA({
   } else if (decision === "passe") {
     raison = alerte
       ? `${alerte.titre}. C'est rédhibitoire : une négociation ne le rattrape pas, mieux vaut chercher un autre bien.`
-      : `Score global ${formatNote(score)}/10 : trop de points faibles pour un investissement sain.`;
+      : "Trop de points faibles pour un investissement sain.";
   } else if (decision === "achete") {
     raison = ecartPct != null && ecartPct <= -5
       ? `Aucun frein détecté, et un prix affiché ${Math.abs(ecartPct)} % sous les ventes comparables : un bon dossier, à sécuriser sans traîner.`
@@ -314,10 +314,13 @@ export default function AnalyseIA({
 
   const styles = DECISION_STYLES[decision];
 
-  // Alertes de l'en-tête (critere only)
+  const NIVEAU_PRIO: Record<string, number> = { alerte: 0, attention: 1, positif: 2 };
+  const ORIGINE_PRIO: Record<string, number> = { critere: 0, bloc: 1 };
   const alertes = (analyse.verdicts ?? [])
-    .filter((v) =>
-      v.origine ? v.origine === "critere" : !/\(\d+([.,]\d+)?\/10\)\s*$/.test(v.titre)
+    .filter((v) => v.niveau !== "positif")
+    .sort((a, b) =>
+      (NIVEAU_PRIO[a.niveau] ?? 9) - (NIVEAU_PRIO[b.niveau] ?? 9)
+      || (ORIGINE_PRIO[a.origine ?? ""] ?? 9) - (ORIGINE_PRIO[b.origine ?? ""] ?? 9)
     )
     .slice(0, 3);
 

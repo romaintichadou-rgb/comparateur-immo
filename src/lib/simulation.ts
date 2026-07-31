@@ -142,6 +142,29 @@ export function defaultInputs(): SimulationInputs {
   };
 }
 
+/**
+ * Capital réellement emprunté — SOURCE UNIQUE du plafond.
+ *
+ * `montantSaisi == null` = mode auto : l'emprunt suit le prix + travaux.
+ *
+ * INVARIANT : on n'emprunte jamais plus que ce que l'opération coûte. Un
+ * montant figé est un montant ABSOLU, saisi à un prix donné ; si le prix baisse
+ * ensuite, il reste en l'état et devient une aberration (270 000 € empruntés
+ * pour un bien à 215 000 € coût total) qui fausse la mensualité, l'impôt, et
+ * donc TOUS les chiffres dérivés — sans le moindre signal à l'écran. Le plafond
+ * borne le cas y compris pour les données déjà en base, sans migration.
+ *
+ * Il laisse passer le prêt « à 110 % » (prix + notaire), qui vaut exactement
+ * `coutTotal` : ne pas le resserrer sur le seul prix d'achat.
+ */
+export function capitalEffectif(
+  montantSaisi: number | null,
+  montantAuto: number,
+  coutTotal: number
+): number {
+  return Math.min(Math.max(0, montantSaisi ?? montantAuto), Math.max(0, coutTotal));
+}
+
 export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): SimulationResult | null {
   const loyerMensuel = apt.loyer_retenu;
   if (loyerMensuel == null || loyerMensuel <= 0) return null;
@@ -153,11 +176,11 @@ export function simulate(apt: ApartmentWithComputed, inputs: SimulationInputs): 
   // (pratique bancaire courante — le notaire est plutôt couvert par l'apport,
   // pas financé à crédit).
   const montantAuto = Math.round(valeurBienInitiale);
-  const capital = Math.max(0, inputs.montantEmprunte ?? montantAuto);
-  // Apport personnel = coût total RÉEL de l'opération (achat + notaire +
-  // travaux) − montant emprunté (jamais négatif). Inclut donc les frais de
-  // notaire par défaut, puisqu'ils ne sont plus dans le capital emprunté.
+  // Coût total RÉEL de l'opération (achat + notaire + travaux).
   const coutTotalReel = Math.round(apt.budget_total ?? apt.prix ?? 0);
+  const capital = capitalEffectif(inputs.montantEmprunte, montantAuto, coutTotalReel);
+  // Apport personnel = coût total − montant emprunté (jamais négatif). Inclut
+  // les frais de notaire par défaut, puisqu'ils ne sont pas dans le capital.
   const apport = Math.max(0, coutTotalReel - capital);
   const tauxRevalo = (inputs.revalorisationBienPct ?? 0) / 100;
   const tauxMensuel = inputs.tauxCreditPct / 100 / 12;

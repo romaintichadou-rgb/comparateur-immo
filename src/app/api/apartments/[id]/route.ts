@@ -9,6 +9,7 @@ import {
   type ApartmentPatch,
 } from "@/lib/types";
 import { geocodeApartmentLocation } from "@/lib/geocoding";
+import { capitalEffectif } from "@/lib/simulation";
 
 // Champs dont dépend le géocodage : les coordonnées de la carte ne sont
 // calculées qu'à la création (voir POST /api/apartments). Un bien importé
@@ -17,6 +18,53 @@ import { geocodeApartmentLocation } from "@/lib/geocoding";
 // plus tard ici, il faut re-géocoder, sinon le pin reste bloqué sur
 // l'ancienne position approximative malgré l'adresse à jour.
 const CHAMPS_LOCALISATION = ["adresse", "quartier", "ville", "code_postal"] as const;
+
+// Champs qui changent le COÛT TOTAL de l'opération, donc le plan de financement.
+const CHAMPS_COUT_OPERATION = ["prix", "travaux", "frais_notaire_estimes"] as const;
+
+/**
+ * Fait suivre un montant emprunté FIGÉ quand le coût de l'opération change.
+ *
+ * En mode auto (`montantEmprunte == null`), l'emprunt suit déjà le prix : rien
+ * à faire. Mais dès que l'utilisateur saisit un montant, celui-ci est stocké en
+ * ABSOLU — changer le prix d'achat ensuite laissait un emprunt calibré sur
+ * l'ancien prix, donc une mensualité, un impôt et un cash-flow faux, sans le
+ * moindre signal.
+ *
+ * On garde l'APPORT constant et on répercute l'écart sur l'emprunt : c'est ce
+ * que l'utilisateur a réellement décidé en figeant le champ (« je mets tant de
+ * ma poche »), et c'est déjà la convention du moteur de recommandations, qui
+ * répercute une négociation de prix sur le capital à apport inchangé.
+ *
+ * Placé ici, dans la route PATCH, et non dans le formulaire : c'est le passage
+ * obligé de TOUTE modification du bien, quel que soit l'écran d'origine.
+ */
+function suivreMontantEmprunte(
+  current: Parameters<typeof computeDerived>[0],
+  patch: ApartmentPatch
+): ApartmentPatch {
+  const inputs = current.simulation_inputs;
+  const capital = inputs?.montantEmprunte;
+  if (inputs == null || capital == null) return {}; // mode auto : déjà dérivé
+  if (patch.simulation_inputs !== undefined) return {}; // l'appelant pilote le plan lui-même
+  if (!CHAMPS_COUT_OPERATION.some((k) => k in patch)) return {};
+
+  const avant = computeDerived(current).budget_total;
+  const apres = computeDerived({ ...current, ...patch }).budget_total;
+  if (avant == null || apres == null || avant === apres) return {};
+
+  // On repart du capital EFFECTIF, pas du montant stocké : s'il était déjà
+  // incohérent (figé à un prix supérieur), lui appliquer l'écart propagerait
+  // la base fausse. Passer par le plafond partagé de `simulate` répare la
+  // valeur en base au premier changement de prix.
+  const effectif = capitalEffectif(capital, avant, avant);
+  return {
+    simulation_inputs: {
+      ...inputs,
+      montantEmprunte: Math.max(0, Math.round(effectif + (apres - avant))),
+    },
+  };
+}
 
 export async function GET(
   _req: NextRequest,
@@ -98,6 +146,7 @@ export async function PATCH(
 
     const updated = await updateApartment(id, {
       ...patch,
+      ...suivreMontantEmprunte(current, patch),
       ...geoPatch,
       champs_manuels: champsManuels,
     });

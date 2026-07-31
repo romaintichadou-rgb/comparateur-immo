@@ -76,24 +76,32 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
     anneesSansImpotFait(result.annees),
   ];
 
-  // Note = cash-flow mensuel moyen (facteur principal, adapté au profil
-  // investisseur) + ajustements pour la soutenabilité et l'avantage fiscal.
-  const r = cfMoyen;
-  const mid = (seuils.vert + seuils.rouge) / 2;
-  let base: number;
-  if (r >= seuils.vert + 200) base = 5;
-  else if (r >= seuils.vert + 100) base = 4.5;
-  else if (r >= seuils.vert) base = 4;
-  else if (r >= mid) base = 3;
-  else if (r >= seuils.rouge) base = 2.5;
-  else if (r >= seuils.rouge - 100) base = 2;
-  else if (r >= seuils.rouge - 200) base = 1.5;
-  else base = 1;
+  // Note /10 = facteur principal (CF année 1 vs seuils profil, 70%) +
+  // soutenabilité (dégradation CF moyen vs an1, 30%) + ajustement fiscal.
+  const range = Math.max(seuils.vert - seuils.rouge, 50);
 
-  // Soutenabilité : un cash-flow positif en année 1 qui bascule négatif sur
-  // la durée est un signal de fragilité — mais uniquement si le cash-flow
-  // moyen sort de la zone acceptable (verte) définie par le profil investisseur.
-  if (cfAn1 > 0 && cfMoyen < 0 && cfMoyen < seuils.vert) base -= 0.5;
+  // Facteur principal : cash-flow année 1 situé par rapport aux seuils profil.
+  let scoreAn1: number;
+  if (cfAn1 >= seuils.vert + range) scoreAn1 = 5;
+  else if (cfAn1 >= seuils.vert)
+    scoreAn1 = 4 + Math.min((cfAn1 - seuils.vert) / range, 1);
+  else if (cfAn1 >= seuils.rouge)
+    scoreAn1 = 2 + 2 * ((cfAn1 - seuils.rouge) / (seuils.vert - seuils.rouge));
+  else if (cfAn1 >= seuils.rouge - range)
+    scoreAn1 = Math.max(0, 2 * ((cfAn1 - (seuils.rouge - range)) / range));
+  else scoreAn1 = 0;
+
+  // Facteur secondaire : soutenabilité dans le temps. Si le CF moyen se
+  // dégrade par rapport à l'année 1, pénalité proportionnelle ; s'il
+  // s'améliore, léger bonus.
+  let soutenabilite = 0;
+  const delta = cfMoyen - cfAn1;
+  if (delta < -range) soutenabilite = -1;
+  else if (delta < 0) soutenabilite = -1 * (Math.abs(delta) / range);
+  else if (delta > range * 0.5) soutenabilite = 0.5;
+  else if (delta > 0) soutenabilite = 0.5 * (delta / (range * 0.5));
+
+  let base = scoreAn1 * 0.7 + (scoreAn1 + soutenabilite) * 0.3;
 
   // Avantage fiscal LMNP : des années sans impôt améliorent la rentabilité
   // réelle, pas d'avantage fiscal = charge supplémentaire dès le départ.

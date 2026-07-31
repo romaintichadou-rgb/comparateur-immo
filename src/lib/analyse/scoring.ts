@@ -281,18 +281,37 @@ export function buildVerdicts(
   }
 
   // 3) Tout bloc noté ≤ 5/10 remonte comme point d'attention critique.
+  const BLOC_VERDICT_FAIBLE: Record<BlocKey, { titre: string; detail: string }> = {
+    prix: { titre: "Prix trop élevé", detail: "Le prix affiché est supérieur aux ventes comparables du secteur — la marge de rentabilité est réduite." },
+    location: { titre: "Faible potentiel locatif", detail: "Demande locative faible ou loyer atteignable insuffisant pour le prix d'achat." },
+    simulation: { titre: "Mauvais cash-flow mensuel", detail: "Après crédit et fiscalité, l'effort d'épargne mensuel est élevé — vérifie le financement." },
+    potentiel: { titre: "Peu de potentiel", detail: "Peu de marge de plus-value à la revente ou de revalorisation locative." },
+    risque: { titre: "Risques élevés", detail: "Un ou plusieurs facteurs de risque pèsent sur cet investissement — voir le détail ci-dessous." },
+    quartier: { titre: "Quartier défavorable", detail: "L'environnement du bien présente des faiblesses (services, transports, dynamique)." },
+  };
+
   for (const b of Object.values(blocs) as BlocAnalyse[]) {
     if (b.note != null && b.note <= 5) {
+      const labels = BLOC_VERDICT_FAIBLE[b.cle as BlocKey];
       verdicts.push({
         niveau: b.note <= 4 ? "alerte" : "attention",
-        titre: `${b.titre} faible (${b.note}/10)`,
-        detail: "Un des critères est défavorable — voir le détail du bloc ci-dessous.",
+        titre: labels?.titre ?? `${b.titre} faible`,
+        detail: labels?.detail ?? "Un des critères est défavorable — voir le détail du bloc ci-dessous.",
         origine: "bloc",
       });
     }
   }
 
   // 4) Points forts marquants (note ≥ 9/10) — équilibre, en dernier, max 2.
+  const BLOC_VERDICT_FORT: Record<BlocKey, string> = {
+    prix: "Prix d'achat très compétitif",
+    location: "Forte demande locative",
+    simulation: "Cash-flow confortable",
+    potentiel: "Fort potentiel de valorisation",
+    risque: "Profil de risque très sain",
+    quartier: "Quartier attractif",
+  };
+
   const forts = (Object.values(blocs) as BlocAnalyse[])
     .filter((b) => b.note != null && (b.note as number) >= 9)
     .sort((a, b) => (b.note as number) - (a.note as number))
@@ -300,7 +319,7 @@ export function buildVerdicts(
   for (const b of forts) {
     verdicts.push({
       niveau: "positif",
-      titre: `${b.titre} (${b.note}/10)`,
+      titre: BLOC_VERDICT_FORT[b.cle as BlocKey] ?? b.titre,
       detail: "Point fort du bien — voir le détail du bloc ci-dessous.",
       origine: "bloc",
     });

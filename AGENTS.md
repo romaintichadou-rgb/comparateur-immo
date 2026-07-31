@@ -464,6 +464,17 @@ est normal qu'elle diffère.
 les biens analysés avant ce changement gardent un `cashflowAvant` calculé sur la
 moyenne jusqu'à la prochaine relance d'analyse.
 
+### Scoring bloc Simulation financière (`blocs/simulation.ts`)
+
+Note /10 adaptée au profil investisseur (seuils cash-flow personnels) :
+- **Facteur principal (70 %)** : CF année 1 situé vs seuils profil (vert/rouge)
+- **Facteur secondaire (30 %)** : soutenabilité (dégradation CF moyen vs an1)
+- **Ajustement** : avantage fiscal LMNP (années sans impôt : +0.5 si ≥ 10 ans)
+
+Un CF année 1 **vert** selon le profil donne un score de base ~8+. La
+dégradation sur la durée pénalise proportionnellement mais ne fait pas
+plonger un bon cash-flow immédiat sous 7.
+
 ### `ecartTone(pct)` — écart loyer (perspective investisseur)
 
 `LoyerDetailPanel.tsx`. Logique **inversée** vs le locataire : au-dessus du
@@ -811,8 +822,24 @@ au niveau de l'analyse globale :
 - DPE F → **alerte** "DPE F — interdiction de louer en 2028"
 - DPE E → **attention** "DPE E — interdiction de louer en 2034"
 
-Ces verdicts s'ajoutent aux verdicts "bloc faible" classiques et sont
-toujours visibles en tête d'analyse.
+Ces verdicts s'ajoutent aux verdicts "bloc faible" classiques.
+
+### Verdicts de blocs faibles/forts (`buildVerdicts`)
+
+Tout bloc noté ≤ 5 génère un verdict (≤ 4 = alerte, 5 = attention) avec un
+libellé orienté investisseur — **jamais de score brut** dans le titre :
+
+| Bloc | Titre (faible) | Titre (fort, ≥ 9) |
+|------|----------------|-------------------|
+| prix | Prix trop élevé | Prix d'achat très compétitif |
+| location | Faible potentiel locatif | Forte demande locative |
+| simulation | Mauvais cash-flow mensuel | Cash-flow confortable |
+| potentiel | Peu de potentiel | Fort potentiel de valorisation |
+| risque | Risques élevés | Profil de risque très sain |
+| quartier | Quartier défavorable | Quartier attractif |
+
+Les cartes alertes dans le verdict affichent **tous les verdicts** (critère +
+bloc), triés par priorité (alerte > attention, critère > bloc), max 3.
 
 ## Plafonds globaux existants (rappel)
 
@@ -952,8 +979,10 @@ l'avait réutilisé. Ne pas le recréer.
 1. **Carte verdict** — dégradé tonal (`from-white to-{emerald|amber|red}-50`),
    score global à droite dans une jauge circulaire (`VerdictGauge`, anneau épais
    100px, stroke 8), titre verdict en Fraunces (`text-4xl` / `sm:text-5xl`),
-   raison actionnable, puis ligne de sous-scores par bloc (couleurs `noteTone()` :
-   `emerald-700` / `amber-700` / `red-600`).
+   raison actionnable (jamais de score brut — libellé orienté investisseur),
+   puis ligne de sous-scores par bloc (couleurs `noteTone()` :
+   `emerald-700` / `amber-700` / `red-600`), puis cartes alertes/attention
+   (critère ET bloc, triées alerte > attention, critere > bloc, max 3).
 2. **MetricCards** — 4 cartes (Cash-flow, Rendement net, Prix au m², DPE) en
    grille, avec emphase conditionnelle sur négocie/passe.
 3. **Bloc synthèse** — narration IA sur fond `bg-ink-100/40`.
