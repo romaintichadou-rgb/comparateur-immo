@@ -104,16 +104,14 @@ export function extractFromFreeText(text: string): ParsedListing {
   const data: ParsedListing = {};
 
   // Prix : dernier filet quand ni JSON-LD ni les données structurées du site
-  // n'ont donné de prix. Un bien immobilier se chiffre en dizaines/centaines
-  // de milliers d'euros — on exige au moins 5 chiffres pour écarter les
-  // faux positifs (charges mensuelles, dépôt de garantie, prix au m²...).
-  // On garde le plus grand montant trouvé dans la page plutôt que le premier
-  // (le prix principal est presque toujours le montant le plus élevé
-  // affiché ; les frais annexes sont toujours plus petits).
+  // n'ont donné de prix. On prend le PREMIER montant ≥ 10 000 € plutôt que
+  // le plus grand : le prix de vente est affiché en premier sur toutes les
+  // plateformes, alors qu'un montant plus élevé en bas de page (estimation,
+  // prix voisins, honoraires cumulés) créait des faux positifs.
   const prixMatches = Array.from(text.matchAll(/(\d[\d\s]{4,9})\s?€/g))
     .map((m) => toNumber(m[1]))
     .filter((n): n is number => n != null && n >= 10000);
-  if (prixMatches.length > 0) data.prix = Math.max(...prixMatches);
+  if (prixMatches.length > 0) data.prix = prixMatches[0];
 
   // Pas de \b après "²" : ce n'est pas un caractère "mot", la frontière ne
   // matche donc jamais quand il est suivi de ponctuation (ex: "65 m²,").
@@ -133,10 +131,12 @@ export function extractFromFreeText(text: string): ParsedListing {
   if (/sans ascenseur/i.test(text)) data.ascenseur = false;
   else if (/\bascenseur\b/i.test(text)) data.ascenseur = true;
 
-  const dpe = firstMatch(text, /\bdpe\s*[:\-]?\s*([A-G])\b/i);
+  const dpe = firstMatch(text, /\b(?:dpe|consommation\s+[ée]nerg[ée]tique|classe\s+[ée]nergie)\s*[:\-]?\s*([A-G])\b/i)
+    ?? firstMatch(text, /consommation[^A-G]{0,40}classe\s+([A-G])\b/i);
   if (dpe) data.dpe = dpe.toUpperCase();
 
-  const ges = firstMatch(text, /\b(?:ges|climat)\s*[:\-]?\s*([A-G])\b/i);
+  const ges = firstMatch(text, /\b(?:ges|gaz\s+[àa]\s+effet|climat|[ée]missions?)\s*[:\-]?\s*([A-G])\b/i)
+    ?? firstMatch(text, /[ée]missions?[^A-G]{0,40}classe\s+([A-G])\b/i);
   if (ges) data.ges = ges.toUpperCase();
 
   const annee = firstMatch(text, /construit\w* en (\d{4})/i);

@@ -1463,3 +1463,29 @@ supposer qu'une nouvelle panne est inédite) :
    `computeDerived()` ni le rendu de `ApartmentDetail` — une exception dans
    l'un ou l'autre échappe au `catch` et retombe sur `error.tsx` (point 1
    ci-dessus, avant sa correction, tombait exactement dans ce trou).
+
+# Bookmarklet — pipeline d'extraction
+
+Le bookmarklet (`src/lib/bookmarklet.ts`) est le chemin principal pour
+importer une annonce — le scraping serveur est bloqué sur la plupart des
+sites (DataDome, Cloudflare). Pipeline par priorité (première valeur gagne) :
+
+1. **JSON-LD** (schema.org) — cross-plateforme, données structurées fiables
+   (prix, adresse, surface, pièces, photo)
+2. **`__NEXT_DATA__`** — spécifique Leboncoin (Next.js SSR data)
+3. **Sélecteurs CSS plateforme** — ciblés par site (SeLoger : prix, DPE/GES,
+   features ; Leboncoin : prix via `data-qa-id`)
+4. **URL parsing** — ville, quartier, code postal depuis le chemin (SeLoger :
+   `/annonces/TYPE/BIEN/ville-arrond-dept/quartier/ID.htm`)
+5. **og:description parsing** — prix (premier match), ville + code postal
+   depuis la méta description
+6. **CSS sélecteurs génériques** — `[data-testid="price"]`, `[class*="Price"]`
+7. **Free-text regex** — dernier filet sur `body.innerText`
+
+**Règles prix** : toujours le PREMIER montant ≥ 10 000 € trouvé (pas le plus
+grand — le prix de vente est affiché en premier, les montants plus élevés en
+bas de page sont des estimations ou prix voisins). S'applique au bookmarklet
+ET aux parsers serveur (`common.ts`).
+
+**Plateformes détectées** : Leboncoin, SeLoger, PAP, Orpi, BienIci, LogicImmo,
+ou "Manuel" (fallback). La détection se fait sur `location.hostname`.
