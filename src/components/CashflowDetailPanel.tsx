@@ -111,20 +111,24 @@ export default function CashflowDetailPanel({
             </p>
           ) : (
             <div className="space-y-5">
+              {/* Année 1 EN PREMIER : c'est la définition du « cash-flow
+                  mensuel » non qualifié dans toute l'app (MetricCards,
+                  Optimiser, moteur de recommandations). La moyenne reste
+                  affichée à côté, mais en second — elle ne fait pas foi. */}
               <div className="grid grid-cols-2 gap-3">
-                <ResultTile
-                  label="Cash-flow moyen"
-                  sub="moyenne sur la durée du crédit"
-                  value={fmtSigned(cashflowMoyen)}
-                  unit="/mois"
-                  tone={toneMoyen}
-                />
                 <ResultTile
                   label="Cash-flow année 1"
                   sub="première année"
                   value={fmtSigned(cashflowAn1)}
                   unit="/mois"
                   tone={toneAn1}
+                />
+                <ResultTile
+                  label="Cash-flow moyen"
+                  sub="moyenne sur la durée du crédit"
+                  value={fmtSigned(cashflowMoyen)}
+                  unit="/mois"
+                  tone={toneMoyen}
                 />
               </div>
 

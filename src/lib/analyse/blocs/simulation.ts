@@ -2,6 +2,7 @@ import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { defaultInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
 import { cashflowSeuilsFromSettings, cashflowTone, clampNote } from "../scoring";
+import { formatEurosSigned } from "@/lib/format";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fait } from "../types";
 
 /**
@@ -52,8 +53,8 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
   const tone = (v: number) => cashflowTone(v, seuils) as "positif" | "attention" | "alerte";
 
   const highlights: BlocHighlight[] = [
-    { label: "Cash-flow mensuel — année 1", value: `${signe(cfAn1)} €`, tone: tone(cfAn1) },
-    { label: "Cash-flow mensuel moyen", value: `${signe(cfMoyen)} €`, tone: tone(cfMoyen) },
+    { label: "Cash-flow mensuel — année 1", value: formatEurosSigned(cfAn1), tone: tone(cfAn1) },
+    { label: "Cash-flow mensuel moyen", value: formatEurosSigned(cfMoyen), tone: tone(cfMoyen) },
   ];
 
   const faits: Fait[] = [
@@ -115,11 +116,6 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
     sources: [],
     narration: "",
   };
-}
-
-function signe(n: number): string {
-  const r = Math.round(n) || 0; // normalise -0 → 0
-  return `${r > 0 ? "+" : ""}${r.toLocaleString("fr-FR")}`;
 }
 
 /**

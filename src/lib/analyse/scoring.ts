@@ -177,6 +177,7 @@ export const RENDEMENT_HOVER_RING: Record<RendementTone, string> = {
   alerte: "hover:ring-2 hover:ring-inset hover:ring-red-200",
 };
 
+
 /**
  * Calcul de la note globale /10, pondérée par bloc, avec plafonds rédhibitoires.
  *

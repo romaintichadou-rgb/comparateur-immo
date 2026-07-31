@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock, Info, Loader2, Sparkles } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
@@ -9,7 +9,6 @@ import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, V
 import {
   DECISION_RING_STYLES,
   NOTE_TEXT_CLASS,
-  RENDEMENT_HOVER_RING,
   SEUILS_RENDEMENT_DEFAUT,
   TONE_TEXT_CLASS,
   cashflowTone,
@@ -23,14 +22,20 @@ import {
 import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/decision";
 import { simulate, defaultInputs } from "@/lib/simulation";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
+import { useCashflowDetail } from "@/components/CashflowDetailProvider";
 import { formatDateTime, formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
+import { renderMarkdownBold } from "@/components/richText";
 
 /** Repli si le profil investisseur n'a pas pu être chargé — les seuils réels
  * viennent toujours des réglages (prop `cashflowSeuils`). */
 const CASHFLOW_SEUILS_DEFAUT: CashflowSeuils = { vert: 0, rouge: -200 };
 
 const HIGHLIGHTS_RENDEMENT = new Set(["Rendement brut", "Rendement net"]);
+
+/** Libellés produits par `buildBlocSimulation` — les garder synchronisés avec
+ * `blocs/simulation.ts`, c'est lui qui fabrique ces chaînes. */
+const HIGHLIGHTS_CASHFLOW = new Set(["Cash-flow mensuel — année 1", "Cash-flow mensuel moyen"]);
 
 /** Les highlights ont un habillage identique quelle que soit la tonalité —
  * seule la couleur de la valeur varie, et elle vient de `TONE_TEXT_CLASS`
@@ -152,18 +157,6 @@ export function formatNote(note: number): string {
   return Number.isInteger(note) ? String(note) : note.toFixed(1).replace(".", ",");
 }
 
-/** Rend un texte en interprétant le gras markdown **…** en <strong>. */
-export function renderBold(text: string): ReactNode {
-  return text.split(/\*\*(.+?)\*\*/g).map((seg, i) =>
-    i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-ink-900">
-        {seg}
-      </strong>
-    ) : (
-      seg
-    )
-  );
-}
 
 function dpeInfo(dpe: string): { sub: string; tone: MetricTone } {
   switch (dpe.trim().toUpperCase()) {
@@ -197,6 +190,7 @@ export default function AnalyseIA({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { open: openCashflowDetail } = useCashflowDetail();
   const analyse = apartment.analyse_ia;
   const immeuble = isImmeuble(apartment.type_bien);
 
@@ -411,8 +405,8 @@ export default function AnalyseIA({
           sub={cashflow == null ? "Simulation incomplète" : "Année 1 · net en poche chaque mois"}
           tone={cfTone}
           emphasis={driver(cfTone)}
-          linkLabel="Simulation"
-          onClick={() => goTab("simulation", "sim-cashflow")}
+          linkLabel="Détail"
+          onClick={() => openCashflowDetail(apartment, cashflowSeuils)}
         />
         <MetricCard
           label="Rendement net"
@@ -448,7 +442,7 @@ export default function AnalyseIA({
       {/* ── 3. Synthesis block (option 3 — after MetricCards) ── */}
       {analyse.synthese && (
         <div className="mt-6 rounded-xl bg-ink-100/40 px-5 py-4 text-sm leading-relaxed text-ink-700">
-          {renderBold(analyse.synthese)}
+          {renderMarkdownBold(analyse.synthese)}
         </div>
       )}
 
@@ -460,6 +454,7 @@ export default function AnalyseIA({
             bloc={bloc}
             apartment={apartment}
             seuilsRendement={seuilsRendement}
+            cashflowSeuils={cashflowSeuils}
             isFirst={i === 0}
             isLast={i === blocs.length - 1}
           />
@@ -587,12 +582,14 @@ function FlatSection({
   bloc,
   apartment,
   seuilsRendement,
+  cashflowSeuils,
   isFirst,
   isLast,
 }: {
   bloc: BlocAnalyse;
   apartment: ApartmentWithComputed;
   seuilsRendement: RendementSeuils;
+  cashflowSeuils: CashflowSeuils;
   isFirst: boolean;
   isLast: boolean;
 }) {
@@ -639,7 +636,7 @@ function FlatSection({
                 ? "text-[15px] leading-relaxed text-ink-700"
                 : "rounded-lg bg-ink-100/40 px-4 py-3 text-sm leading-relaxed text-ink-700"
             }>
-              {renderBold(bloc.narration)}
+              {renderMarkdownBold(bloc.narration)}
             </p>
           )}
           {isQuartier && !bloc.narration && (
@@ -660,7 +657,7 @@ function FlatSection({
           {bloc.highlights && bloc.highlights.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               {bloc.highlights.map((h, i) => (
-                <HighlightCard key={i} highlight={h} apartment={apartment} seuilsRendement={seuilsRendement} />
+                <HighlightCard key={i} highlight={h} apartment={apartment} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
               ))}
             </div>
           )}
@@ -718,12 +715,15 @@ function HighlightCard({
   highlight,
   apartment,
   seuilsRendement,
+  cashflowSeuils,
 }: {
   highlight: BlocHighlight;
   apartment: ApartmentWithComputed;
   seuilsRendement: RendementSeuils;
+  cashflowSeuils: CashflowSeuils;
 }) {
   const { open: openRendementDetail } = useRendementDetail();
+  const { open: openCashflowDetail } = useCashflowDetail();
   const content = (
     <>
       <p className={`text-xs font-medium ${HIGHLIGHT_LABEL}`}>{highlight.label}</p>
@@ -733,22 +733,31 @@ function HighlightCard({
     </>
   );
 
-  const isClickable = HIGHLIGHTS_RENDEMENT.has(highlight.label);
+  const onClick = HIGHLIGHTS_RENDEMENT.has(highlight.label)
+    ? () => openRendementDetail(apartment, seuilsRendement)
+    : HIGHLIGHTS_CASHFLOW.has(highlight.label)
+      ? () => openCashflowDetail(apartment, cashflowSeuils)
+      : null;
 
-  if (!isClickable) {
+  if (!onClick) {
     return <div className={`rounded-xl p-4 ${HIGHLIGHT_WRAP}`}>{content}</div>;
   }
 
-  // Anneau de survol dans la TONALITÉ du rendement affiché, comme partout
-  // ailleurs (tableau, carte, fiche). `RENDEMENT_HOVER_RING` était déjà importé
-  // ici mais jamais appliqué — un hover gris neutre lui tenait lieu de
-  // remplacement, seul écart de l'app à la règle documentée dans AGENTS.md.
+  // Survol : la bordure reste à 1px, seule sa COULEUR change (ink-200 → ink-300),
+  // identique quelle que soit la tonalité — décision produit assumée, voir
+  // AGENTS.md. La couleur sémantique est portée par la VALEUR ; le survol ne dit
+  // qu'une chose, « c'est cliquable ».
+  //
+  // Ni `hover:border-2` (épaissir rogne la zone de contenu d'1px et fait
+  // tressauter le texte), ni `hover:ring-inset` (l'anneau se superpose à la
+  // bordure et se voit comme un second liseré). Changer la seule couleur ne
+  // touche à aucune géométrie.
   return (
     <button
       type="button"
-      onClick={() => openRendementDetail(apartment, seuilsRendement)}
+      onClick={onClick}
       title="Voir le détail du calcul"
-      className={`rounded-xl p-4 text-left transition ${HIGHLIGHT_WRAP} ${RENDEMENT_HOVER_RING[highlight.tone]}`}
+      className={`rounded-xl p-4 text-left transition-colors ${HIGHLIGHT_WRAP} hover:border-ink-300`}
     >
       {content}
     </button>

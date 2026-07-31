@@ -8,6 +8,7 @@ import { formatApartmentTitle, formatEuros, sanitizeJustification } from "@/lib/
 import { isAiEstimated } from "@/lib/estimates";
 import { TONE_PANEL_STYLES, type RendementTone, type TonePanelStyle } from "@/lib/analyse/scoring";
 import { AiEstimatedBadge } from "@/components/form/Fields";
+import { renderBoldInline } from "@/components/richText";
 
 const TRANSITION_MS = 300;
 
@@ -258,7 +259,7 @@ export default function LoyerDetailPanel({
                     )}
                     {apt.loyer_justification && (
                       <div className="rounded-lg bg-ink-50 p-3 text-sm text-ink-600 whitespace-pre-line">
-                        {renderBold(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))}
+                        {renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))}
                       </div>
                     )}
                   </div>
@@ -354,24 +355,6 @@ function ecartTone(pct: number, slot: keyof TonePanelStyle): string {
   return TONE_PANEL_STYLES[tone][slot];
 }
 
-function renderBold(text: string): ReactNode {
-  return text.split(/(↑[^↓.]*|↓[^↑.]*|\d[\d\s]*€[^\s]*|\d+,?\d*\s*€|\d+[\s,.]?\d*\s*%|fourchette\s+haute|fourchette\s+basse|au-dessus|en-dessous|valorisation|luminosité|balcon|terrasse|rénov\w*|travaux|parking|cave|ascenseur|calme|vue)/gi).map((seg, i) => {
-    if (i % 2 === 0) return seg;
-    if (seg.startsWith("↑")) {
-      return (
-        <span key={i} className="font-semibold text-emerald-700">{seg}</span>
-      );
-    }
-    if (seg.startsWith("↓")) {
-      return (
-        <span key={i} className="font-semibold text-amber-700">{seg}</span>
-      );
-    }
-    return (
-      <strong key={i} className="font-semibold text-ink-900">{seg}</strong>
-    );
-  });
-}
 
 function Row({
   label,

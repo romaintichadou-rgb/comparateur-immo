@@ -457,27 +457,48 @@ la paire « Loyer mensuel CC » (accent) / « Écart vs marché » (tonalité) d
 cohérence qui compte est celle qui est visible dans le même champ de vision, pas
 celle avec un écran que l'utilisateur ne voit pas en même temps.
 
-### Survol d'un rendement cliquable — la COULEUR est la règle, pas la forme
+### Survol d'un chiffre cliquable — l'affordance suit le SUPPORT
 
-Six endroits affichent un rendement cliquable (il ouvre `RendementDetailPanel`).
-Ce qu'ils doivent tous respecter : **le survol reprend la TONALITÉ de la valeur**
-(`rendementNetTone`), jamais un gris neutre ni une couleur fixe. Un rendement en
-alerte rougit au survol, où qu'il soit.
+Plusieurs endroits affichent un chiffre cliquable qui ouvre un panneau de détail
+(rendement → `RendementDetailPanel`, cash-flow → `CashflowDetailPanel`). Il n'y
+a **pas** d'affordance unique : chaque support a la sienne.
 
-L'**affordance elle-même suit le contexte** — décision produit assumée, les
-contextes les plus denses ne supporteraient pas un anneau :
-
-| Support | Affordance |
+| Support | Affordance au survol |
 |---|---|
-| Carte mobile, popup de la carte, highlights de l'Analyse | anneau `RENDEMENT_HOVER_RING[tone]` |
+| Carte mobile, popup de la carte (SANS bordure) | anneau tonal `RENDEMENT_HOVER_RING[tone]` |
+| **Highlights de l'Analyse** (carte bordée) | **bordure NEUTRE recolorée**, 1px : `hover:border-ink-300` |
 | Ligne du tableau d'accueil (dense) | soulignement pointillé |
 | Tuile `ResultCard` (Opération, Simulation) | fond + bordure intensifiés (`hoverEmphase` / `hoverContext`) |
 | Carte de l'onglet Optimiser | le lien « détail → » change de couleur |
 
-Ne pas « uniformiser » vers l'anneau en lisant cette section trop vite :
-`RENDEMENT_HOVER_RING` n'est PAS obligatoire partout. Une version antérieure de
-ce document disait « CHAQUE composant », ce qui contredisait le code depuis
-toujours et invitait à corriger au hasard dans un sens ou dans l'autre.
+**Les highlights de l'Analyse survolent en GRIS, pas en tonalité** — décision
+produit assumée. La couleur sémantique est déjà portée par la VALEUR affichée
+(`TONE_TEXT_CLASS`) ; le survol ne dit qu'une chose, « c'est cliquable », et le
+dire en couleur ajoutait un second signal redondant qui variait d'une carte à
+l'autre dans la même grille.
+
+**La bordure reste à 1px : seule sa COULEUR change.** Deux pistes ont été
+essayées puis écartées :
+
+- `hover:border-2` — la taille extérieure ne bouge pas (`box-sizing:
+  border-box`), mais la zone de CONTENU se rétrécit d'1 px de chaque côté et le
+  texte tressaute au survol.
+- `hover:ring-inset` — pas de décalage (un `box-shadow` ne participe pas à la
+  mise en page), mais l'anneau se superpose à la bordure et se lit comme un
+  second liseré.
+
+Changer la seule couleur ne touche à aucune géométrie et ne crée qu'un liseré.
+
+⚠️ **`RENDEMENT_HOVER_RING` (anneau TONAL) reste réservé aux éléments SANS
+bordure.** Ce qui produisait deux cercles concentriques sur les highlights,
+c'était la DIFFÉRENCE de couleur entre l'anneau (emerald) et le
+`border-ink-200` en dessous — pas l'anneau lui-même.
+
+Ne pas « uniformiser » ces affordances en lisant cette section trop vite. Deux
+versions antérieures de ce document se sont trompées dans les deux sens : l'une
+affirmait que `RENDEMENT_HOVER_RING` s'appliquait à « CHAQUE composant », l'autre
+que le survol devait « toujours » reprendre la tonalité. Ni l'un ni l'autre n'a
+jamais été vrai dans le code.
 
 ### DPE — impact réglementaire dans MetricCards
 
@@ -858,11 +879,19 @@ Ancres cibles (avec `scroll-mt-24`) :
 
 | CTA | Onglet | Ancre (`id`) | Fichier de l'ancre |
 |---|---|---|---|
-| Cash-flow | Simulation financière | `sim-cashflow` | `SimulationFinanciere.tsx` |
 | Rendement net | Détails de l'opération | `fin-resultats` | `ApartmentDetail.tsx` |
 | Prix vs marché | Analyse | `bloc-prix` | `AnalyseIA.tsx` (`FlatSection`) |
 | Prix au m² (fallback) | Détails de l'opération | `fin-achat` | `ApartmentDetail.tsx` |
 | DPE | Analyse | `bloc-risque` | `AnalyseIA.tsx` (`FlatSection`) |
+
+**Le cash-flow ne navigue plus** : la MetricCard « Cash-flow mensuel » et les
+deux highlights du bloc Simulation (« — année 1 », « moyen ») ouvrent le
+panneau latéral `CashflowDetailPanel` (`useCashflowDetail`), comme le fait
+l'onglet Optimiser. Même geste que le rendement net, qui ouvre déjà
+`RendementDetailPanel` — un chiffre clé se détaille sur place, il ne renvoie
+pas vers un autre onglet. Les libellés des highlights sont fabriqués par
+`blocs/simulation.ts` : `HIGHLIGHTS_CASHFLOW` (`AnalyseIA.tsx`) doit rester
+synchronisé avec eux.
 
 # Onglet "Optimiser" — recommandations prescriptives (lecture seule)
 

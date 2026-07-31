@@ -64,6 +64,7 @@ import AnalyseIA from "@/components/AnalyseIA";
 import OptimiserView from "@/components/OptimiserView";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
 import { cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
+import { renderBoldInline } from "@/components/richText";
 import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
@@ -1611,16 +1612,4 @@ function SkeletonFlatSection({ faitCount, isFirst, isLast, isQuartier }: { faitC
  * même rang reste courte), et une image est de toute façon plus utile à lire
  * qu'un chemin de fichier.
  */
-function renderBoldInline(text: string) {
-  return text.split(/(↑[^↓.]*|↓[^↑.]*|\d[\d\s]*€[^\s]*|\d+,?\d*\s*€|\d+[\s,.]?\d*\s*%|fourchette\s+haute|fourchette\s+basse|au-dessus|en-dessous|valorisation|luminosité|balcon|terrasse|rénov\w*|travaux|parking|cave|ascenseur|calme|vue|taux\s+communal|syndic|entretien|copropriété|exploitation|chauffage|ancien\w*)/gi).map((seg, i) => {
-    if (i % 2 === 0) return seg;
-    if (seg.startsWith("↑")) {
-      return <span key={i} className="font-semibold text-emerald-700">{seg}</span>;
-    }
-    if (seg.startsWith("↓")) {
-      return <span key={i} className="font-semibold text-amber-700">{seg}</span>;
-    }
-    return <strong key={i} className="font-semibold text-ink-900">{seg}</strong>;
-  });
-}
 
