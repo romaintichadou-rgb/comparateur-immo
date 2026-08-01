@@ -829,9 +829,12 @@ intelligent est calculé selon la zone via `defaultQuotePartTerrain()` :
 - Zone rurale / périurbaine : **20 %** terrain
 
 Le champ est modifiable dans l'onglet « Simulation financière » (section
-Fiscalité LMNP), avec un badge « auto » quand il est en mode automatique.
-La modification est sauvegardée immédiatement (PATCH direct) pour un feedback
-en temps réel sur le cash-flow simulé.
+Fiscalité LMNP), avec une pastille « auto » quand il est en mode automatique.
+Il ne part **plus** en PATCH direct à chaque frappe : il est tenu en brouillon
+local le temps de l'édition et enregistré avec les hypothèses, dans le même
+PATCH (voir « Lecture par défaut, édition par carte » plus bas). L'aperçu
+temps réel du cash-flow est conservé — c'est le brouillon qui alimente
+`simulate()`, sans rien persister.
 
 # Analyse IA — bloc Risques et scoring DPE/GES
 
@@ -1198,6 +1201,81 @@ colonnes 0006 sont absentes : sans ce filet, lancer l'app avant d'avoir appliqu�
 la migration propagerait des `undefined` jusque dans `simulate()`, donc des `NaN`
 partout. La LECTURE dégrade proprement ; l'ÉCRITURE échoue avec un message
 explicite tant que la migration n'est pas passée.
+
+# Simulation financière — ENTRÉES en gris, RÉSULTATS en blanc
+
+Règle de lecture de tout l'onglet : **ce qu'on saisit est gris (`bg-ink-50`), ce
+que la simulation produit est blanc.** Avant, entrées et résultats partageaient
+la carte blanche et le même poids visuel, et rien ne disait où s'arrêtaient les
+hypothèses ni où commençait la réponse.
+
+Surtout, les entrées étaient dispersées en **trois endroits** — carte « Crédit
+immobilier », carte « Fiscalité », et une rangée de boutons au-dessus du tableau
+année par année — chacun présenté comme une section à part entière.
+
+## Un panneau `Hypothèses` unique
+
+Toutes les entrées sont réunies dans un seul panneau gris, placé **entre les
+KPI et les résultats** (la réponse d'abord, ce sur quoi elle repose ensuite),
+en trois colonnes : **Crédit** (montant emprunté, taux, durée, assurance),
+**Fiscalité** (TMI, quote-part terrain), **Projection** (les quatre hypothèses
+optionnelles). Un unique bouton « Modifier » bascule tout le panneau en saisie.
+
+- **`EditableCard`** porte le motif : en-tête `SectionHeader` + « Modifier »,
+  pied « Annuler / Enregistrer » **sous les champs**. Bordure `accent-300` en
+  édition (`ink-200` sinon).
+- **`HypRow`** rend une ligne en lecture. La pastille d'origine (`profil`,
+  `auto`) est collée à la VALEUR, à droite, jamais après le libellé : quand elle
+  suivait le libellé, elle poussait le montant hors de la ligne, qui passait à
+  deux lignes et cassait l'alignement de la colonne.
+- Une hypothèse de projection désactivée affiche **« — »**, elle n'est pas
+  masquée : « aucune revalorisation supposée » est une information, pas une
+  absence.
+- **`snapshot`** est la copie d'`inputs` prise à l'ouverture de l'édition ;
+  c'est elle qui rend « Annuler » possible. Il n'existait pas : on éditait en
+  direct et le seul retour en arrière était de retaper les valeurs de mémoire.
+- **L'aperçu reste vivant pendant l'édition** : coût du crédit, amortissements
+  et tableau se recalculent à la frappe. C'est ce qui rend la saisie utile.
+  Rien n'est persisté pour autant.
+- **Le mode d'emploi de la saisie** (« vide le champ pour repasser en auto »)
+  n'est rendu **qu'en édition**. En lecture il occupait quatre lignes pour
+  expliquer un geste que l'utilisateur n'était pas en train de faire.
+
+## Les cartes blanches ne contiennent PLUS aucun champ
+
+« Coût du crédit » (mensualité hors assurance, assurance, coût total, apport),
+« Détail mensuel — année 1 », « Fiscalité — LMNP au réel » (amortissements seuls,
+la TMI et la quote-part sont remontées dans le panneau), « Cash-flow année par
+année », « Financement du projet », « Évolution du patrimoine » : toutes sont des
+résultats purs. Vérifiable d'une ligne — hors panneau Hypothèses, l'onglet ne
+doit contenir aucun `input` ni `select`. Ne pas y réintroduire de saisie « au
+plus près de la donnée » : c'est exactement ce qui avait produit les trois zones
+d'entrée dispersées.
+
+Les montants du bloc « Coût du crédit » portent chacun leur HORIZON, parce qu'il
+en mélange trois : deux mensuels, un cumul sur toute la durée du prêt, et un
+versement unique au départ. Sans ces qualificatifs, le cumul sur 25 ans contamine
+la lecture de l'apport, qu'on croit alors étalé lui aussi.
+
+## Un seul point d'enregistrement : `persist()`
+
+L'onglet écrivait par DEUX chemins concurrents — `simulation_inputs` via la
+bannière « Hypothèses modifiées » en haut de page, et `quote_part_terrain_pct`
+en PATCH immédiat à chaque frappe via une prop `onPatchApartment`. Deux modèles
+mentaux dans le même écran, dont un non annulable.
+
+`persist(extra?)` est désormais le passage unique : **un PATCH, une réponse, un
+`onSaved`**. La quote-part voyage dans le même corps de requête quand elle a
+changé. Ne pas revenir à deux requêtes enchaînées : la seconde repartait de
+l'`apartment` capturé au rendu précédent et réécrasait localement les
+`simulation_inputs` tout juste enregistrés, jusqu'à ce que la réponse serveur
+remette tout d'aplomb. `onPatchApartment` a été supprimée de
+`SimulationFinanciere` ET de `ApartmentDetail`.
+
+La bannière globale ne s'affiche plus que si `dirty && editingId === null` :
+quand une carte est ouverte, c'est SON pied qui porte « Enregistrer ». Elle
+reste indispensable pour les hypothèses du tableau année par année, qui
+s'éditent en ligne (`OptionalRateField`) sans passer par une carte.
 
 # Simulation financière — hypothèses optionnelles
 

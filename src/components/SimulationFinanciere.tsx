@@ -107,6 +107,131 @@ function ChampHerite({
   );
 }
 
+/** Intitulé d'un groupe d'hypothèses (Crédit / Fiscalité / Projection). */
+function HypGroupTitle({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-400">{children}</p>
+  );
+}
+
+/**
+ * Ligne d'hypothèse en lecture. Dense, discrète : c'est une donnée d'ENTRÉE, on
+ * la consulte pour vérifier sur quoi la simulation repose, pas pour la lire
+ * comme un résultat.
+ *
+ * La pastille est collée à la VALEUR, à droite, et non après le libellé : quand
+ * elle suivait le libellé (« Montant emprunté [auto · hors notaire] 219 000 € »)
+ * elle poussait le montant hors de la ligne, qui passait à deux lignes et
+ * cassait l'alignement de la colonne.
+ */
+function HypRow({ label, value, badge }: { label: string; value: string; badge?: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-[3px]">
+      <span className="truncate text-[11px] text-ink-500">{label}</span>
+      <span className="flex shrink-0 items-center gap-1.5">
+        {badge}
+        <span className="font-mono text-xs tabular-nums text-ink-800">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+/** Ligne d'une carte de RÉSULTAT : plus lisible qu'une ligne d'hypothèse. */
+function ResultLine({ label, value }: { label: string; value: string }) {
+  return (
+    <li className="flex items-baseline justify-between gap-3 py-2">
+      <span className="text-ink-600">{label}</span>
+      <span className="shrink-0 font-mono tabular-nums text-ink-900">{value}</span>
+    </li>
+  );
+}
+
+/** Hypothèse optionnelle en lecture : « — » quand elle est désactivée.
+ *  (`pct` est déjà pris plus bas par le calcul de part d'un total.) */
+function hypPct(v: number | null): string {
+  return v == null ? "—" : `${formatNombre(v)} %`;
+}
+
+/**
+ * Enveloppe du panneau d'HYPOTHÈSES : lecture (défaut) et édition de tous ses
+ * champs d'un bloc.
+ *
+ * Fond `ink-50` — c'est la clé de lecture de l'onglet : **ce qu'on saisit est
+ * gris, ce que la simulation produit est blanc**. Avant, entrées et résultats
+ * partageaient la carte blanche et le même poids visuel ; rien ne disait où
+ * s'arrêtaient les hypothèses et où commençait la réponse.
+ *
+ * L'édition remplace les « Modifier » par champ : trois boutons pour une seule
+ * intention, aucun moyen d'ANNULER (on éditait en direct, le retour en arrière
+ * était à retaper de mémoire), et un enregistrement piloté depuis une bannière
+ * en haut de l'onglet, loin du champ modifié.
+ */
+function EditableCard({
+  icon,
+  title,
+  editing,
+  canEdit,
+  onEdit,
+  onCancel,
+  onSave,
+  saving,
+  children,
+}: {
+  icon: typeof Landmark;
+  title: string;
+  editing: boolean;
+  /** Faux quand une AUTRE carte est déjà en édition : une seule à la fois. */
+  canEdit: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className={`space-y-4 rounded-xl border bg-ink-50 p-4 transition-colors ${
+        editing ? "border-accent-300" : "border-ink-200"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader icon={icon} title={title} as="h3" />
+        {!editing && canEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="shrink-0 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-accent-600"
+          >
+            Modifier
+          </button>
+        )}
+      </div>
+
+      {children}
+
+      {editing && (
+        <div className="flex items-center justify-end gap-2 border-t border-ink-100/50 pt-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function OptionalRateField({
   label,
   value,
@@ -162,14 +287,12 @@ export default function SimulationFinanciere({
   apartment,
   settings,
   onSaved,
-  onPatchApartment,
 }: {
   apartment: ApartmentWithComputed;
   settings: AppSettings;
-  /** Appelé après l'enregistrement des hypothèses, pour resynchroniser le bien côté parent. */
+  /** Appelé après l'enregistrement, pour resynchroniser le bien côté parent.
+   *  Reçoit le bien complet renvoyé par l'unique PATCH de l'onglet. */
   onSaved?: (apartment: ApartmentWithComputed) => void;
-  /** Patch un champ du bien (quote-part terrain). */
-  onPatchApartment?: (patch: Partial<ApartmentWithComputed>) => void;
 }) {
   const cashflowSeuils: CashflowSeuils = {
     vert: settings.cashflowSeuilVertEuros,
@@ -190,24 +313,76 @@ export default function SimulationFinanciere({
   const [saving, setSaving] = useState(false);
   const dirty = JSON.stringify(inputs) !== JSON.stringify(savedInputs ?? defaultInputs());
 
+  // UNE carte en édition à la fois. `snapshot` est la copie d'avant-édition qui
+  // rend « Annuler » possible — il n'existait pas : on éditait en direct et le
+  // seul retour en arrière était de retaper les valeurs de mémoire.
+  const [editingId, setEditingId] = useState<null | "credit" | "fiscalite">(null);
+  const [snapshot, setSnapshot] = useState<SimulationInputs | null>(null);
+
+  // La quote-part terrain vit sur le BIEN, pas dans `simulation_inputs` : elle
+  // partait donc en PATCH immédiat, un deuxième modèle d'enregistrement dans le
+  // même écran (et impossible à annuler). On la tient en brouillon local le
+  // temps de l'édition, et elle part avec le reste au clic sur Enregistrer.
+  // `null` = pas de brouillon actif ; `{value: null}` = brouillon « auto ».
+  const [quotePartDraft, setQuotePartDraft] = useState<{ value: number | null } | null>(null);
+
   // `inputs` = ce qui est STOCKÉ sur le bien (profil emprunteur en `null` tant
   // qu'il n'est pas surchargé). `resolus` = ce que la simulation consomme, une
   // fois l'héritage du Profil investisseur appliqué. Les champs lisent `resolus`
   // pour AFFICHER, et écrivent dans `inputs` pour créer un override.
   const resolus = useMemo(() => resolveInputs(inputs, settings), [inputs, settings]);
-  const result = useMemo(() => simulate(apartment, resolus), [apartment, resolus]);
+  // Le brouillon de quote-part alimente la simulation pour que l'aperçu reste
+  // vivant pendant l'édition, sans rien persister tant qu'on n'a pas enregistré.
+  const apartmentSim = useMemo(
+    () =>
+      quotePartDraft ? { ...apartment, quote_part_terrain_pct: quotePartDraft.value } : apartment,
+    [apartment, quotePartDraft],
+  );
+  const result = useMemo(() => simulate(apartmentSim, resolus), [apartmentSim, resolus]);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
   }
 
-  async function handleSaveInputs() {
+  function startEdit(id: "credit" | "fiscalite") {
+    setSnapshot(inputs);
+    if (id === "fiscalite") setQuotePartDraft({ value: apartment.quote_part_terrain_pct ?? null });
+    setEditingId(id);
+  }
+
+  function cancelEdit() {
+    if (snapshot) setInputs(snapshot);
+    setQuotePartDraft(null);
+    setSnapshot(null);
+    setEditingId(null);
+  }
+
+  async function saveEdit() {
+    // La quote-part part dans le MÊME PATCH que les hypothèses. Deux requêtes
+    // enchaînées laissaient une fenêtre incohérente : le second appel repartait
+    // de l'`apartment` capturé au rendu précédent et réécrasait localement les
+    // `simulation_inputs` qu'on venait d'enregistrer, jusqu'à ce que la réponse
+    // serveur remette tout d'aplomb.
+    await persist(
+      quotePartDraft && quotePartDraft.value !== (apartment.quote_part_terrain_pct ?? null)
+        ? { quote_part_terrain_pct: quotePartDraft.value }
+        : undefined,
+    );
+    setQuotePartDraft(null);
+    setSnapshot(null);
+    setEditingId(null);
+  }
+
+  /** Point d'enregistrement UNIQUE de l'onglet : un PATCH, une réponse, un
+   *  `onSaved`. La quote-part terrain passait auparavant par un chemin séparé
+   *  (PATCH immédiat à chaque frappe, sans annulation possible). */
+  async function persist(extra?: { quote_part_terrain_pct: number | null }) {
     setSaving(true);
     try {
       const res = await fetch(`/api/apartments/${apartment.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ simulation_inputs: inputs }),
+        body: JSON.stringify({ simulation_inputs: inputs, ...extra }),
       });
       if (res.ok) {
         const { apartment: updated } = await res.json();
@@ -217,6 +392,8 @@ export default function SimulationFinanciere({
       setSaving(false);
     }
   }
+
+  const handleSaveInputs = () => persist();
 
   if (!result) {
     return (
@@ -236,7 +413,12 @@ export default function SimulationFinanciere({
 
   return (
     <div className="space-y-6">
-      {dirty && (
+      {/* `editingId === null` : quand une carte est en édition, c'est SON pied
+          qui porte Enregistrer. Laisser la bannière en plus afficherait deux
+          boutons pour la même action, à deux endroits de l'écran. La bannière
+          reste indispensable pour les hypothèses du tableau année par année,
+          qui s'éditent en ligne sans passer par une carte. */}
+      {dirty && editingId === null && (
         <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
           <p className="text-xs text-accent-700">
             Hypothèses modifiées, non enregistrées — le score de l&apos;Analyse IA se base sur les
@@ -276,71 +458,229 @@ export default function SimulationFinanciere({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Simulateur de crédit */}
-        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-          <SectionHeader icon={Landmark} title="Crédit immobilier" as="h3" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <NumberField
-              label="Montant emprunté"
-              value={result.montantEmprunte}
-              onChange={(v) => set("montantEmprunte", v)}
-              suffix="€"
-              hint={
-                result.montantAutomatique ? (
-                  // Dit AUSSI d'où vient le calcul : sans le mode, « auto »
-                  // n'explique pas pourquoi le montant inclut ou non le notaire.
-                  <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
-                ) : result.montantPlafonne ? (
-                  <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                    ramené au coût total
-                  </span>
-                ) : undefined
-              }
-            />
-            <ChampHerite
-              label="Taux du crédit"
-              suffix="%/an"
-              override={inputs.tauxCreditPct}
-              resolu={resolus.tauxCreditPct}
-              format={(v) => `${formatNombre(v)} %`}
-              onChange={(v) => set("tauxCreditPct", v)}
-            />
-            <ChampHerite
-              label="Durée"
-              suffix="ans"
-              override={inputs.dureeAnnees}
-              resolu={resolus.dureeAnnees}
-              format={(v) => `${formatNombre(v)} ans`}
-              onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
-            />
-            <ChampHerite
-              label="Assurance emprunteur"
-              suffix="%/an"
-              override={inputs.tauxAssurancePct}
-              resolu={resolus.tauxAssurancePct}
-              format={(v) => `${formatNombre(v)} %`}
-              onChange={(v) => set("tauxAssurancePct", v)}
-            />
+      {/* TOUTES les entrées de l'onglet, en un seul endroit et en gris.
+          Elles étaient dispersées en trois points (carte Crédit, carte
+          Fiscalité, ligne au-dessus du tableau année par année), chacun traité
+          comme une section à part entière — d'où l'impossibilité de voir d'un
+          coup d'œil ce qui est saisi et ce qui est calculé. */}
+      <EditableCard
+        icon={Landmark}
+        title="Hypothèses"
+        editing={editingId === "credit"}
+        canEdit={editingId === null}
+        onEdit={() => startEdit("credit")}
+        onCancel={cancelEdit}
+        onSave={saveEdit}
+        saving={saving}
+      >
+        {editingId === "credit" ? (
+          <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-3">
+            <div className="space-y-3">
+              <HypGroupTitle>Crédit</HypGroupTitle>
+              <NumberField
+                label="Montant emprunté"
+                value={result.montantEmprunte}
+                onChange={(v) => set("montantEmprunte", v)}
+                suffix="€"
+                hint={
+                  result.montantAutomatique ? (
+                    // Dit AUSSI d'où vient le calcul : sans le mode, « auto »
+                    // n'explique pas pourquoi le montant inclut ou non le notaire.
+                    <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
+                  ) : result.montantPlafonne ? (
+                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                      ramené au coût total
+                    </span>
+                  ) : undefined
+                }
+              />
+              <ChampHerite
+                label="Taux du crédit"
+                suffix="%/an"
+                override={inputs.tauxCreditPct}
+                resolu={resolus.tauxCreditPct}
+                format={(v) => `${formatNombre(v)} %`}
+                onChange={(v) => set("tauxCreditPct", v)}
+              />
+              <ChampHerite
+                label="Durée"
+                suffix="ans"
+                override={inputs.dureeAnnees}
+                resolu={resolus.dureeAnnees}
+                format={(v) => `${formatNombre(v)} ans`}
+                onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
+              />
+              <ChampHerite
+                label="Assurance emprunteur"
+                suffix="%/an"
+                override={inputs.tauxAssurancePct}
+                resolu={resolus.tauxAssurancePct}
+                format={(v) => `${formatNombre(v)} %`}
+                onChange={(v) => set("tauxAssurancePct", v)}
+              />
+              <p className="text-[11px] leading-relaxed text-ink-400">
+                En mode <strong className="font-medium text-ink-500">auto</strong>, l&apos;emprunt
+                suit le prix d&apos;achat + les travaux (hors frais de notaire, supposés couverts
+                par l&apos;apport). Saisis un montant pour le figer ; vide le champ pour repasser
+                en auto.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <HypGroupTitle>Fiscalité</HypGroupTitle>
+              {/* La TMI est une tranche légale, pas une saisie libre : on garde
+                  le select et on signale seulement l'ORIGINE de la valeur. */}
+              <div className="flex items-end gap-1">
+                <div className="flex-1">
+                  <SelectField
+                    label="Tranche marginale d'imposition (TMI)"
+                    value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
+                    onChange={(v) => set("tmiPct", Number(v))}
+                    options={TMI_OPTIONS}
+                    allowEmpty={false}
+                    hint={
+                      inputs.tmiPct == null ? (
+                        <Pastille>profil</Pastille>
+                      ) : (
+                        <span className="text-xs font-normal text-ink-400">
+                          + {LMNP.prelevementsSociauxPct} % PS
+                        </span>
+                      )
+                    }
+                  />
+                </div>
+                {inputs.tmiPct != null && (
+                  <button
+                    type="button"
+                    onClick={() => set("tmiPct", null)}
+                    title="Revenir à la valeur du profil investisseur"
+                    aria-label="TMI : revenir au profil"
+                    className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <NumberField
+                label="Quote-part terrain"
+                value={result.quotePartTerrainPct}
+                onChange={(v) => setQuotePartDraft({ value: v })}
+                suffix="% du prix"
+                hint={quotePartDraft?.value == null ? <Pastille>auto</Pastille> : undefined}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <HypGroupTitle>Projection</HypGroupTitle>
+              <div className="flex flex-wrap items-end gap-2">
+                <OptionalRateField
+                  label="Revalorisation du bien"
+                  value={inputs.revalorisationBienPct}
+                  defaut={REVALORISATION_BIEN_DEFAUT_PCT}
+                  onChange={(v) => set("revalorisationBienPct", v)}
+                />
+                <OptionalRateField
+                  label="Revalorisation du loyer"
+                  value={inputs.revalorisationLoyerPct}
+                  defaut={REVALORISATION_LOYER_DEFAUT_PCT}
+                  onChange={(v) => set("revalorisationLoyerPct", v)}
+                />
+                <OptionalRateField
+                  label="Indexation charges"
+                  value={inputs.indexationChargesPct}
+                  defaut={INDEXATION_CHARGES_DEFAUT_PCT}
+                  onChange={(v) => set("indexationChargesPct", v)}
+                />
+                <OptionalRateField
+                  label="Vacance locative"
+                  value={inputs.vacanceLocativePct}
+                  defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
+                  onChange={(v) => set("vacanceLocativePct", v)}
+                  suffix="% du loyer"
+                />
+              </div>
+              <p className="text-[11px] leading-relaxed text-ink-400">
+                Désactivées par défaut : aucune revalorisation, indexation ni vacance n&apos;est
+                supposée, c&apos;est l&apos;hypothèse la plus prudente.
+              </p>
+            </div>
           </div>
-          {/* Chaque montant porte son HORIZON, parce que la ligne en mélange
+        ) : (
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <HypGroupTitle>Crédit</HypGroupTitle>
+              <HypRow
+                label="Montant emprunté"
+                value={`${euros(result.montantEmprunte)} €`}
+                badge={
+                  result.montantAutomatique ? (
+                    <Pastille>auto</Pastille>
+                  ) : result.montantPlafonne ? (
+                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                      plafonné
+                    </span>
+                  ) : undefined
+                }
+              />
+              <HypRow
+                label="Taux"
+                value={`${formatNombre(resolus.tauxCreditPct)} %`}
+                badge={inputs.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
+              />
+              <HypRow
+                label="Durée"
+                value={`${formatNombre(resolus.dureeAnnees)} ans`}
+                badge={inputs.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
+              />
+              <HypRow
+                label="Assurance"
+                value={`${formatNombre(resolus.tauxAssurancePct)} %`}
+                badge={inputs.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
+              />
+            </div>
+            <div>
+              <HypGroupTitle>Fiscalité</HypGroupTitle>
+              <HypRow
+                label="TMI"
+                value={`${formatNombre(resolus.tmiPct)} % + ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
+                badge={inputs.tmiPct == null ? <Pastille>profil</Pastille> : undefined}
+              />
+              <HypRow
+                label="Quote-part terrain"
+                value={`${formatNombre(result.quotePartTerrainPct)} %`}
+                badge={apartment.quote_part_terrain_pct == null ? <Pastille>auto</Pastille> : undefined}
+              />
+            </div>
+            <div>
+              <HypGroupTitle>Projection</HypGroupTitle>
+              {/* « — » plutôt que masquer la ligne : une hypothèse désactivée est
+                  une information (aucune revalorisation supposée), pas une absence. */}
+              <HypRow label="Revalorisation du bien" value={hypPct(inputs.revalorisationBienPct)} />
+              <HypRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
+              <HypRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
+              <HypRow label="Vacance locative" value={hypPct(inputs.vacanceLocativePct)} />
+            </div>
+          </div>
+        )}
+      </EditableCard>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Coût du crédit — RÉSULTAT, plus aucune saisie ici. */}
+        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+          <SectionHeader icon={Landmark} title="Coût du crédit" as="h3" />
+          {/* Chaque montant porte son HORIZON, parce que le bloc en mélange
            * trois : deux mensuels, un cumul sur toute la durée du prêt
            * (`coutCredit`), et un versement unique au départ (`apport`).
            * Sans ces qualificatifs, le cumul sur 25 ans juste à côté contamine
            * la lecture de l'apport, qu'on croit alors étalé lui aussi. */}
-          <div className="rounded-lg bg-ink-50 px-4 py-3 text-sm text-ink-600">
-            Mensualité hors assurance : <strong className="text-ink-900">{euros(result.mensualiteHorsAssurance)} €</strong>
-            {" · "}assurance : <strong className="text-ink-900">{euros(result.assuranceMensuelle)} €</strong>/mois
-            {" · "}coût total du crédit sur {resolus.dureeAnnees} ans : <strong className="text-ink-900">{euros(result.coutCredit)} €</strong>
-            {" · "}apport personnel à l&apos;achat : <strong className="text-ink-900">{euros(result.apport)} €</strong>
-          </div>
-          <p className="text-xs text-ink-400">
-            En mode <strong className="font-medium text-ink-500">auto</strong>, le montant emprunté
-            suit en temps réel le prix d&apos;achat + les travaux (hors frais de notaire, supposés
-            couverts par l&apos;apport), y compris pendant la saisie dans les autres onglets. Modifie
-            le champ pour le figer (simuler un apport différent) ; vide-le pour repasser en auto.
-          </p>
+          <ul className="divide-y divide-ink-100/50 text-sm">
+            <ResultLine label="Mensualité hors assurance" value={`${euros(result.mensualiteHorsAssurance)} €`} />
+            <ResultLine label="Assurance emprunteur" value={`${euros(result.assuranceMensuelle)} €/mois`} />
+            <ResultLine label={`Coût total du crédit · ${resolus.dureeAnnees} ans`} value={`${euros(result.coutCredit)} €`} />
+            <ResultLine label="Apport personnel à l'achat" value={`${euros(result.apport)} €`} />
+          </ul>
         </section>
+
 
         {/* Détail mensuel année 1 — la "participation mensuelle" */}
         <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
@@ -371,59 +711,10 @@ export default function SimulationFinanciere({
         </section>
       </div>
 
-      {/* Fiscalité LMNP */}
-      <section className="space-y-5 rounded-xl border border-ink-200 bg-white p-5">
+      {/* Fiscalité — RÉSULTAT pur : la TMI et la quote-part sont remontées
+          dans le panneau Hypothèses, il ne reste ici que ce qui en découle. */}
+      <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
         <SectionHeader icon={ReceiptText} title="Fiscalité — LMNP au réel" as="h3" />
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {/* Même héritage que les champs de crédit, mais sur un <select> : la
-              TMI est une tranche légale, pas une saisie libre. On garde donc le
-              select éditable et on signale seulement l'ORIGINE de la valeur. */}
-          <div className="flex items-end gap-1">
-            <div className="flex-1">
-              <SelectField
-                label="Tranche marginale d'imposition (TMI)"
-                value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
-                onChange={(v) => set("tmiPct", Number(v))}
-                options={TMI_OPTIONS}
-                allowEmpty={false}
-                hint={
-                  inputs.tmiPct == null ? (
-                    <Pastille>profil</Pastille>
-                  ) : (
-                    <span className="text-xs font-normal text-ink-400">
-                      + {LMNP.prelevementsSociauxPct} % de prélèvements sociaux
-                    </span>
-                  )
-                }
-              />
-            </div>
-            {inputs.tmiPct != null && (
-              <button
-                type="button"
-                onClick={() => set("tmiPct", null)}
-                title="Revenir à la valeur du profil investisseur"
-                aria-label="TMI : revenir au profil"
-                className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          <NumberField
-            label="Quote-part terrain"
-            value={result.quotePartTerrainPct}
-            onChange={(v) => onPatchApartment?.({ quote_part_terrain_pct: v })}
-            suffix="% du prix"
-            hint={
-              apartment.quote_part_terrain_pct == null ? (
-                <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
-                  auto
-                </span>
-              ) : undefined
-            }
-          />
-        </div>
 
         <div className="rounded-lg bg-ink-50 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Amortissements annuels déductibles</p>
@@ -460,37 +751,10 @@ export default function SimulationFinanciere({
         <div className="p-5 pb-3">
           <SectionHeader icon={Calculator} title="Cash-flow année par année" as="h3" />
         </div>
-        <div className="flex flex-wrap items-end gap-3 px-5 pb-4">
-          <OptionalRateField
-            label="Revalorisation du bien"
-            value={inputs.revalorisationBienPct}
-            defaut={REVALORISATION_BIEN_DEFAUT_PCT}
-            onChange={(v) => set("revalorisationBienPct", v)}
-          />
-          <OptionalRateField
-            label="Revalorisation du loyer"
-            value={inputs.revalorisationLoyerPct}
-            defaut={REVALORISATION_LOYER_DEFAUT_PCT}
-            onChange={(v) => set("revalorisationLoyerPct", v)}
-          />
-          <OptionalRateField
-            label="Indexation charges (copro + taxe foncière)"
-            value={inputs.indexationChargesPct}
-            defaut={INDEXATION_CHARGES_DEFAUT_PCT}
-            onChange={(v) => set("indexationChargesPct", v)}
-          />
-          <OptionalRateField
-            label="Vacance locative"
-            value={inputs.vacanceLocativePct}
-            defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
-            onChange={(v) => set("vacanceLocativePct", v)}
-            suffix="% du loyer"
-          />
-        </div>
-        <p className="px-5 pb-4 text-xs text-ink-400">
-          Par défaut, aucune revalorisation, indexation ni vacance n&apos;est supposée (hypothèse la plus
-          prudente) — active-les au besoin.
-        </p>
+        {/* Les quatre hypothèses de projection qui vivaient ici sont remontées
+            dans le panneau Hypothèses : elles pilotent ce tableau, mais ce sont
+            des ENTRÉES, et les laisser ici était le troisième endroit où l'on
+            saisissait quelque chose dans cet onglet. */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

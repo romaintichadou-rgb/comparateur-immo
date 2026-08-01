@@ -1228,19 +1228,6 @@ export default function ApartmentDetail({
           apartment={live}
           settings={settings}
           onSaved={setApt}
-          onPatchApartment={async (patch) => {
-            const optimistic = { ...apt, ...patch } as ApartmentWithComputed;
-            setApt(computeDerived(optimistic));
-            const res = await fetch(`/api/apartments/${apt.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(patch),
-            });
-            if (res.ok) {
-              const { apartment: updated } = await res.json();
-              setApt(updated);
-            }
-          }}
         />
       )}
 
