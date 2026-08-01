@@ -1288,6 +1288,44 @@ la normalise à `null` au premier enregistrement. Conséquence attendue : cette
 normalisation modifie `simulation_inputs`, donc `empreinteBien`, donc l'analyse
 du bien est signalée obsolète une fois.
 
+## Les trois états d'une hypothèse, et « Réinitialiser (n) »
+
+Chaque ligne du panneau est dans l'un de trois états, dont **deux seulement
+portent une pastille** :
+
+| État | Pastille | Sens |
+|---|---|---|
+| Hérité | `profil` | `null` sur le bien → vient du Profil investisseur (`resolveInputs`). Change pour TOUS les biens quand le profil change. Concerne taux, durée, assurance, TMI. |
+| Dérivé | `auto` | `null` → calculé depuis les données de CE bien. Montant emprunté = prix + travaux selon `financementMode` ; quote-part terrain = zone du code postal (`defaultQuotePartTerrain`). |
+| **Fixé à la main** | *aucune* | L'utilisateur a saisi la valeur : elle ne suit plus rien. |
+
+Les deux pastilles ne sont **pas redondantes** — elles pointent vers deux
+endroits différents où aller corriger (les Paramètres, ou les données du bien).
+Ne pas les fusionner en un « défaut » unique, ça perdrait cette indication.
+
+En revanche le troisième état, le seul qui résulte d'une décision, est le seul
+qui n'était **pas** signalé — il se déduisait par ABSENCE de pastille, ce qui est
+le plus faible des signaux. Plutôt qu'une troisième pastille (qui aurait
+étiqueté presque toutes les lignes), c'est **`compterSurcharges()`** qui le rend
+visible : le bouton **« Réinitialiser (n) »** de l'en-tête compte exactement les
+lignes sans pastille.
+
+- Le bouton n'apparaît **que si `n > 0`** — sinon il n'aurait rien à faire, et un
+  bouton inerte est pire qu'absent.
+- `regimeFiscal` stocké à `REGIME_FISCAL_DEFAUT` n'est PAS compté : ça vaut la
+  même chose que `null`, le compter afficherait un « 1 » que rien à l'écran ne
+  justifierait.
+- La réinitialisation est **exactement `defaultInputs()`** + `quote_part_terrain_pct: null`.
+  Toute la convention du modèle étant déjà « `null` = valeur par défaut », il n'y
+  a aucune logique de remise à zéro à écrire — ne pas en ajouter une.
+- Elle passe par `ConfirmDialog` en mode `destructive` (bouton rouge, focus
+  initial sur « Annuler ») : elle jette des valeurs saisies, et elle touche AUSSI
+  les hypothèses de projection, ce que la description de la modale doit continuer
+  de dire explicitement.
+- `persist()` prend son `payload` en **argument** et ne le lit pas dans l'état :
+  la réinitialisation appelle `setInputs` puis `persist` dans la foulée, et
+  l'état ne serait pas encore à jour au moment de construire la requête.
+
 ## Les cartes blanches ne contiennent PLUS aucun champ
 
 « Coût du crédit » (mensualité hors assurance, assurance, coût total, apport),

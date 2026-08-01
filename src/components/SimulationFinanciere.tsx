@@ -11,6 +11,7 @@ import {
   simulate,
   LMNP,
   REGIMES_FISCAUX,
+  REGIME_FISCAL_DEFAUT,
   type RegimeFiscal,
   INDEXATION_CHARGES_DEFAUT_PCT,
   REVALORISATION_BIEN_DEFAUT_PCT,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/simulation";
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
 import { SectionHeader } from "@/components/SectionHeader";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
 import { formatEurosSigned, formatNombre } from "@/lib/format";
@@ -160,6 +162,31 @@ function hypPct(v: number | null): string {
 }
 
 /**
+ * Nombre d'hypothèses que l'utilisateur a fixées lui-même, c.-à-d. tout ce qui
+ * ne suit plus ni le profil ni le calcul automatique.
+ *
+ * C'est exactement l'ensemble des lignes SANS pastille dans le panneau : la
+ * pastille (`profil` / `auto`) signale une valeur par défaut, son absence
+ * signale une valeur imposée. Ce compteur rend cet état — le seul des trois qui
+ * n'était pas étiqueté — visible et actionnable.
+ */
+function compterSurcharges(inputs: SimulationInputs, quotePartTerrain: number | null): number {
+  const defauts = defaultInputs();
+  let n = 0;
+  for (const cle of Object.keys(defauts) as (keyof SimulationInputs)[]) {
+    const valeur = inputs[cle];
+    if (valeur == null) continue;
+    // `regimeFiscal` stocké au régime par défaut n'est pas une surcharge : ça
+    // vaut la même chose que `null`, le compter ferait apparaître un « 1 »
+    // fantôme que rien à l'écran ne justifierait.
+    if (cle === "regimeFiscal" && valeur === REGIME_FISCAL_DEFAUT) continue;
+    n++;
+  }
+  if (quotePartTerrain != null) n++;
+  return n;
+}
+
+/**
  * Enveloppe du panneau d'HYPOTHÈSES : lecture (défaut) et édition de tous ses
  * champs d'un bloc.
  *
@@ -182,6 +209,8 @@ function EditableCard({
   onCancel,
   onSave,
   saving,
+  surcharges = 0,
+  onReset,
   children,
 }: {
   icon: typeof Landmark;
@@ -193,6 +222,10 @@ function EditableCard({
   onCancel: () => void;
   onSave: () => void;
   saving: boolean;
+  /** Nombre de valeurs fixées à la main. 0 → pas de bouton de réinitialisation :
+   *  il n'aurait rien à faire, et un bouton inerte est pire qu'absent. */
+  surcharges?: number;
+  onReset?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -204,13 +237,24 @@ function EditableCard({
       <div className="flex items-center justify-between gap-3">
         <SectionHeader icon={icon} title={title} as="h3" />
         {!editing && canEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="shrink-0 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-accent-600"
-          >
-            Modifier
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            {surcharges > 0 && onReset && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-red-600"
+              >
+                Réinitialiser ({surcharges})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-accent-600"
+            >
+              Modifier
+            </button>
+          </div>
         )}
       </div>
 
@@ -328,6 +372,7 @@ export default function SimulationFinanciere({
   // seul retour en arrière était de retaper les valeurs de mémoire.
   const [editingId, setEditingId] = useState<null | "credit" | "fiscalite">(null);
   const [snapshot, setSnapshot] = useState<SimulationInputs | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   // La quote-part terrain vit sur le BIEN, pas dans `simulation_inputs` : elle
   // partait donc en PATCH immédiat, un deuxième modèle d'enregistrement dans le
@@ -349,6 +394,7 @@ export default function SimulationFinanciere({
     [apartment, quotePartDraft],
   );
   const result = useMemo(() => simulate(apartmentSim, resolus), [apartmentSim, resolus]);
+  const surcharges = compterSurcharges(inputs, apartment.quote_part_terrain_pct ?? null);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
@@ -374,6 +420,7 @@ export default function SimulationFinanciere({
     // `simulation_inputs` qu'on venait d'enregistrer, jusqu'à ce que la réponse
     // serveur remette tout d'aplomb.
     await persist(
+      inputs,
       quotePartDraft && quotePartDraft.value !== (apartment.quote_part_terrain_pct ?? null)
         ? { quote_part_terrain_pct: quotePartDraft.value }
         : undefined,
@@ -385,14 +432,21 @@ export default function SimulationFinanciere({
 
   /** Point d'enregistrement UNIQUE de l'onglet : un PATCH, une réponse, un
    *  `onSaved`. La quote-part terrain passait auparavant par un chemin séparé
-   *  (PATCH immédiat à chaque frappe, sans annulation possible). */
-  async function persist(extra?: { quote_part_terrain_pct: number | null }) {
+   *  (PATCH immédiat à chaque frappe, sans annulation possible).
+   *
+   *  `payload` est passé EXPLICITEMENT et non lu dans l'état : la réinitialisation
+   *  appelle `setInputs` puis `persist` dans la foulée, et l'état ne serait pas
+   *  encore à jour au moment de construire le corps de la requête. */
+  async function persist(
+    payload: SimulationInputs,
+    extra?: { quote_part_terrain_pct: number | null },
+  ) {
     setSaving(true);
     try {
       const res = await fetch(`/api/apartments/${apartment.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ simulation_inputs: inputs, ...extra }),
+        body: JSON.stringify({ simulation_inputs: payload, ...extra }),
       });
       if (res.ok) {
         const { apartment: updated } = await res.json();
@@ -403,7 +457,26 @@ export default function SimulationFinanciere({
     }
   }
 
-  const handleSaveInputs = () => persist();
+  const handleSaveInputs = () => persist(inputs);
+
+  /**
+   * Remet TOUTES les hypothèses à leur valeur par défaut : les champs hérités
+   * repassent au Profil investisseur, les champs dérivés repassent en auto, et
+   * les hypothèses de projection sont désactivées. C'est exactement
+   * `defaultInputs()` — toute la convention du modèle étant déjà « `null` =
+   * valeur par défaut », il n'y a aucune logique de remise à zéro à écrire.
+   *
+   * La quote-part terrain vit sur le bien et part dans le même PATCH.
+   */
+  async function resetHypotheses() {
+    const neutres = defaultInputs();
+    setInputs(neutres);
+    setQuotePartDraft(null);
+    setSnapshot(null);
+    setEditingId(null);
+    setConfirmReset(false);
+    await persist(neutres, { quote_part_terrain_pct: null });
+  }
 
   if (!result) {
     return (
@@ -423,6 +496,18 @@ export default function SimulationFinanciere({
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={confirmReset}
+        title="Réinitialiser toutes les hypothèses ?"
+        description="Le crédit, la fiscalité et les hypothèses de projection repartiront de leurs valeurs par défaut : les champs hérités suivront de nouveau ton Profil investisseur, le montant emprunté et la quote-part terrain repasseront en calcul automatique, et les revalorisations, indexations et vacances seront désactivées. Les valeurs que tu as saisies seront perdues."
+        confirmLabel="Réinitialiser"
+        loadingLabel="Réinitialisation…"
+        destructive
+        loading={saving}
+        onConfirm={resetHypotheses}
+        onCancel={() => setConfirmReset(false)}
+      />
+
       {/* `editingId === null` : quand une carte est en édition, c'est SON pied
           qui porte Enregistrer. Laisser la bannière en plus afficherait deux
           boutons pour la même action, à deux endroits de l'écran. La bannière
@@ -482,6 +567,8 @@ export default function SimulationFinanciere({
         onCancel={cancelEdit}
         onSave={saveEdit}
         saving={saving}
+        surcharges={surcharges}
+        onReset={() => setConfirmReset(true)}
       >
         {editingId === "credit" ? (
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-3">
