@@ -1133,13 +1133,35 @@ Miroir d'`OptionalRateField`, **sens inversé** : une hypothèse optionnelle est
 absente par défaut et s'active ; un champ hérité a toujours une valeur (celle du
 profil) et c'est la SURCHARGE qui s'active.
 
-- hérité → valeur en **lecture seule** + pastille « profil » + « Modifier » ;
-- surchargé → `NumberField` + `✕` (revenir au profil).
+**Toujours un `NumberField`, jamais un encart en lecture seule.** Le mode hérité
+affichait la valeur derrière un second bouton « Modifier », pour éviter de
+laisser croire que le chiffre était stocké sur le bien. Depuis que le panneau
+Hypothèses a son propre mode édition, ça faisait **deux portes à franchir** pour
+taper un chiffre — on venait déjà de cliquer « Modifier » sur le panneau. Ne pas
+réintroduire ce second niveau.
 
-La lecture seule est délibérée : un input pré-rempli laisserait croire que le
-chiffre est stocké sur le bien alors qu'il suit le profil. Les champs AFFICHENT
-`resolus.*` et ÉCRIVENT dans `inputs.*` — ne pas afficher `inputs.*`, qui vaut
-`null` en mode hérité.
+- hérité → champ pré-rempli avec `resolus.*` + pastille « profil » ;
+- surchargé → même champ + `✕` (revenir au profil).
+
+L'origine de la valeur est dite par la **pastille**, pas par une désactivation —
+exactement comme le montant emprunté, lui aussi dérivé (pastille « auto ») ET
+directement éditable depuis toujours.
+
+Deux détails que le composant doit garder :
+
+- **`key={herite ? "herite" : "override"}`** — vider une surcharge renvoie
+  `null` (retour au profil), mais `NumberField` garde son texte local : sans ce
+  remontage, le champ restait **vide** au lieu de réafficher la valeur du profil
+  qui venait de reprendre effet.
+- **`onChange` passe `v` tel quel.** L'ancien `v ?? 0` transformait un champ vidé
+  en 0 au lieu de le rendre au profil — sur la durée, `Math.max(1, …)` le
+  ramenait silencieusement à 1 an.
+- Une **gouttière de 28 px** (`w-7`) est réservée au `✕` même quand il est
+  absent, et le montant emprunté porte le `pr-8` équivalent : sans ça les champs
+  surchargés sont plus étroits que les autres et la colonne devient irrégulière.
+
+Les champs AFFICHENT `resolus.*` et ÉCRIVENT dans `inputs.*` — ne pas afficher
+`inputs.*`, qui vaut `null` en mode hérité.
 
 ## Obsolescence d'une analyse — TROIS causes
 

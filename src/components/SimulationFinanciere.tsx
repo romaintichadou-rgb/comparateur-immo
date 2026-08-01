@@ -52,16 +52,20 @@ function Pastille({ children }: { children: ReactNode }) {
  * est absente par défaut et s'active, celle-ci a TOUJOURS une valeur (celle du
  * profil) et c'est la surcharge qui s'active.
  *
- * En mode hérité on affiche la valeur en LECTURE SEULE plutôt qu'un champ
- * pré-rempli : un input éditable laisserait croire que le chiffre est stocké sur
- * le bien, alors qu'il suit le profil et changera avec lui.
+ * **Toujours un champ de saisie, jamais un encart en lecture seule.** Le mode
+ * hérité affichait auparavant la valeur derrière un second bouton « Modifier »,
+ * pour éviter de laisser croire que le chiffre était stocké sur le bien. Mais
+ * depuis que le panneau a son propre mode édition, ça faisait DEUX portes à
+ * franchir pour taper un chiffre — on avait déjà cliqué « Modifier » sur le
+ * panneau. L'origine de la valeur reste dite par la pastille « profil », comme
+ * le fait déjà le montant emprunté avec sa pastille « auto », lui aussi dérivé
+ * ET directement éditable.
  */
 function ChampHerite({
   label,
   suffix,
   override,
   resolu,
-  format,
   onChange,
 }: {
   label: string;
@@ -70,41 +74,42 @@ function ChampHerite({
   override: number | null;
   /** Valeur effectivement utilisée par le calcul (profil ou surcharge). */
   resolu: number;
-  format: (v: number) => string;
   onChange: (v: number | null) => void;
 }) {
-  if (override == null) {
-    return (
-      <div className="flex flex-col gap-1 text-sm">
-        <span className="flex items-center gap-1.5 font-medium text-ink-700">
-          {label}
-          <Pastille>profil</Pastille>
-        </span>
-        <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-ink-200 bg-ink-50 px-3 py-2">
-          <span className="font-mono tabular-nums text-ink-500">{format(resolu)}</span>
-          <button
-            type="button"
-            onClick={() => onChange(resolu)}
-            className="shrink-0 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-accent-600"
-          >
-            Modifier
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const herite = override == null;
   return (
     <div className="flex items-end gap-1">
-      <NumberField label={label} value={override} onChange={(v) => onChange(v ?? 0)} suffix={suffix} />
-      <button
-        type="button"
-        onClick={() => onChange(null)}
-        title="Revenir à la valeur du profil investisseur"
-        aria-label={`${label} : revenir au profil`}
-        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      <div className="min-w-0 flex-1">
+        <NumberField
+          // Force le réamorçage du texte affiché quand on repasse en hérité :
+          // sans ça, vider une surcharge laissait le champ vide au lieu de
+          // réafficher la valeur du profil qui reprend effet.
+          key={herite ? "herite" : "override"}
+          label={label}
+          value={herite ? resolu : override}
+          // `v` passe tel quel : vider le champ renvoie `null`, donc retour au
+          // profil. L'ancien `v ?? 0` transformait un champ vidé en 0 — sur la
+          // durée, `Math.max(1, …)` le ramenait à 1 an sans que rien ne le dise.
+          onChange={onChange}
+          suffix={suffix}
+          hint={herite ? <Pastille>profil</Pastille> : undefined}
+        />
+      </div>
+      {/* Emplacement réservé même sans bouton : sinon les champs surchargés
+          sont plus étroits que les autres et la colonne devient irrégulière. */}
+      <div className="mb-[3px] w-7 shrink-0">
+        {!herite && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            title="Revenir à la valeur du profil investisseur"
+            aria-label={`${label} : revenir au profil`}
+            className="rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -482,6 +487,10 @@ export default function SimulationFinanciere({
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-3">
             <div className="space-y-3">
               <HypGroupTitle>Crédit</HypGroupTitle>
+              {/* Même gouttière de 28 px que `ChampHerite` réserve à son bouton
+                  « revenir au profil », pour que les quatre champs de la colonne
+                  aient exactement la même largeur. */}
+              <div className="pr-8">
               <NumberField
                 label="Montant emprunté"
                 value={result.montantEmprunte}
@@ -499,12 +508,12 @@ export default function SimulationFinanciere({
                   ) : undefined
                 }
               />
+              </div>
               <ChampHerite
                 label="Taux du crédit"
                 suffix="%/an"
                 override={inputs.tauxCreditPct}
                 resolu={resolus.tauxCreditPct}
-                format={(v) => `${formatNombre(v)} %`}
                 onChange={(v) => set("tauxCreditPct", v)}
               />
               <ChampHerite
@@ -512,7 +521,6 @@ export default function SimulationFinanciere({
                 suffix="ans"
                 override={inputs.dureeAnnees}
                 resolu={resolus.dureeAnnees}
-                format={(v) => `${formatNombre(v)} ans`}
                 onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
               />
               <ChampHerite
@@ -520,7 +528,6 @@ export default function SimulationFinanciere({
                 suffix="%/an"
                 override={inputs.tauxAssurancePct}
                 resolu={resolus.tauxAssurancePct}
-                format={(v) => `${formatNombre(v)} %`}
                 onChange={(v) => set("tauxAssurancePct", v)}
               />
               <p className="text-[11px] leading-relaxed text-ink-400">
