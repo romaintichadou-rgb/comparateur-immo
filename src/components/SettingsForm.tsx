@@ -6,13 +6,14 @@ import {
   Landmark,
   TrendingUp,
   SlidersHorizontal,
+  Wallet,
   ChevronDown,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Info,
   type LucideIcon,
 } from "lucide-react";
+import { SectionHeader } from "@/components/SectionHeader";
 import {
   FINANCEMENT_MODE_INFOS,
   type AppSettings,
@@ -71,13 +72,8 @@ function toggleInSet(prev: Set<string>, id: string): Set<string> {
 export default function SettingsForm({ initial }: { initial: AppSettings }) {
   const [values, setValues] = useState<AppSettings>(initial);
   const [saving, setSaving] = useState(false);
-  const [openTooltips, setOpenTooltips] = useState<Set<string>>(new Set());
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const { banner, show: showBanner, resolve: resolveBanner } = useBanner();
-
-  const toggleTooltip = useCallback((id: string) => {
-    setOpenTooltips((prev) => toggleInSet(prev, id));
-  }, []);
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections((prev) => toggleInSet(prev, id));
@@ -122,48 +118,22 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
     <>
       {banner && <SettingsBanner phase={banner.phase} label={banner.label} />}
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
-          <p className="mt-1 text-sm text-ink-500">Tes conditions d&apos;emprunt et seuils par défaut</p>
-        </div>
-        <div className="relative shrink-0 pt-0.5">
-          <button
-            onClick={() => toggleTooltip("main")}
-            className="rounded-full p-1 hover:bg-ink-100"
-            aria-label="Informations sur le profil investisseur"
-          >
-            <Info className="h-5 w-5 text-ink-400 hover:text-ink-600" />
-          </button>
-          <div className={`absolute right-0 top-8 z-10 w-48 rounded-lg border border-ink-200 bg-white p-3 text-xs text-ink-700 shadow-lg transition-opacity ${
-            openTooltips.has("main") ? "block" : "hidden sm:group-hover:block"
-          }`}>
-            Appliqué à tous tes biens. Tu peux surcharger les valeurs bien par bien dans leur Simulation financière.
-          </div>
-        </div>
+      {/* Pas d'icône « i » ici : son contenu tenait en une phrase, et un tooltip
+          isolé à l'autre bout du titre se lit comme un élément orphelin. */}
+      <div>
+        <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
+        <p className="mt-1 max-w-prose text-sm leading-relaxed text-ink-500">
+          Tes conditions d&apos;emprunt et tes seuils par défaut, appliqués à tous tes biens.
+          Chaque bien peut les surcharger dans sa Simulation financière.
+        </p>
       </div>
 
       <section className="rounded-xl border border-ink-200 bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <Landmark className="h-4 w-4 text-accent-600" />
-            Profil emprunteur
-          </h2>
-          <div className="group relative">
-            <button
-              onClick={() => toggleTooltip("borrower")}
-              className="rounded p-0.5 hover:bg-ink-100"
-              aria-label="Informations sur le profil emprunteur"
-            >
-              <Info className="h-4 w-4 text-ink-400 hover:text-ink-600" />
-            </button>
-            <div className={`absolute right-0 top-6 z-10 w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-700 shadow-lg transition-opacity ${
-              openTooltips.has("borrower") ? "block" : "hidden group-hover:block"
-            }`}>
-              Modifie ces valeurs peut rendre les analyses obsolètes. Chaque bien te proposera de les relancer.
-            </div>
-          </div>
-        </div>
+        <SectionHeader icon={Landmark} title="Profil emprunteur" />
+        <p className="mt-2 text-xs leading-relaxed text-ink-500">
+          Les modifier rend les analyses déjà calculées obsolètes : chaque bien te proposera
+          de relancer la sienne.
+        </p>
         <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
           <NumberField
             label="Taux du crédit"
@@ -200,25 +170,12 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
             concurrente au moment précis où il faut trancher. À deux options
             décrites en trois lignes chacune, le coût en hauteur est nul. */}
         <fieldset className="mt-6">
-          <div className="flex items-center justify-between">
-            <legend className="text-sm font-medium text-ink-700">
-              Couverture de l&apos;emprunt
-            </legend>
-            <div className="group relative">
-              <button
-                onClick={() => toggleTooltip("coverage")}
-                className="rounded p-0.5 hover:bg-ink-100"
-                aria-label="Informations sur la couverture de l'emprunt"
-              >
-                <Info className="h-4 w-4 text-ink-400 hover:text-ink-600" />
-              </button>
-              <div className={`absolute right-0 top-6 z-10 w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-700 shadow-lg transition-opacity ${
-                openTooltips.has("coverage") ? "block" : "hidden group-hover:block"
-              }`}>
-                Base du montant emprunté. Modifiable bien par bien.
-              </div>
-            </div>
-          </div>
+          <GroupHeading
+            as="legend"
+            icon={Wallet}
+            titre="Couverture de l'emprunt"
+            description="Ce que couvre l'emprunt tant que tu ne saisis pas de montant sur un bien."
+          />
           <div className="mt-4 flex flex-col gap-3">
             {FINANCEMENT_MODES.map((mode) => {
               const info = FINANCEMENT_MODE_INFOS[mode];
@@ -287,10 +244,10 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         isOpen={expandedSections.has("seuils")}
         onToggle={toggleSection}
       >
-        <p className="text-xs leading-relaxed text-ink-600">
-          Ces deux seuils colorent les chiffres dans toute l&apos;app — vert au-dessus du seuil
-          vert, ambre entre les deux, rouge en dessous du seuil rouge — et pèsent sur le score
-          global de chaque bien.
+        {/* Une seule ligne : la répartition des couleurs est MONTRÉE par la barre
+            de chaque groupe, la redire en prose faisait doublon. */}
+        <p className="text-xs leading-relaxed text-ink-500">
+          Ils colorent les chiffres dans toute l&apos;app et pèsent sur le score de chaque bien.
         </p>
 
         <SeuilGroup
@@ -298,7 +255,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
           titre="Rendement net"
           description="Le loyer annuel, net de charges et d'impôts, rapporté au coût total de l'opération."
           rougeLabel="Seuil rouge"
-          rougeHint="En dessous, le bien est écarté : le score global est plafonné à 5/10."
+          rougeHint="En dessous, le score global du bien est plafonné à 5/10."
           vertLabel="Seuil vert"
           vertHint="Au-dessus, ton objectif de rentabilité est atteint."
           suffix="%/an"
@@ -317,9 +274,9 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
           titre="Cash-flow mensuel"
           description="Ce qu'il reste chaque mois une fois le crédit, les charges et l'impôt payés."
           rougeLabel="Seuil rouge"
-          rougeHint="En dessous, l'effort d'épargne mensuel devient un point d'alerte."
+          rougeHint="En dessous, l'effort d'épargne devient un point d'alerte."
           vertLabel="Seuil vert"
-          vertHint="Au-dessus, l'opération s'autofinance selon tes critères."
+          vertHint="Au-dessus, l'opération s'autofinance."
           suffix="€/mois"
           vert={values.cashflowSeuilVertEuros}
           rouge={values.cashflowSeuilRougeEuros}
@@ -406,10 +363,7 @@ function CollapsibleSection({
         aria-controls={`section-${id}`}
         className="flex w-full items-center justify-between px-6 py-4 transition-colors hover:bg-ink-50 sm:pointer-events-none sm:cursor-default sm:hover:bg-transparent"
       >
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <Icon className="h-4 w-4 text-accent-600" />
-          {title}
-        </h2>
+        <SectionHeader icon={Icon} title={title} />
         <ChevronDown
           className={`h-5 w-5 text-ink-400 transition-transform sm:hidden ${isOpen ? "rotate-180" : ""}`}
         />
@@ -456,13 +410,7 @@ function SeuilGroup({
 }) {
   return (
     <section className="space-y-4">
-      <div>
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-800">
-          <Icon className="h-4 w-4 text-ink-400" />
-          {titre}
-        </h3>
-        <p className="mt-1 text-xs leading-relaxed text-ink-600">{description}</p>
-      </div>
+      <GroupHeading icon={Icon} titre={titre} description={description} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
@@ -484,17 +432,72 @@ function SeuilGroup({
         </div>
       )}
 
-      <div className="space-y-1">
-        <div className="flex h-1.5 overflow-hidden rounded-full">
-          <div className={`flex-1 ${valide ? "bg-red-400" : "bg-ink-200"}`} />
-          <div className={`flex-1 ${valide ? "bg-amber-400" : "bg-ink-200"}`} />
-          <div className={`flex-1 ${valide ? "bg-emerald-400" : "bg-ink-200"}`} />
-        </div>
-        <div className="flex justify-between font-mono text-[10px] tabular-nums text-ink-400">
-          <span>R {formatValue(rouge)}</span>
-          <span>V {formatValue(vert)}</span>
-        </div>
-      </div>
+      <ZonesBar valide={valide} rouge={formatValue(rouge)} vert={formatValue(vert)} />
     </section>
+  );
+}
+
+/** Les trois zones que les deux seuils découpent, nommées. Remplace l'ancien
+ *  couple « R 4,0 % / V 5,0 % » : les initiales étaient un code à déchiffrer, et
+ *  la barre ne disait pas à quoi servaient ses couleurs. Ici la valeur est posée
+ *  SUR la frontière qu'elle définit — c'est le sens même d'un seuil. */
+function ZonesBar({ valide, rouge, vert }: { valide: boolean; rouge: string; vert: string }) {
+  const zones = [
+    { label: "Alerte", text: "text-red-600", bar: "bg-red-400" },
+    { label: "À surveiller", text: "text-amber-700", bar: "bg-amber-400" },
+    { label: "Objectif", text: "text-emerald-700", bar: "bg-emerald-400" },
+  ];
+  return (
+    <div aria-hidden>
+      <div className="flex text-[10px] font-medium uppercase tracking-wide">
+        {zones.map((z, i) => (
+          <span
+            key={z.label}
+            className={`flex-1 ${valide ? z.text : "text-ink-400"} ${
+              i === 1 ? "text-center" : i === 2 ? "text-right" : ""
+            }`}
+          >
+            {z.label}
+          </span>
+        ))}
+      </div>
+      <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full">
+        {zones.map((z) => (
+          <div key={z.label} className={`flex-1 ${valide ? z.bar : "bg-ink-200"}`} />
+        ))}
+      </div>
+      {/* Positionnées aux tiers, décalées de leur demi-largeur : la valeur est
+          centrée sur la frontière de couleur, pas sur une des deux zones. */}
+      <div className="relative mt-1.5 h-4 font-mono text-[10px] tabular-nums text-ink-500">
+        <span className="absolute left-1/3 -translate-x-1/2">{rouge}</span>
+        <span className="absolute left-2/3 -translate-x-1/2">{vert}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Sous-titre de groupe, niveau 2 : casse normale + `ink-800`, là où le titre de
+ *  carte (`SectionHeader`) est en capitales + `ink-500`. Partagé par les trois
+ *  groupes de la page pour qu'ils ne divergent pas — ils l'avaient déjà fait une
+ *  fois (`legend` en `font-medium ink-700` face à des `h3` en `semibold ink-800`). */
+function GroupHeading({
+  as: Tag = "h3",
+  icon: Icon,
+  titre,
+  description,
+}: {
+  as?: "h3" | "legend";
+  icon: LucideIcon;
+  titre: string;
+  description: string;
+}) {
+  return (
+    <div className="w-full">
+      <Tag className="flex items-center gap-2 text-sm font-semibold text-ink-800">
+        <Icon className="h-4 w-4 text-ink-400" />
+        {titre}
+      </Tag>
+      <p className="mt-1 text-xs leading-relaxed text-ink-500">{description}</p>
+    </div>
   );
 }

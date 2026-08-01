@@ -1001,17 +1001,15 @@ désormais deux **groupes** d'une seule carte, introduits par un paragraphe comm
 qui explique ce que les seuils pilotent (couleur des chiffres + score global).
 Ne pas les re-séparer en deux cartes.
 
-- **`SeuilGroup`** (ex-`SeuilCard`) rend UN couple rouge/vert : sous-titre `h3`
-  (`text-ink-800`, pas de capitales — la capitale est réservée au `h2` de la
-  carte), phrase de définition de la métrique, les deux `NumberField`, la barre
-  tricolore. Ce n'est plus une carte : pas de bordure ni de fond propres, c'est
-  la carte parente qui les porte.
+- **`SeuilGroup`** (ex-`SeuilCard`) rend UN couple rouge/vert : `GroupHeading`,
+  les deux `NumberField`, la `ZonesBar`. Ce n'est plus une carte : pas de bordure
+  ni de fond propres, c'est la carte parente qui les porte.
 - **Chaque champ porte son propre sous-titre** (`rougeHint` / `vertHint`) qui dit
-  ce que le seuil DÉCLENCHE, pas ce qu'il vaut — « En dessous, le bien est
-  écarté : le score global est plafonné à 5/10 », « Au-dessus, l'opération
-  s'autofinance ». C'est la seule chose que l'utilisateur ne peut pas déduire de
-  l'écran ; les garder factuels et alignés sur le code (voir les plafonds de
-  `computeScoreGlobal` et `cashflowTone`).
+  ce que le seuil DÉCLENCHE, pas ce qu'il vaut — « En dessous, le score global du
+  bien est plafonné à 5/10 », « Au-dessus, l'opération s'autofinance ». C'est la
+  seule chose que l'utilisateur ne peut pas déduire de l'écran ; les garder
+  factuels et alignés sur le code (voir les plafonds de `computeScoreGlobal` et
+  `cashflowTone`).
 - Le `hint` de `form/Fields.tsx` ne convient PAS pour ça : il se rend **inline à
   côté du label** (c'est l'emplacement des badges type `AiEstimatedBadge`). Les
   sous-titres sont donc des `<p>` rendus sous le champ par `SeuilGroup`.
@@ -1019,6 +1017,44 @@ Ne pas les re-séparer en deux cartes.
   l'utilisateur n'a pas déplié (`hidden` + `sm:block`), et le bouton d'en-tête est
   neutralisé au-dessus de `sm:` (`sm:pointer-events-none`). Le chevron n'existe
   que sur mobile.
+
+### `ZonesBar` — la barre nomme ses zones, la valeur est SUR la frontière
+
+L'ancien pied de barre affichait `R 4,0 %` … `V 5,0 %` aux deux extrémités. Deux
+défauts cumulés : les initiales étaient un code à déchiffrer, et une valeur collée
+au bord gauche décrivait en fait une frontière située au tiers de la barre.
+
+`ZonesBar` nomme les trois zones au-dessus (**Alerte** `red-600` / **À surveiller**
+`amber-700` / **Objectif** `emerald-700`) et pose chaque seuil **centré sur la
+frontière de couleur qu'il définit** (`absolute left-1/3` et `left-2/3`, chacun
+`-translate-x-1/2`). C'est le sens même d'un seuil : il sépare, il ne borne pas.
+
+C'est aussi ce qui a permis de ramener le paragraphe d'intro de la carte à une
+seule ligne — la répartition des couleurs est désormais MONTRÉE, la redire en
+prose faisait doublon. La barre est `aria-hidden` : elle ne fait que redessiner
+des valeurs déjà lues par les deux champs et leurs sous-titres.
+
+### Deux niveaux de titre, et AUCUNE icône « i »
+
+| Niveau | Composant | Rendu | Exemples |
+|---|---|---|---|
+| Carte | `SectionHeader` (partagé) | pastille `accent-50` + CAPITALES + `ink-500` | « PROFIL EMPRUNTEUR », « SEUILS DE DÉCISION » |
+| Groupe | `GroupHeading` (local) | icône `ink-400` + casse normale + `ink-800` | « Couverture de l'emprunt », « Rendement net », « Cash-flow mensuel » |
+
+`GroupHeading` accepte `as="legend"` pour le `fieldset` de la couverture
+d'emprunt — sans quoi ce titre divergeait (il était en `font-medium ink-700` face
+à des `h3` en `semibold ink-800`, pour le même niveau hiérarchique). Chaque niveau
+porte une phrase d'explication sous le titre : c'est la forme commune à tous les
+blocs de la page.
+
+La page n'a **plus aucun tooltip `Info`** — elle en portait trois (en-tête, profil
+emprunteur, couverture). Leur contenu tenait à chaque fois en une phrase, et le
+mettre derrière un survol posait trois problèmes : invisible au doigt, orphelin
+visuellement (l'icône de l'en-tête flottait à l'autre bout du titre), et surtout
+il cachait un **avertissement de conséquence** (« les modifier rend les analyses
+obsolètes ») que l'utilisateur doit lire AVANT d'éditer, pas après avoir survolé.
+Les trois phrases sont donc rendues en clair. Ne pas réintroduire d'icône « i »
+sur cet écran : si une explication mérite d'être écrite, elle mérite d'être vue.
 
 ## Héritage : `resolveInputs`, point de passage unique
 
