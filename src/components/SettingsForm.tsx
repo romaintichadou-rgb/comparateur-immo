@@ -167,7 +167,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
               </div>
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-3 space-y-3">
             {FINANCEMENT_MODES.map((mode) => {
               const info = FINANCEMENT_MODE_INFOS[mode];
               const actif = values.financementMode === mode;
