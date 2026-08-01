@@ -167,7 +167,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
               </div>
             </div>
           </div>
-          <div className="mt-4 flex flex-col gap-4">
+          <div className="mt-4 flex flex-col gap-3">
             {FINANCEMENT_MODES.map((mode) => {
               const info = FINANCEMENT_MODE_INFOS[mode];
               const actif = values.financementMode === mode;
@@ -209,7 +209,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
                       <span className={`block text-sm font-medium ${actif ? "text-accent-800" : "text-ink-800"}`}>
                         {info.titre}
                       </span>
-                      <span className="mt-0.5 block text-[11px] leading-tight text-ink-500">
+                      <span className="mt-1 block text-[11px] leading-tight text-ink-500">
                         {info.detail}
                       </span>
                       <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium font-mono tabular-nums ${
@@ -334,7 +334,7 @@ function SeuilCard({
           <Icon className="h-4 w-4 text-ink-400" />
           {titre}
         </h2>
-        <p className="mt-0.5 text-[11px] text-ink-400">{description}</p>
+        <p className="mt-1 text-[11px] text-ink-400">{description}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
