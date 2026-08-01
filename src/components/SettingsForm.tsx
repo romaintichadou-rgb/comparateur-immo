@@ -167,7 +167,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
               </div>
             </div>
           </div>
-          <div className="mt-4 flex flex-col gap-8">
+          <div className="mt-4 flex flex-col gap-4">
             {FINANCEMENT_MODES.map((mode) => {
               const info = FINANCEMENT_MODE_INFOS[mode];
               const actif = values.financementMode === mode;
