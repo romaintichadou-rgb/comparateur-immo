@@ -53,7 +53,25 @@ function useBanner() {
 export default function SettingsForm({ initial }: { initial: AppSettings }) {
   const [values, setValues] = useState<AppSettings>(initial);
   const [saving, setSaving] = useState(false);
+  const [openTooltips, setOpenTooltips] = useState<Set<string>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const { banner, show: showBanner, resolve: resolveBanner } = useBanner();
+
+  const toggleTooltip = useCallback((id: string) => {
+    setOpenTooltips((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSection = useCallback((id: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
 
   function set<K extends keyof AppSettings>(key: K, v: number | null) {
     setValues((s) => ({ ...s, [key]: v ?? 0 }));
@@ -99,9 +117,17 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
           <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
           <p className="mt-1 text-sm text-ink-500">Tes conditions d&apos;emprunt et seuils par défaut</p>
         </div>
-        <div className="group relative shrink-0 pt-0.5">
-          <Info className="h-5 w-5 text-ink-300 hover:text-ink-500" />
-          <div className="absolute right-0 top-8 z-10 hidden w-48 rounded-lg border border-ink-200 bg-white p-3 text-xs text-ink-600 shadow-lg group-hover:block">
+        <div className="relative shrink-0 pt-0.5">
+          <button
+            onClick={() => toggleTooltip("main")}
+            className="rounded-full p-1 hover:bg-ink-100"
+            aria-label="Informations sur le profil investisseur"
+          >
+            <Info className="h-5 w-5 text-ink-400 hover:text-ink-600" />
+          </button>
+          <div className={`absolute right-0 top-8 z-10 w-48 rounded-lg border border-ink-200 bg-white p-3 text-xs text-ink-700 shadow-lg transition-opacity ${
+            openTooltips.has("main") ? "block" : "hidden sm:group-hover:block"
+          }`}>
             Appliqué à tous tes biens. Tu peux surcharger les valeurs bien par bien dans leur Simulation financière.
           </div>
         </div>
@@ -114,8 +140,16 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
             Profil emprunteur
           </h2>
           <div className="group relative">
-            <Info className="h-4 w-4 text-ink-300 hover:text-ink-500 cursor-help" />
-            <div className="absolute right-0 top-6 z-10 hidden w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-600 shadow-lg group-hover:block">
+            <button
+              onClick={() => toggleTooltip("borrower")}
+              className="rounded p-0.5 hover:bg-ink-100"
+              aria-label="Informations sur le profil emprunteur"
+            >
+              <Info className="h-4 w-4 text-ink-400 hover:text-ink-600" />
+            </button>
+            <div className={`absolute right-0 top-6 z-10 w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-700 shadow-lg transition-opacity ${
+              openTooltips.has("borrower") ? "block" : "hidden group-hover:block"
+            }`}>
               Modifie ces valeurs peut rendre les analyses obsolètes. Chaque bien te proposera de les relancer.
             </div>
           </div>
@@ -161,8 +195,16 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
               Couverture de l&apos;emprunt
             </legend>
             <div className="group relative">
-              <Info className="h-4 w-4 text-ink-300 hover:text-ink-500 cursor-help" />
-              <div className="absolute right-0 top-6 z-10 hidden w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-600 shadow-lg group-hover:block">
+              <button
+                onClick={() => toggleTooltip("coverage")}
+                className="rounded p-0.5 hover:bg-ink-100"
+                aria-label="Informations sur la couverture de l'emprunt"
+              >
+                <Info className="h-4 w-4 text-ink-400 hover:text-ink-600" />
+              </button>
+              <div className={`absolute right-0 top-6 z-10 w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-700 shadow-lg transition-opacity ${
+                openTooltips.has("coverage") ? "block" : "hidden group-hover:block"
+              }`}>
                 Base du montant emprunté. Modifiable bien par bien.
               </div>
             </div>
@@ -228,43 +270,60 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         </fieldset>
       </section>
 
-      <SeuilCard
-        icon={TrendingUp}
-        titre="Rendement net"
-        description="À partir du seuil vert, l'objectif de rentabilité est atteint. En dessous du seuil rouge, c'est rédhibitoire (le score global en tient compte)."
-        vertLabel="Seuil vert"
-        rougeLabel="Seuil rouge"
-        suffix="%/an"
-        vert={values.rendementSeuilVertPct}
-        rouge={values.rendementSeuilRougePct}
-        onVertChange={(v) => set("rendementSeuilVertPct", v)}
-        onRougeChange={(v) => set("rendementSeuilRougePct", v)}
-        formatValue={(v) => `${v.toFixed(1).replace(".", ",")} %`}
-        valide={rendementValide}
-      />
+      <CollapsibleSection id="rendement" title="Rendement net" isOpen={expandedSections.has("rendement")} onToggle={toggleSection}>
+        <SeuilCard
+          icon={TrendingUp}
+          titre="Rendement net"
+          description="À partir du seuil vert, l'objectif de rentabilité est atteint. En dessous du seuil rouge, c'est rédhibitoire (le score global en tient compte)."
+          vertLabel="Seuil vert"
+          rougeLabel="Seuil rouge"
+          suffix="%/an"
+          vert={values.rendementSeuilVertPct}
+          rouge={values.rendementSeuilRougePct}
+          onVertChange={(v) => set("rendementSeuilVertPct", v)}
+          onRougeChange={(v) => set("rendementSeuilRougePct", v)}
+          formatValue={(v) => `${v.toFixed(1).replace(".", ",")} %`}
+          valide={rendementValide}
+          hideHeader
+        />
+      </CollapsibleSection>
 
-      <SeuilCard
-        icon={Banknote}
-        titre="Cash-flow mensuel"
-        description="À partir du seuil vert, c'est GO. En dessous du seuil rouge, c'est un point d'alerte."
-        vertLabel="Seuil vert"
-        rougeLabel="Seuil rouge"
-        suffix="€/mois"
-        vert={values.cashflowSeuilVertEuros}
-        rouge={values.cashflowSeuilRougeEuros}
-        onVertChange={(v) => set("cashflowSeuilVertEuros", v)}
-        onRougeChange={(v) => set("cashflowSeuilRougeEuros", v)}
-        formatValue={(v) => `${Math.round(v)} €`}
-        valide={cashflowValide}
-      />
+      <CollapsibleSection id="cashflow" title="Cash-flow mensuel" isOpen={expandedSections.has("cashflow")} onToggle={toggleSection}>
+        <SeuilCard
+          icon={Banknote}
+          titre="Cash-flow mensuel"
+          description="À partir du seuil vert, c'est GO. En dessous du seuil rouge, c'est un point d'alerte."
+          vertLabel="Seuil vert"
+          rougeLabel="Seuil rouge"
+          suffix="€/mois"
+          vert={values.cashflowSeuilVertEuros}
+          rouge={values.cashflowSeuilRougeEuros}
+          onVertChange={(v) => set("cashflowSeuilVertEuros", v)}
+          onRougeChange={(v) => set("cashflowSeuilRougeEuros", v)}
+          formatValue={(v) => `${Math.round(v)} €`}
+          valide={cashflowValide}
+          hideHeader
+        />
+      </CollapsibleSection>
 
-      <button
-        onClick={handleSave}
-        disabled={saving || !rendementValide || !cashflowValide}
-        className="w-full rounded-lg bg-accent-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {saving ? "Enregistrement..." : "Enregistrer"}
-      </button>
+      <div>
+        {(saving || !rendementValide || !cashflowValide) && (
+          <div className="mb-3 flex gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+            <p className="text-xs text-amber-800">
+              {!rendementValide || !cashflowValide ? "Vérifie que tous les seuils sont valides (vert > rouge)." : "Enregistrement en cours…"}
+            </p>
+          </div>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={saving || !rendementValide || !cashflowValide}
+          className="w-full rounded-lg bg-accent-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-disabled={saving || !rendementValide || !cashflowValide}
+        >
+          {saving ? "Enregistrement..." : "Enregistrer"}
+        </button>
+      </div>
       </div>
     </>
   );
@@ -300,6 +359,44 @@ function SettingsBanner({ phase, label }: BannerState) {
   );
 }
 
+function CollapsibleSection({
+  id,
+  title,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  isOpen: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-ink-200 bg-white overflow-hidden">
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-ink-50 transition-colors sm:cursor-default sm:pointer-events-none"
+      >
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">{title}</h2>
+        <div className="sm:hidden">
+          <svg
+            className={`h-5 w-5 text-ink-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        </div>
+      </button>
+      <div className={`px-6 pb-6 space-y-4 sm:block ${isOpen ? "block" : "hidden"}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function SeuilCard({
   icon: Icon,
   titre,
@@ -313,6 +410,7 @@ function SeuilCard({
   onRougeChange,
   formatValue,
   valide,
+  hideHeader = false,
 }: {
   icon: typeof Banknote;
   titre: string;
@@ -326,24 +424,36 @@ function SeuilCard({
   onRougeChange: (v: number | null) => void;
   formatValue: (v: number) => string;
   valide: boolean;
+  hideHeader?: boolean;
 }) {
   return (
-    <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <Icon className="h-4 w-4 text-ink-400" />
-          {titre}
-        </h2>
-        <p className="mt-1 text-[11px] text-ink-400">{description}</p>
-      </div>
+    <section className="space-y-4">
+      {!hideHeader && (
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <Icon className="h-4 w-4 text-ink-400" />
+            {titre}
+          </h2>
+          <p className="mt-1 text-[11px] text-ink-700">{description}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
-        <NumberField label={rougeLabel} value={rouge} onChange={onRougeChange} suffix={suffix} />
-        <NumberField label={vertLabel} value={vert} onChange={onVertChange} suffix={suffix} />
+        <div>
+          <NumberField label={rougeLabel} value={rouge} onChange={onRougeChange} suffix={suffix} />
+          {!valide && <p className="mt-1 text-xs text-amber-700 font-medium">Inférieur à</p>}
+        </div>
+        <div>
+          <NumberField label={vertLabel} value={vert} onChange={onVertChange} suffix={suffix} />
+          {!valide && <p className="mt-1 text-xs text-amber-700 font-medium">Supérieur à</p>}
+        </div>
       </div>
 
       {!valide && (
-        <p className="text-xs text-amber-600">Le seuil vert doit être supérieur au seuil rouge.</p>
+        <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+          <p className="text-xs text-amber-800">Le seuil vert doit être supérieur au seuil rouge.</p>
+        </div>
       )}
 
       <div className="space-y-1">
