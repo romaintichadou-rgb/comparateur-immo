@@ -46,7 +46,33 @@ export interface SimulationInputs {
   indexationChargesPct: number | null;
   /** Vacance locative, en % du loyer annuel (ex. 5 = 1 mois vide sur 20). null = désactivée (occupation 100 %). */
   vacanceLocativePct: number | null;
+  /**
+   * Régime fiscal d'imposition des revenus locatifs.
+   *
+   * `null` (ou clé absente sur un bien antérieur) = `REGIME_FISCAL_DEFAUT`.
+   *
+   * ⚠️ **Champ DÉCLARATIF pour l'instant** : `simulate()` calcule toujours en
+   * LMNP réel, quelle que soit la valeur. Il est stocké et affiché pour que le
+   * choix soit explicite et que l'ajout d'un second régime n'ait pas à migrer
+   * les données existantes — mais ajouter une entrée à `REGIMES_FISCAUX` ne
+   * suffira PAS à le faire calculer : il faudra brancher `simulate` dessus
+   * (amortissements, assiette, prélèvements sociaux, report de déficit).
+   */
+  regimeFiscal: RegimeFiscal | null;
 }
+
+/**
+ * Régimes fiscaux proposés. Un seul est géré aujourd'hui — la structure existe
+ * pour que l'ajout des revenus fonciers (location nue) ou du micro-BIC soit une
+ * entrée de plus ici, plus une refonte du champ.
+ */
+export const REGIMES_FISCAUX = {
+  lmnp_reel: "LMNP au réel",
+} as const;
+
+export type RegimeFiscal = keyof typeof REGIMES_FISCAUX;
+
+export const REGIME_FISCAL_DEFAUT: RegimeFiscal = "lmnp_reel";
 
 /** Hypothèses LMNP réel (calées sur le simulateur de référence). */
 export const LMNP = {
@@ -161,6 +187,9 @@ export function defaultInputs(): SimulationInputs {
     revalorisationLoyerPct: null,
     indexationChargesPct: null,
     vacanceLocativePct: null,
+    // null = REGIME_FISCAL_DEFAUT. Non figé ici pour la même raison que les
+    // champs hérités : un défaut recopié dans la donnée ne suit plus le code.
+    regimeFiscal: null,
   };
 }
 
@@ -171,13 +200,15 @@ export function defaultInputs(): SimulationInputs {
  */
 export interface InputsResolus extends Omit<
   SimulationInputs,
-  "tauxCreditPct" | "dureeAnnees" | "tauxAssurancePct" | "tmiPct"
+  "tauxCreditPct" | "dureeAnnees" | "tauxAssurancePct" | "tmiPct" | "regimeFiscal"
 > {
   tauxCreditPct: number;
   dureeAnnees: number;
   tauxAssurancePct: number;
   tmiPct: number;
   financementMode: FinancementMode;
+  /** Toujours renseigné une fois résolu. `simulate()` ne le lit pas ENCORE. */
+  regimeFiscal: RegimeFiscal;
 }
 
 /**
@@ -203,6 +234,7 @@ export function resolveInputs(
     tauxAssurancePct: base.tauxAssurancePct ?? settings.tauxAssurancePct,
     tmiPct: base.tmiPct ?? settings.tmiPct,
     financementMode: settings.financementMode,
+    regimeFiscal: base.regimeFiscal ?? REGIME_FISCAL_DEFAUT,
   };
 }
 

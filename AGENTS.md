@@ -289,12 +289,13 @@ valeur exacte de la chaîne.
   est un total. Si un nouveau bloc d'analyse est ajouté, vérifier s'il a
   besoin du même traitement (comparer à une base "appartement" par défaut).
 - **Limite connue, non traitée** : la simulation financière
-  (`src/lib/simulation.ts`) suppose partout le régime **LMNP réel (meublé)**.
-  Un immeuble de rapport est souvent loué nu (revenus fonciers, régime
-  fiscal différent) — les montants restent corrects (ils scalent avec le
-  loyer total et les charges totales), mais le régime fiscal n'est PAS
-  spécialisé par type de bien. À traiter comme un chantier séparé si demandé,
-  pas un oubli à corriger silencieusement en marge d'une autre tâche.
+  (`src/lib/simulation.ts`) **calcule** partout en régime **LMNP réel
+  (meublé)**. Un immeuble de rapport est souvent loué nu (revenus fonciers,
+  régime fiscal différent) — les montants restent corrects (ils scalent avec le
+  loyer total et les charges totales), mais le calcul n'est PAS spécialisé par
+  type de bien. L'existence du champ `regimeFiscal` ne change rien à ça (voir
+  « Régime fiscal » plus bas) : c'est un chantier séparé, pas un oubli à
+  corriger silencieusement en marge d'une autre tâche.
 
 # Architecture d'estimation (loyer + charges)
 
@@ -1240,6 +1241,30 @@ optionnelles). Un unique bouton « Modifier » bascule tout le panneau en saisie
 - **Le mode d'emploi de la saisie** (« vide le champ pour repasser en auto »)
   n'est rendu **qu'en édition**. En lecture il occupait quatre lignes pour
   expliquer un geste que l'utilisateur n'était pas en train de faire.
+
+## Régime fiscal — champ DÉCLARATIF, pas encore un levier de calcul
+
+`SimulationInputs.regimeFiscal` (`RegimeFiscal | null`, `null` = défaut) est
+proposé dans la colonne Fiscalité du panneau. Les libellés viennent de
+**`REGIMES_FISCAUX`** (`simulation.ts`), seule source : la liste d'options de
+l'UI en est dérivée (`Object.keys`), ajouter une entrée suffit à la proposer.
+
+⚠️ **`simulate()` ne lit pas encore ce champ** — il calcule en LMNP réel quelle
+que soit sa valeur. Ajouter un régime à `REGIMES_FISCAUX` le fera donc
+apparaître dans le menu **sans rien changer aux chiffres**, ce qui serait un
+mensonge à l'écran. Un nouveau régime demande de brancher `simulate` :
+amortissements, assiette imposable, prélèvements sociaux, report de déficit.
+
+Aujourd'hui un seul régime est géré, donc le `<select>` n'a qu'une option. Il
+est rendu comme un choix quand même — c'en est un — avec un `hint` « seul régime
+géré » qui dit l'état réel plutôt que de laisser croire à un menu incomplet.
+
+Le champ est `.optional()` dans `simulationInputsSchema` (comme
+`vacanceLocativePct`) : les biens enregistrés avant son ajout n'ont pas la clé,
+et un `simulation_inputs` incomplet ne doit pas faire échouer tout le PATCH. Zod
+la normalise à `null` au premier enregistrement. Conséquence attendue : cette
+normalisation modifie `simulation_inputs`, donc `empreinteBien`, donc l'analyse
+du bien est signalée obsolète une fois.
 
 ## Les cartes blanches ne contiennent PLUS aucun champ
 

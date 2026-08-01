@@ -21,6 +21,10 @@ const simulationInputsSchema = z.object({
   revalorisationLoyerPct: z.number().nullable(),
   indexationChargesPct: z.number().nullable(),
   vacanceLocativePct: z.number().nullable().optional().transform((v) => v ?? null),
+  // `.optional()` comme la vacance : les biens enregistrés avant ce champ n'ont
+  // pas la clé, et un `simulation_inputs` incomplet ne doit pas faire échouer
+  // tout le PATCH. `null` = régime par défaut, résolu par `resolveInputs`.
+  regimeFiscal: z.enum(["lmnp_reel"]).nullable().optional().transform((v) => v ?? null),
 });
 
 export const PLATEFORMES = [
@@ -31,6 +35,11 @@ export const PLATEFORMES = [
   "BienIci",
   "LogicImmo",
   "LuxResidence",
+  "Century21",
+  "Laforet",
+  "AVendreALouer",
+  "Notaires",
+  "Autre",
   "Manuel",
 ] as const;
 export type Plateforme = (typeof PLATEFORMES)[number];

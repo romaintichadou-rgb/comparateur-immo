@@ -10,6 +10,8 @@ import {
   resolveInputs,
   simulate,
   LMNP,
+  REGIMES_FISCAUX,
+  type RegimeFiscal,
   INDEXATION_CHARGES_DEFAUT_PCT,
   REVALORISATION_BIEN_DEFAUT_PCT,
   REVALORISATION_LOYER_DEFAUT_PCT,
@@ -275,6 +277,9 @@ function OptionalRateField({
 
 const TMI_OPTIONS = ["11", "30", "41", "45"] as const;
 
+/** Dérivé de `REGIMES_FISCAUX` : ajouter un régime là-bas suffit à le proposer. */
+const REGIMES_FISCAUX_OPTIONS = Object.keys(REGIMES_FISCAUX) as RegimeFiscal[];
+
 // Seuils personnels (page Paramètres) : au-dessus du seuil vert c'est "GO",
 // en dessous du seuil rouge c'est un point d'alerte, entre les deux c'est
 // acceptable. Le type et la logique de tonalité viennent de scoring.ts —
@@ -528,6 +533,21 @@ export default function SimulationFinanciere({
 
             <div className="space-y-3">
               <HypGroupTitle>Fiscalité</HypGroupTitle>
+              {/* Un seul régime géré : le select n'offre donc qu'une option. Il
+                  est quand même rendu comme un choix — c'en est un, et le jour
+                  où un second régime arrive, rien ne bouge côté UI. Le `hint`
+                  dit l'état réel plutôt que de laisser croire à un menu vide. */}
+              <SelectField
+                label="Régime fiscal"
+                value={resolus.regimeFiscal}
+                onChange={(v) => set("regimeFiscal", v)}
+                options={REGIMES_FISCAUX_OPTIONS}
+                optionLabel={(v) => REGIMES_FISCAUX[v]}
+                allowEmpty={false}
+                hint={
+                  <span className="text-xs font-normal text-ink-400">seul régime géré</span>
+                }
+              />
               {/* La TMI est une tranche légale, pas une saisie libre : on garde
                   le select et on signale seulement l'ORIGINE de la valeur. */}
               <div className="flex items-end gap-1">
@@ -640,6 +660,7 @@ export default function SimulationFinanciere({
             </div>
             <div>
               <HypGroupTitle>Fiscalité</HypGroupTitle>
+              <HypRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
               <HypRow
                 label="TMI"
                 value={`${formatNombre(resolus.tmiPct)} % + ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
