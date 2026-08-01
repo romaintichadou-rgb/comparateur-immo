@@ -327,7 +327,11 @@ function SettingsBanner({ phase, label }: BannerState) {
   const Icon = BANNER_ICON[phase];
   return (
     <div className={`fixed top-0 left-0 right-0 z-40 animate-banner-in border-b backdrop-blur ${s.bg} ${s.border}`}>
-      <div className={`mx-auto flex max-w-6xl items-center gap-2.5 px-4 py-3 text-xs font-medium sm:px-6 ${s.text}`}>
+      {/* `max-w-2xl` = la largeur de CETTE page, pas le `max-w-6xl` d'où ce
+          composant a été copié (`ApartmentDetail`, dont la page fait 6xl). Sans
+          ça le message de confirmation démarrait 240 px à gauche du formulaire
+          qu'il confirme. Une bannière suit toujours le conteneur de sa page. */}
+      <div className={`mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3 text-xs font-medium sm:px-6 ${s.text}`}>
         <Icon className={`h-3.5 w-3.5 shrink-0 ${phase === "saving" ? "animate-spin" : ""}`} />
         <span className="flex-1">{label}</span>
       </div>

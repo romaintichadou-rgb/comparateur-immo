@@ -160,6 +160,35 @@ Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 | Séparateur de section | — | `border-t border-ink-100/50` |
 | Séparateur de faits | — | `divide-y divide-ink-100/50` |
 
+## Largeur de page — choisie par ARCHÉTYPE, pas au jugé
+
+Tout écran est un `mx-auto <max-w-*> px-4 py-8 sm:px-6`. La largeur suit le type
+d'écran, pas son contenu ponctuel :
+
+| Archétype | Classe | Écrans |
+|---|---|---|
+| Liste dense (tableau, carte) | `max-w-7xl` | `Navbar`, `HomeView` |
+| Détail dense (onglets, grilles de métriques) | `max-w-6xl` | `ApartmentDetail`, son `loading.tsx` |
+| Formulaire **avec colonne latérale** | `max-w-4xl` | `AddApartmentFlow` |
+| Hero / écran vide centré | `max-w-4xl` | `EmptyHomeState` |
+| Formulaire simple, colonne unique | `max-w-2xl` | `SettingsForm`, `BookmarkletView`, `SetupNotice` |
+
+⚠️ **`AddApartmentFlow` est en `4xl` À CAUSE de sa sidebar, pas parce que c'est un
+formulaire plus long.** Sa grille `lg:grid-cols-[1fr_320px]` dépense 320 px + le
+`gap-6` en colonne de droite ; le ramener à `2xl` pour « aligner les deux écrans
+de formulaire » laisserait la colonne principale à **280 px** et ses champs en
+`sm:grid-cols-2` à **100 px** chacun — inutilisables. Mesuré, pas supposé. Les
+deux écrans de formulaire ONT le droit de différer : ce qui compte est la largeur
+de la colonne de saisie (504 px ici, 624 px dans `SettingsForm`), pas celle du
+conteneur.
+
+**Une bannière fixée suit le conteneur de SA page.** `SettingsBanner` et son
+jumeau dans `ApartmentDetail` sont `fixed inset-x-0` avec un enfant
+`mx-auto max-w-*` : cette largeur doit reprendre celle de la page. Le pattern a
+été copié depuis `ApartmentDetail` (page en `6xl`) vers `SettingsForm` (page en
+`2xl`) sans l'ajuster — le message de confirmation démarrait alors 240 px à
+gauche du formulaire qu'il confirmait.
+
 ## Border radius
 
 | Contexte | Classe |
