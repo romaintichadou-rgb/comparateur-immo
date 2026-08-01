@@ -93,7 +93,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
   return (
     <>
       {banner && <SettingsBanner phase={banner.phase} label={banner.label} />}
-      <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
+      <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
@@ -107,7 +107,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         </div>
       </div>
 
-      <section className="rounded-xl border border-ink-200 bg-white p-5">
+      <section className="rounded-xl border border-ink-200 bg-white p-6">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
             <Landmark className="h-4 w-4 text-accent-600" />
@@ -120,7 +120,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
             </div>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
           <NumberField
             label="Taux du crédit"
             value={values.tauxCreditPct}
@@ -155,7 +155,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
             comparent — les enfermer dans une liste déroulante cache l'option
             concurrente au moment précis où il faut trancher. À deux options
             décrites en trois lignes chacune, le coût en hauteur est nul. */}
-        <fieldset className="mt-5">
+        <fieldset className="mt-6">
           <div className="flex items-center justify-between">
             <legend className="text-sm font-medium text-ink-700">
               Couverture de l&apos;emprunt
@@ -167,7 +167,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
               </div>
             </div>
           </div>
-          <div className="mt-3 space-y-3">
+          <div className="mt-4 space-y-4">
             {FINANCEMENT_MODES.map((mode) => {
               const info = FINANCEMENT_MODE_INFOS[mode];
               const actif = values.financementMode === mode;
@@ -328,7 +328,7 @@ function SeuilCard({
   valide: boolean;
 }) {
   return (
-    <section className="space-y-3 rounded-xl border border-ink-200 bg-white p-5">
+    <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-6">
       <div>
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Icon className="h-4 w-4 text-ink-400" />
@@ -337,7 +337,7 @@ function SeuilCard({
         <p className="mt-0.5 text-[11px] text-ink-400">{description}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         <NumberField label={rougeLabel} value={rouge} onChange={onRougeChange} suffix={suffix} />
         <NumberField label={vertLabel} value={vert} onChange={onVertChange} suffix={suffix} />
       </div>
