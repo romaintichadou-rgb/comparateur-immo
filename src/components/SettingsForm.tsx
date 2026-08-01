@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Banknote, Landmark, TrendingUp, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Banknote, Landmark, TrendingUp, CheckCircle2, AlertCircle, Loader2, Info } from "lucide-react";
 import {
   FINANCEMENT_MODE_INFOS,
   type AppSettings,
@@ -94,24 +94,32 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
     <>
       {banner && <SettingsBanner phase={banner.phase} label={banner.label} />}
       <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          Tes conditions d&apos;emprunt et tes seuils personnels. Chaque bien en hérite —
-          tu peux surcharger une valeur bien par bien depuis sa Simulation financière.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
+          <p className="mt-1 text-sm text-ink-500">Tes conditions d&apos;emprunt et seuils par défaut</p>
+        </div>
+        <div className="group relative shrink-0 pt-0.5">
+          <Info className="h-5 w-5 text-ink-300 hover:text-ink-500" />
+          <div className="absolute right-0 top-8 z-10 hidden w-48 rounded-lg border border-ink-200 bg-white p-3 text-xs text-ink-600 shadow-lg group-hover:block">
+            Appliqué à tous tes biens. Tu peux surcharger les valeurs bien par bien dans leur Simulation financière.
+          </div>
+        </div>
       </div>
 
       <section className="rounded-xl border border-ink-200 bg-white p-5">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-          <Landmark className="h-4 w-4 text-accent-600" />
-          Profil emprunteur
-        </h2>
-        <p className="mt-1.5 text-sm text-ink-500">
-          Appliqué par défaut à tous tes biens, présents et futurs. Changer une de ces
-          valeurs rend les analyses déjà calculées obsolètes — chaque bien te proposera
-          de les relancer.
-        </p>
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <Landmark className="h-4 w-4 text-accent-600" />
+            Profil emprunteur
+          </h2>
+          <div className="group relative">
+            <Info className="h-4 w-4 text-ink-300 hover:text-ink-500 cursor-help" />
+            <div className="absolute right-0 top-6 z-10 hidden w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-600 shadow-lg group-hover:block">
+              Modifie ces valeurs peut rendre les analyses obsolètes. Chaque bien te proposera de les relancer.
+            </div>
+          </div>
+        </div>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <NumberField
             label="Taux du crédit"
@@ -132,25 +140,33 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
             onChange={(v) => set("dureeAnnees", Math.max(1, Math.min(35, v ?? 25)))}
             suffix="ans"
           />
-          <SelectField
-            label="Tranche marginale d'imposition (TMI)"
-            value={String(values.tmiPct) as (typeof TMI_OPTIONS)[number]}
-            onChange={(v) => set("tmiPct", Number(v))}
-            options={TMI_OPTIONS}
-            allowEmpty={false}
-          />
+          <div className="group">
+            <SelectField
+              label="TMI"
+              value={String(values.tmiPct) as (typeof TMI_OPTIONS)[number]}
+              onChange={(v) => set("tmiPct", Number(v))}
+              options={TMI_OPTIONS}
+              allowEmpty={false}
+            />
+            <p className="mt-0.5 text-[10px] text-ink-400">Tranche marginale d&apos;imposition</p>
+          </div>
         </div>
         {/* Cartes radio, PAS un <select> : les deux modes s'excluent et se
             comparent — les enfermer dans une liste déroulante cache l'option
             concurrente au moment précis où il faut trancher. À deux options
             décrites en trois lignes chacune, le coût en hauteur est nul. */}
         <fieldset className="mt-5">
-          <legend className="text-sm font-medium text-ink-700">
-            Ce que couvre l&apos;emprunt
-          </legend>
-          <p className="mt-1 text-xs text-ink-400">
-            Base du montant emprunté tant que tu ne le saisis pas à la main sur un bien.
-          </p>
+          <div className="flex items-center justify-between">
+            <legend className="text-sm font-medium text-ink-700">
+              Couverture de l&apos;emprunt
+            </legend>
+            <div className="group relative">
+              <Info className="h-4 w-4 text-ink-300 hover:text-ink-500 cursor-help" />
+              <div className="absolute right-0 top-6 z-10 hidden w-56 rounded-lg border border-ink-200 bg-white p-2.5 text-xs text-ink-600 shadow-lg group-hover:block">
+                Base du montant emprunté. Modifiable bien par bien.
+              </div>
+            </div>
+          </div>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {FINANCEMENT_MODES.map((mode) => {
               const info = FINANCEMENT_MODE_INFOS[mode];
@@ -172,7 +188,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
                     aria-label={`${info.titre}. ${info.detail} ${info.apport}.`}
                   />
                   <span
-                    className={`flex h-full gap-2.5 rounded-lg border p-4 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-600 ${
+                    className={`flex gap-2.5 rounded-lg border p-3 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-600 ${
                       actif
                         ? "border-accent-600 bg-accent-50"
                         : "border-ink-200 bg-white hover:border-ink-300"
@@ -193,10 +209,14 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
                       <span className={`block text-sm font-medium ${actif ? "text-accent-800" : "text-ink-800"}`}>
                         {info.titre}
                       </span>
-                      <span className="mt-1 block text-xs leading-relaxed text-ink-500">
+                      <span className="mt-0.5 block text-[11px] leading-tight text-ink-500">
                         {info.detail}
                       </span>
-                      <span className={`mt-2 block font-mono text-xs font-semibold tabular-nums ${actif ? "text-accent-700" : "text-ink-400"}`}>
+                      <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium font-mono tabular-nums ${
+                        actif
+                          ? "bg-accent-100 text-accent-700"
+                          : "bg-ink-100 text-ink-600"
+                      }`}>
                         {info.apport}
                       </span>
                     </span>
@@ -308,16 +328,16 @@ function SeuilCard({
   valide: boolean;
 }) {
   return (
-    <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+    <section className="space-y-3 rounded-xl border border-ink-200 bg-white p-5">
       <div>
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
           <Icon className="h-4 w-4 text-ink-400" />
           {titre}
         </h2>
-        <p className="mt-1 text-xs text-ink-400">{description}</p>
+        <p className="mt-0.5 text-[11px] text-ink-400">{description}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <NumberField label={rougeLabel} value={rouge} onChange={onRougeChange} suffix={suffix} />
         <NumberField label={vertLabel} value={vert} onChange={onVertChange} suffix={suffix} />
       </div>
@@ -326,16 +346,15 @@ function SeuilCard({
         <p className="text-xs text-amber-600">Le seuil vert doit être supérieur au seuil rouge.</p>
       )}
 
-      <div className="space-y-1.5">
-        <div className="flex h-2 overflow-hidden rounded-full">
+      <div className="space-y-1">
+        <div className="flex h-1.5 overflow-hidden rounded-full">
           <div className={`flex-1 ${valide ? "bg-red-400" : "bg-ink-200"}`} />
           <div className={`flex-1 ${valide ? "bg-amber-400" : "bg-ink-200"}`} />
           <div className={`flex-1 ${valide ? "bg-emerald-400" : "bg-ink-200"}`} />
         </div>
-        <div className="flex justify-between font-mono text-[11px] tabular-nums text-ink-500">
-          <span>Rouge &lt; {formatValue(rouge)}</span>
-          <span>Ambre</span>
-          <span>Vert ≥ {formatValue(vert)}</span>
+        <div className="flex justify-between font-mono text-[10px] tabular-nums text-ink-400">
+          <span>R {formatValue(rouge)}</span>
+          <span>V {formatValue(vert)}</span>
         </div>
       </div>
     </section>
