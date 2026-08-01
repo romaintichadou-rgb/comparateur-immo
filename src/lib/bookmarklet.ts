@@ -207,8 +207,8 @@ if(!d.etage&&/rez[\\s-]?de[\\s-]?chauss/i.test(ft))d.etage='RDC';
 }
 if(pf==='Orpi'){
 try{
-if(!d.dpe){var dpeO=document.querySelector('.c-dpe:not(.c-dpe--ges) .c-dpe__index--active');if(dpeO){var dv=(dpeO.textContent||'').trim();if(/^[A-G]$/i.test(dv))d.dpe=dv.toUpperCase();}}
-if(!d.ges){var gesO=document.querySelector('.c-dpe--ges .c-dpe__index--active');if(gesO){var gv=(gesO.textContent||'').trim();if(/^[A-G]$/i.test(gv))d.ges=gv.toUpperCase();}}
+if(!d.dpe){var dpeO=document.querySelector('.c-dpe:not(.c-dpe--ges) .c-dpe__index--active');if(dpeO){var dv=(dpeO.textContent||'').trim().charAt(0);if(/^[A-G]$/i.test(dv))d.dpe=dv.toUpperCase();}}
+if(!d.ges){var gesO=document.querySelector('.c-dpe--ges .c-dpe__index--active');if(gesO){var gv=(gesO.textContent||'').trim().charAt(0);if(/^[A-G]$/i.test(gv))d.ges=gv.toUpperCase();}}
 if(!d.prix){var prO=document.querySelector('[class*="price-tag"],[class*="price_tag"],[class*="c-price"]');if(prO){var pv=N(prO.textContent);if(pv&&pv>=10000)d.prix=pv;}}
 if(!d.description||d.description.length<100){
 var h2s=document.querySelectorAll('h2');for(var hi=0;hi<h2s.length;hi++){if(/avis|description|pr[eé]sentation/i.test(h2s[hi].textContent||'')){var nxt=h2s[hi].nextElementSibling;if(nxt){var nt=(nxt.textContent||'').trim();if(nt.length>80){d.description=nt;break;}}}}
@@ -249,6 +249,8 @@ if(!d.prix){var pm=od.match(/(\\d[\\d\\s]{4,9})\\s?€/g);if(pm){for(var i=0;i<p
 if(!d.ville){var vm=od.match(/([A-Z\\u00C0-\\u00DC][a-z\\u00E0-\\u00FC]+(?:[- ][A-Z\\u00C0-\\u00DC][a-z\\u00E0-\\u00FC]+)*)\\s*\\(\\d{5}\\)/);if(vm)d.ville=vm[1].trim();}
 if(!d.code_postal){var cm=od.match(/\\((\\d{5})\\)/);if(cm)d.code_postal=cm[1];}
 }
+if(!d.type_bien){var tbt={studio:'Studio',appartement:'Appartement',duplex:'Duplex',loft:'Loft',maison:'Maison',immeuble:'Immeuble'};var tbp=path.toLowerCase();for(var tbk in tbt){if(tbp.indexOf(tbk)>-1){d.type_bien=tbt[tbk];break;}}}
+if(!d.type_bien&&od){var odl=od.toLowerCase();var tbt2={studio:'Studio',appartement:'Appartement',duplex:'Duplex',loft:'Loft',maison:'Maison',immeuble:'Immeuble'};for(var tbk2 in tbt2){if(odl.indexOf(tbk2)>-1){d.type_bien=tbt2[tbk2];break;}}}
 if(d.prix===undefined){
 var sels=['[data-qa-id="adview_price"]','[data-testid="price"]','[data-test="price"]','[class*="Price"]','[class*="price"]','.price'];
 for(var i=0;i<sels.length;i++){

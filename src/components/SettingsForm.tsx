@@ -1,7 +1,18 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Banknote, Landmark, TrendingUp, CheckCircle2, AlertCircle, Loader2, Info } from "lucide-react";
+import {
+  Banknote,
+  Landmark,
+  TrendingUp,
+  SlidersHorizontal,
+  ChevronDown,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Info,
+  type LucideIcon,
+} from "lucide-react";
 import {
   FINANCEMENT_MODE_INFOS,
   type AppSettings,
@@ -50,6 +61,13 @@ function useBanner() {
   return { banner, show, resolve, dismiss } as const;
 }
 
+function toggleInSet(prev: Set<string>, id: string): Set<string> {
+  const next = new Set(prev);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+
 export default function SettingsForm({ initial }: { initial: AppSettings }) {
   const [values, setValues] = useState<AppSettings>(initial);
   const [saving, setSaving] = useState(false);
@@ -58,19 +76,11 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
   const { banner, show: showBanner, resolve: resolveBanner } = useBanner();
 
   const toggleTooltip = useCallback((id: string) => {
-    setOpenTooltips((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setOpenTooltips((prev) => toggleInSet(prev, id));
   }, []);
 
   const toggleSection = useCallback((id: string) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setExpandedSections((prev) => toggleInSet(prev, id));
   }, []);
 
   function set<K extends keyof AppSettings>(key: K, v: number | null) {
@@ -270,13 +280,27 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         </fieldset>
       </section>
 
-      <CollapsibleSection id="rendement" title="Rendement net" isOpen={expandedSections.has("rendement")} onToggle={toggleSection}>
-        <SeuilCard
+      <CollapsibleSection
+        id="seuils"
+        icon={SlidersHorizontal}
+        title="Seuils de décision"
+        isOpen={expandedSections.has("seuils")}
+        onToggle={toggleSection}
+      >
+        <p className="text-xs leading-relaxed text-ink-600">
+          Ces deux seuils colorent les chiffres dans toute l&apos;app — vert au-dessus du seuil
+          vert, ambre entre les deux, rouge en dessous du seuil rouge — et pèsent sur le score
+          global de chaque bien.
+        </p>
+
+        <SeuilGroup
           icon={TrendingUp}
           titre="Rendement net"
-          description="À partir du seuil vert, l'objectif de rentabilité est atteint. En dessous du seuil rouge, c'est rédhibitoire (le score global en tient compte)."
-          vertLabel="Seuil vert"
+          description="Le loyer annuel, net de charges et d'impôts, rapporté au coût total de l'opération."
           rougeLabel="Seuil rouge"
+          rougeHint="En dessous, le bien est écarté : le score global est plafonné à 5/10."
+          vertLabel="Seuil vert"
+          vertHint="Au-dessus, ton objectif de rentabilité est atteint."
           suffix="%/an"
           vert={values.rendementSeuilVertPct}
           rouge={values.rendementSeuilRougePct}
@@ -284,17 +308,18 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
           onRougeChange={(v) => set("rendementSeuilRougePct", v)}
           formatValue={(v) => `${v.toFixed(1).replace(".", ",")} %`}
           valide={rendementValide}
-          hideHeader
         />
-      </CollapsibleSection>
 
-      <CollapsibleSection id="cashflow" title="Cash-flow mensuel" isOpen={expandedSections.has("cashflow")} onToggle={toggleSection}>
-        <SeuilCard
+        <hr className="border-t border-ink-100/50" />
+
+        <SeuilGroup
           icon={Banknote}
           titre="Cash-flow mensuel"
-          description="À partir du seuil vert, c'est GO. En dessous du seuil rouge, c'est un point d'alerte."
-          vertLabel="Seuil vert"
+          description="Ce qu'il reste chaque mois une fois le crédit, les charges et l'impôt payés."
           rougeLabel="Seuil rouge"
+          rougeHint="En dessous, l'effort d'épargne mensuel devient un point d'alerte."
+          vertLabel="Seuil vert"
+          vertHint="Au-dessus, l'opération s'autofinance selon tes critères."
           suffix="€/mois"
           vert={values.cashflowSeuilVertEuros}
           rouge={values.cashflowSeuilRougeEuros}
@@ -302,7 +327,6 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
           onRougeChange={(v) => set("cashflowSeuilRougeEuros", v)}
           formatValue={(v) => `${Math.round(v)} €`}
           valide={cashflowValide}
-          hideHeader
         />
       </CollapsibleSection>
 
@@ -361,48 +385,52 @@ function SettingsBanner({ phase, label }: BannerState) {
 
 function CollapsibleSection({
   id,
+  icon: Icon,
   title,
   isOpen,
   onToggle,
   children,
 }: {
   id: string;
+  icon: LucideIcon;
   title: string;
   isOpen: boolean;
   onToggle: (id: string) => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-ink-200 bg-white overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
       <button
         onClick={() => onToggle(id)}
-        className="w-full px-6 py-4 flex items-center justify-between hover:bg-ink-50 transition-colors sm:cursor-default sm:pointer-events-none"
+        aria-expanded={isOpen}
+        aria-controls={`section-${id}`}
+        className="flex w-full items-center justify-between px-6 py-4 transition-colors hover:bg-ink-50 sm:pointer-events-none sm:cursor-default sm:hover:bg-transparent"
       >
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">{title}</h2>
-        <div className="sm:hidden">
-          <svg
-            className={`h-5 w-5 text-ink-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </div>
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
+          <Icon className="h-4 w-4 text-accent-600" />
+          {title}
+        </h2>
+        <ChevronDown
+          className={`h-5 w-5 text-ink-400 transition-transform sm:hidden ${isOpen ? "rotate-180" : ""}`}
+        />
       </button>
-      <div className={`px-6 pb-6 space-y-4 sm:block ${isOpen ? "block" : "hidden"}`}>
+      <div id={`section-${id}`} className={`space-y-5 px-6 pb-6 sm:block ${isOpen ? "block" : "hidden"}`}>
         {children}
       </div>
     </div>
   );
 }
 
-function SeuilCard({
+/** Un couple de seuils (rouge / vert) pour une métrique. Rendu comme un groupe
+ *  au sein de la carte « Seuils de décision », pas comme une carte autonome. */
+function SeuilGroup({
   icon: Icon,
   titre,
   description,
-  vertLabel,
   rougeLabel,
+  rougeHint,
+  vertLabel,
+  vertHint,
   suffix,
   vert,
   rouge,
@@ -410,13 +438,14 @@ function SeuilCard({
   onRougeChange,
   formatValue,
   valide,
-  hideHeader = false,
 }: {
-  icon: typeof Banknote;
+  icon: LucideIcon;
   titre: string;
   description: string;
-  vertLabel: string;
   rougeLabel: string;
+  rougeHint: string;
+  vertLabel: string;
+  vertHint: string;
   suffix: string;
   vert: number;
   rouge: number;
@@ -424,35 +453,34 @@ function SeuilCard({
   onRougeChange: (v: number | null) => void;
   formatValue: (v: number) => string;
   valide: boolean;
-  hideHeader?: boolean;
 }) {
   return (
     <section className="space-y-4">
-      {!hideHeader && (
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink-500">
-            <Icon className="h-4 w-4 text-ink-400" />
-            {titre}
-          </h2>
-          <p className="mt-1 text-[11px] text-ink-700">{description}</p>
-        </div>
-      )}
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-800">
+          <Icon className="h-4 w-4 text-ink-400" />
+          {titre}
+        </h3>
+        <p className="mt-1 text-xs leading-relaxed text-ink-600">{description}</p>
+      </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <NumberField label={rougeLabel} value={rouge} onChange={onRougeChange} suffix={suffix} />
-          {!valide && <p className="mt-1 text-xs text-amber-700 font-medium">Inférieur à</p>}
+          <p className="mt-1.5 text-xs leading-relaxed text-ink-500">{rougeHint}</p>
         </div>
         <div>
           <NumberField label={vertLabel} value={vert} onChange={onVertChange} suffix={suffix} />
-          {!valide && <p className="mt-1 text-xs text-amber-700 font-medium">Supérieur à</p>}
+          <p className="mt-1.5 text-xs leading-relaxed text-ink-500">{vertHint}</p>
         </div>
       </div>
 
       {!valide && (
-        <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3">
-          <AlertCircle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
-          <p className="text-xs text-amber-800">Le seuil vert doit être supérieur au seuil rouge.</p>
+        <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <p className="text-xs text-amber-800">
+            Le seuil vert doit être supérieur au seuil rouge.
+          </p>
         </div>
       )}
 

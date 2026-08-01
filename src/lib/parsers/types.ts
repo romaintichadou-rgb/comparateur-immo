@@ -11,6 +11,7 @@ export interface ParsedListing {
   etage?: string;
   ascenseur?: boolean;
   annee_construction?: number;
+  type_bien?: string;
   etat_bien?: string;
   dpe?: string;
   ges?: string;

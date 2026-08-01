@@ -205,6 +205,12 @@ export function extractFromFreeText(text: string): ParsedListing {
     ?? firstMatch(text, /dat\w+\s+(?:de|du)\s+(\d{4})/i);
   if (annee) data.annee_construction = toNumber(annee);
 
+  const typeBien = firstMatch(text, /\b(studio|appartement|duplex|loft|maison|immeuble)\b/i);
+  if (typeBien) {
+    const map: Record<string, string> = { studio: "Studio", appartement: "Appartement", duplex: "Duplex", loft: "Loft", maison: "Maison", immeuble: "Immeuble" };
+    data.type_bien = map[typeBien.toLowerCase()];
+  }
+
   const codePostal = firstMatch(text, /\b(\d{5})\b/);
   if (codePostal) data.code_postal = codePostal;
 

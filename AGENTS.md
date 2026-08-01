@@ -984,6 +984,42 @@ porte DEUX familles de réglages :
 à la main sur CHAQUE projet Supabase (prod et dev). Elle ajoute les 5 colonnes et
 fait table rase des 4 clés emprunteur dans `apartments.simulation_inputs`.
 
+## Écran `SettingsForm.tsx` — DEUX cartes, pas trois
+
+L'écran reflète les deux familles ci-dessus, une carte chacune :
+
+1. **« Profil emprunteur »** — les 5 champs de la personne (taux, assurance,
+   durée, TMI, couverture de l'emprunt).
+2. **« Seuils de décision »** (`CollapsibleSection`, icône `SlidersHorizontal`) —
+   les DEUX couples de seuils réunis : rendement net PUIS cash-flow mensuel,
+   séparés par un `<hr className="border-t border-ink-100/50">`.
+
+Rendement et cash-flow avaient chacun leur carte. C'était trois cartes de même
+gabarit pour deux idées, et le lecteur devait deviner que les deux dernières
+répondaient à la même question (« à partir de quand est-ce bon ? »). Elles sont
+désormais deux **groupes** d'une seule carte, introduits par un paragraphe commun
+qui explique ce que les seuils pilotent (couleur des chiffres + score global).
+Ne pas les re-séparer en deux cartes.
+
+- **`SeuilGroup`** (ex-`SeuilCard`) rend UN couple rouge/vert : sous-titre `h3`
+  (`text-ink-800`, pas de capitales — la capitale est réservée au `h2` de la
+  carte), phrase de définition de la métrique, les deux `NumberField`, la barre
+  tricolore. Ce n'est plus une carte : pas de bordure ni de fond propres, c'est
+  la carte parente qui les porte.
+- **Chaque champ porte son propre sous-titre** (`rougeHint` / `vertHint`) qui dit
+  ce que le seuil DÉCLENCHE, pas ce qu'il vaut — « En dessous, le bien est
+  écarté : le score global est plafonné à 5/10 », « Au-dessus, l'opération
+  s'autofinance ». C'est la seule chose que l'utilisateur ne peut pas déduire de
+  l'écran ; les garder factuels et alignés sur le code (voir les plafonds de
+  `computeScoreGlobal` et `cashflowTone`).
+- Le `hint` de `form/Fields.tsx` ne convient PAS pour ça : il se rend **inline à
+  côté du label** (c'est l'emplacement des badges type `AiEstimatedBadge`). Les
+  sous-titres sont donc des `<p>` rendus sous le champ par `SeuilGroup`.
+- **Repli mobile** : `CollapsibleSection` masque son contenu sous `sm:` tant que
+  l'utilisateur n'a pas déplié (`hidden` + `sm:block`), et le bouton d'en-tête est
+  neutralisé au-dessus de `sm:` (`sm:pointer-events-none`). Le chevron n'existe
+  que sur mobile.
+
 ## Héritage : `resolveInputs`, point de passage unique
 
 Dans `SimulationInputs`, les 4 champs emprunteur sont `number | null` : `null`
