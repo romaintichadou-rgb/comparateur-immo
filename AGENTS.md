@@ -1722,6 +1722,40 @@ Bloc `if(pf==='PAP')` dans le bookmarklet :
 - **Features** : `.item-tags li` — scan des `<li>` pour surface, pièces,
   chambres, étage (mêmes regex que SeLoger features).
 
+## Sélecteurs CSS plateforme — Orpi
+
+Bloc `if(pf==='Orpi')` dans le bookmarklet. Orpi est la **seule** plateforme
+sans JSON-LD — tout doit venir du DOM ou de l'URL :
+- **DPE** : `.c-dpe:not(.c-dpe--ges) .c-dpe__index--active` — la lettre
+  active dans l'étiquette DPE. Validé par `/^[A-G]$/i`.
+- **GES** : `.c-dpe--ges .c-dpe__index--active` — même pattern avec la variante
+  GES du composant DPE.
+- **Prix** : `[class*="price-tag"],[class*="price_tag"],[class*="c-price"]` —
+  sélecteurs lowercase (Orpi utilise `.c-estate-thumb__price-tag`).
+- **Description** : cherche un `<h2>` dont le texte contient "avis",
+  "description" ou "présentation", puis prend `nextElementSibling`. Fallback
+  sur `[class*="description-content"],[class*="agency-opinion"]`.
+- **Code postal** : regex URL `/-(\d{5})-[0-9a-f]{8}/` (le CP est suivi du
+  UUID dans les URLs Orpi).
+- **Ville** : regex URL `/annonce-(vente|location)-TYPE-tN-VILLE-CP-/`, puis
+  fallback DOM `[class*="infos__location"],[class*="localisation"]`.
+- **Features** (surface, pièces, étage) : délégués au free-text `F()` — les
+  éléments CSS d'Orpi sont structurés en H2 mais sans pattern suffisamment
+  stable pour un sélecteur dédié.
+
+## Sélecteurs CSS plateforme — LogicImmo
+
+LogicImmo partage le même frontend Aviv Group que SeLoger — mêmes CSS classes,
+mêmes data-testids. Le bloc `if(pf==='SeLoger'||pf==='LogicImmo')` les traite
+ensemble. Ne pas créer de bloc `LogicImmo` séparé.
+
+## État du bien (etat_bien) — SeLoger/LogicImmo
+
+Le bloc SeLoger/LogicImmo extrait `etat_bien` depuis
+`[data-testid="cdp-energy-features"]` : "neuf" → `"Neuf"`, "rénov/refait/
+réhabilit" → `"Bon état"`. Ce champ est absent des autres plateformes en CSS
+dédié — il peut arriver via `itemCondition` (JSON-LD) ou free-text.
+
 ## DPE/GES — scan générique cross-plateforme
 
 Après les blocs plateforme dédiés, un scan générique cherche DPE/GES dans
@@ -1758,9 +1792,23 @@ Si non trouvées, le champ reste vide — ne pas inventer de valeur.
 ## Étage — extraction multi-pattern
 
 Deux patterns complémentaires (bookmarklet + `common.ts`) :
-1. Nombre avant "étage" : `(\d+)(?:er|e|ème)?\s?é(tage|t\.)` — "3ème étage", "1er ét."
-2. Nombre après "étage" : `é(tage|t\.)\s*[:\-]?\s*(\d+)` — "Étage : 3", "ét. 5"
+1. Nombre avant "étage" : `(\d+)(?:er|e|ème)?\s?é(tage(?!s)|t\.)` — "3ème étage", "1er ét."
+2. Nombre après "étage" : `é(tage(?!s)|t\.)\s*[:\-]?\s*(\d+)` — "Étage : 3", "ét. 5"
 3. "rez-de-chaussée" → `RDC`
+
+**Negative lookahead `(?!s)` obligatoire** : sans lui, "14 étages" (total de
+l'immeuble, pluriel) matche avant "Étage 10" (étage de l'appartement,
+singulier) — extrairait 14 au lieu de 10. Le `(?!s)` après `tage` empêche le
+match quand un "s" suit immédiatement (= pluriel). Appliqué dans les 3
+endroits : bookmarklet SeLoger/PAP features, bookmarklet `F()`, et
+`common.ts` `extractFromFreeText()`.
 
 SeLoger : sélecteurs supplémentaires `[class*="floor"]`, `[class*="Summary"]`
 pour trouver l'étage dans la grille de caractéristiques.
+
+## Prix — sélecteurs génériques case-insensitive
+
+Le sélecteur générique de prix inclut `[class*="Price"]` ET `[class*="price"]`
+pour couvrir les deux conventions de nommage (SeLoger capitalise, Orpi non).
+Les sélecteurs CSS `[class*=...]` sont sensibles à la casse — les deux
+variantes sont donc nécessaires.

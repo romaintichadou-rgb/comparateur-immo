@@ -180,8 +180,8 @@ export function extractFromFreeText(text: string): ParsedListing {
   const chambres = firstMatch(text, /(\d+)\s?chambres?\b/i);
   if (chambres) data.nb_chambres = toNumber(chambres);
 
-  const etage = firstMatch(text, /(\d+)(?:er|e|[eè]me)?\s?[eé](?:tage|t\.)/i)
-    ?? firstMatch(text, /[eé](?:tage|t\.)\s*[:\-]?\s*(\d+)/i);
+  const etage = firstMatch(text, /(\d+)(?:er|e|[eè]me)?\s?[eé](?:tage(?!s)|t\.)/i)
+    ?? firstMatch(text, /[eé](?:tage(?!s)|t\.)\s*[:\-]?\s*(\d+)/i);
   if (etage) data.etage = etage;
   else if (/rez[\s-]?de[\s-]?chauss[ée]e/i.test(text)) data.etage = "RDC";
 

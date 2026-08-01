@@ -148,7 +148,7 @@ var im=(ad.images&&ad.images.urls)||[];if(im[0]&&!d.photo_url)d.photo_url=im[0];
 }
 }
 }catch(e){}
-if(pf==='SeLoger'){
+if(pf==='SeLoger'||pf==='LogicImmo'){
 try{
 var sels=['[data-test="sl.price"]','[data-testid="price"]','[class*="Price_price"]','[class*="Summary_price"]','[class*="price--"]'];
 if(!d.prix){for(var i=0;i<sels.length;i++){var pe=document.querySelector(sels[i]);if(pe){var pv=N(pe.textContent);if(pv&&pv>=10000){d.prix=pv;break;}}}}
@@ -175,10 +175,11 @@ for(var i=0;i<feats.length;i++){
 var ft=(feats[i].textContent||'').trim();
 if(!d.surface_m2){var sm=ft.match(/(\\d+(?:[.,]\\d+)?)\\s?m[²2]/i);if(sm)d.surface_m2=N(sm[1]);}
 if(!d.nb_pieces){var pm=ft.match(/(\\d+)\\s?pi[eè]ces?/i);if(pm)d.nb_pieces=N(pm[1]);}
-if(!d.etage){var em=ft.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé](?:tage|t\\.)/i)||ft.match(/[eé](?:tage|t\\.)\\s*[:\\-]?\\s*(\\d+)/i);if(em)d.etage=em[1];}
+if(!d.etage){var em=ft.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé](?:tage(?!s)|t\\.)/i)||ft.match(/[eé](?:tage(?!s)|t\\.)\\s*[:\\-]?\\s*(\\d+)/i);if(em)d.etage=em[1];}
 if(!d.etage&&/rez[\\s-]?de[\\s-]?chauss/i.test(ft))d.etage='RDC';
 }
 }
+if(!d.etat_bien){var etEl=document.querySelector('[data-testid="cdp-energy-features"],[class*="energy-features"],[class*="EnergyFeatures"]');if(etEl){var ett=(etEl.textContent||'');if(/\\bneuf\\b/i.test(ett))d.etat_bien='Neuf';else if(/\\b(?:r[eé]nov|refait|r[eé]habilit)/i.test(ett))d.etat_bien='Bon état';}}
 }catch(e){}
 }
 if(pf==='BienIci'){
@@ -199,9 +200,24 @@ for(var fi=0;fi<papFeats.length;fi++){var ft=(papFeats[fi].textContent||'').trim
 if(!d.surface_m2){var sm=ft.match(/(\\d+(?:[.,]\\d+)?)\\s?m[²2]/i);if(sm)d.surface_m2=N(sm[1]);}
 if(!d.nb_pieces){var pm=ft.match(/(\\d+)\\s?pi[eè]ces?/i);if(pm)d.nb_pieces=N(pm[1]);}
 if(!d.nb_chambres){var cm=ft.match(/(\\d+)\\s?chambres?/i);if(cm)d.nb_chambres=N(cm[1]);}
-if(!d.etage){var em=ft.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé](?:tage|t\\.)/i)||ft.match(/[eé](?:tage|t\\.)\\s*[:\\-]?\\s*(\\d+)/i);if(em)d.etage=em[1];}
+if(!d.etage){var em=ft.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé](?:tage(?!s)|t\\.)/i)||ft.match(/[eé](?:tage(?!s)|t\\.)\\s*[:\\-]?\\s*(\\d+)/i);if(em)d.etage=em[1];}
 if(!d.etage&&/rez[\\s-]?de[\\s-]?chauss/i.test(ft))d.etage='RDC';
 }}
+}catch(e){}
+}
+if(pf==='Orpi'){
+try{
+if(!d.dpe){var dpeO=document.querySelector('.c-dpe:not(.c-dpe--ges) .c-dpe__index--active');if(dpeO){var dv=(dpeO.textContent||'').trim();if(/^[A-G]$/i.test(dv))d.dpe=dv.toUpperCase();}}
+if(!d.ges){var gesO=document.querySelector('.c-dpe--ges .c-dpe__index--active');if(gesO){var gv=(gesO.textContent||'').trim();if(/^[A-G]$/i.test(gv))d.ges=gv.toUpperCase();}}
+if(!d.prix){var prO=document.querySelector('[class*="price-tag"],[class*="price_tag"],[class*="c-price"]');if(prO){var pv=N(prO.textContent);if(pv&&pv>=10000)d.prix=pv;}}
+if(!d.description||d.description.length<100){
+var h2s=document.querySelectorAll('h2');for(var hi=0;hi<h2s.length;hi++){if(/avis|description|pr[eé]sentation/i.test(h2s[hi].textContent||'')){var nxt=h2s[hi].nextElementSibling;if(nxt){var nt=(nxt.textContent||'').trim();if(nt.length>80){d.description=nt;break;}}}}
+if(!d.description||d.description.length<100){var descO=document.querySelector('[class*="description-content"],[class*="description__content"],[class*="agency-opinion"]');if(descO){var dot=(descO.textContent||'').trim();if(dot.length>80)d.description=dot;}}
+}
+var opm=location.pathname.match(/-(\\d{5})-[0-9a-f]{8}/);
+if(opm&&!d.code_postal)d.code_postal=opm[1];
+if(!d.ville){var ovm=location.pathname.match(/annonce-(?:vente|location)-\\w+-t\\d+-(.*?)-(\\d{5})-/);if(ovm)d.ville=ovm[1].split('-').map(function(p){return cap(p);}).join('-');}
+if(!d.ville||!d.code_postal){var locO=document.querySelector('[class*="infos__location"],[class*="localisation"]');if(locO){var lt=(locO.textContent||'').trim();if(!d.code_postal){var cpO=lt.match(/\\b(\\d{5})\\b/);if(cpO)d.code_postal=cpO[1];}if(!d.ville){var vlO=lt.match(/([A-Z\\u00C0-\\u00DC][a-z\\u00E0-\\u00FC]+(?:[- ][A-Z\\u00C0-\\u00DC][a-z\\u00E0-\\u00FC]+)*)/);if(vlO)d.ville=vlO[1];}}}
 }catch(e){}
 }
 try{
@@ -234,7 +250,7 @@ if(!d.ville){var vm=od.match(/([A-Z\\u00C0-\\u00DC][a-z\\u00E0-\\u00FC]+(?:[- ][
 if(!d.code_postal){var cm=od.match(/\\((\\d{5})\\)/);if(cm)d.code_postal=cm[1];}
 }
 if(d.prix===undefined){
-var sels=['[data-qa-id="adview_price"]','[data-testid="price"]','[data-test="price"]','[class*="Price"]','.price'];
+var sels=['[data-qa-id="adview_price"]','[data-testid="price"]','[data-test="price"]','[class*="Price"]','[class*="price"]','.price'];
 for(var i=0;i<sels.length;i++){
 var el=document.querySelector(sels[i]);
 if(el){var n=N(el.textContent);if(n&&n>=1000){d.prix=n;break;}}
@@ -251,7 +267,7 @@ function F(t){var d={},m;
 if(m=t.match(/(\\d+(?:[.,]\\d+)?)\\s?m(?:2\\b|²)/i))d.surface_m2=N(m[1]);
 if(m=t.match(/(\\d+)\\s?pi[eè]ces?\\b/i))d.nb_pieces=N(m[1]);
 if(m=t.match(/(\\d+)\\s?chambres?\\b/i))d.nb_chambres=N(m[1]);
-m=t.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé](?:tage|t\\.)/i)||t.match(/[eé](?:tage|t\\.)\\s*[:\\-]?\\s*(\\d+)/i);if(m)d.etage=m[1];else if(/rez[\\s-]?de[\\s-]?chauss[eé]e/i.test(t))d.etage='RDC';
+m=t.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé](?:tage(?!s)|t\\.)/i)||t.match(/[eé](?:tage(?!s)|t\\.)\\s*[:\\-]?\\s*(\\d+)/i);if(m)d.etage=m[1];else if(/rez[\\s-]?de[\\s-]?chauss[eé]e/i.test(t))d.etage='RDC';
 if(/sans ascenseur/i.test(t))d.ascenseur=false;else if(/\\bascenseur\\b/i.test(t))d.ascenseur=true;
 m=t.match(/\\(DPE\\)\\s*([A-G])/i)||t.match(/\\bdpe\\s*[:\\-]?\\s*([A-G])\\b/i);if(m)d.dpe=m[1].toUpperCase();
 m=t.match(/\\(GES\\)\\s*([A-G])/i)||t.match(/\\b(?:ges|climat)\\s*[:\\-]?\\s*([A-G])\\b/i);if(m)d.ges=m[1].toUpperCase();

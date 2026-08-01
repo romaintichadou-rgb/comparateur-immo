@@ -167,7 +167,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
               </div>
             </div>
           </div>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-6">
             {FINANCEMENT_MODES.map((mode) => {
               const info = FINANCEMENT_MODE_INFOS[mode];
               const actif = values.financementMode === mode;
@@ -188,7 +188,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
                     aria-label={`${info.titre}. ${info.detail} ${info.apport}.`}
                   />
                   <span
-                    className={`flex gap-2.5 rounded-lg border p-3 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-600 ${
+                    className={`flex gap-2.5 rounded-lg border p-4 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-600 ${
                       actif
                         ? "border-accent-600 bg-accent-50"
                         : "border-ink-200 bg-white hover:border-ink-300"
