@@ -242,9 +242,12 @@ function EditableCard({
               <button
                 type="button"
                 onClick={onReset}
-                className="text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-red-600"
+                // Survol NEUTRE : le rouge de la charte est réservé aux vraies
+                // suppressions. Ici on rend des valeurs à leur défaut, la
+                // modale de confirmation porte déjà le poids de l'action.
+                className="text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-ink-600"
               >
-                Réinitialiser ({surcharges})
+                Réinitialiser
               </button>
             )}
             <button

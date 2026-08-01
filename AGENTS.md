@@ -1288,7 +1288,7 @@ la normalise à `null` au premier enregistrement. Conséquence attendue : cette
 normalisation modifie `simulation_inputs`, donc `empreinteBien`, donc l'analyse
 du bien est signalée obsolète une fois.
 
-## Les trois états d'une hypothèse, et « Réinitialiser (n) »
+## Les trois états d'une hypothèse, et « Réinitialiser »
 
 Chaque ligne du panneau est dans l'un de trois états, dont **deux seulement
 portent une pastille** :
@@ -1303,18 +1303,23 @@ Les deux pastilles ne sont **pas redondantes** — elles pointent vers deux
 endroits différents où aller corriger (les Paramètres, ou les données du bien).
 Ne pas les fusionner en un « défaut » unique, ça perdrait cette indication.
 
-En revanche le troisième état, le seul qui résulte d'une décision, est le seul
-qui n'était **pas** signalé — il se déduisait par ABSENCE de pastille, ce qui est
-le plus faible des signaux. Plutôt qu'une troisième pastille (qui aurait
-étiqueté presque toutes les lignes), c'est **`compterSurcharges()`** qui le rend
-visible : le bouton **« Réinitialiser (n) »** de l'en-tête compte exactement les
-lignes sans pastille.
+En revanche le troisième état, le seul qui résulte d'une décision, n'est **pas**
+signalé — il se déduit par ABSENCE de pastille. Une troisième pastille aurait
+étiqueté presque toutes les lignes ; c'est donc le bouton **« Réinitialiser »**
+de l'en-tête qui le rend actionnable.
 
-- Le bouton n'apparaît **que si `n > 0`** — sinon il n'aurait rien à faire, et un
-  bouton inerte est pire qu'absent.
+- **`compterSurcharges()`** compte les lignes sans pastille. Le compte ne
+  s'affiche PAS dans le libellé (« Réinitialiser (3) » a été essayé puis
+  retiré) : il ne sert qu'à décider si le bouton existe.
+- Le bouton n'apparaît **que si le compte est > 0** — sinon il n'aurait rien à
+  faire, et un bouton inerte est pire qu'absent.
+- Survol en **`ink-600`, pas en rouge**. Le rouge de la charte est réservé aux
+  vraies suppressions ; ici on rend des valeurs à leur défaut, et c'est la modale
+  de confirmation qui porte le poids de l'action. Ne pas le « corriger » vers
+  `red-*` en lisant la charte au premier degré.
 - `regimeFiscal` stocké à `REGIME_FISCAL_DEFAUT` n'est PAS compté : ça vaut la
-  même chose que `null`, le compter afficherait un « 1 » que rien à l'écran ne
-  justifierait.
+  même chose que `null`, le compter ferait apparaître le bouton alors que rien
+  à l'écran ne justifierait sa présence.
 - La réinitialisation est **exactement `defaultInputs()`** + `quote_part_terrain_pct: null`.
   Toute la convention du modèle étant déjà « `null` = valeur par défaut », il n'y
   a aucune logique de remise à zéro à écrire — ne pas en ajouter une.
