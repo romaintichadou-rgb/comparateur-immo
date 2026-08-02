@@ -141,8 +141,16 @@ un prop `hint` (y compris `BooleanField` et `TextAreaField`).
 Champs couverts : `ville`, `quartier`, `adresse`, `code_postal`, `surface_m2`,
 `nb_pieces`, `nb_chambres`, `etage`, `ascenseur`, `annee_construction`,
 `etat_bien`, `dpe`, `ges`, `photo_url`, `description`, `prix`,
-`charges_copro_annuelles`, `contact_telephone`, `contact_email`. Ne jamais
-ajouter un champ extractible dans `ParsedListing` sans câbler son badge.
+`charges_copro_annuelles`, `taxe_fonciere`, `contact_telephone`,
+`contact_email`. Ne jamais ajouter un champ extractible dans `ParsedListing`
+sans câbler son badge.
+
+⚠️ **Et sans le recopier dans `applyParsedFields`** (`AddApartmentFlow.tsx`) —
+c'est le vrai piège, plus grave que le badge manquant. `taxe_fonciere` était
+déclarée dans `ParsedListing` mais absente de cette fonction : toute taxe
+foncière extraite d'une annonce était **silencieusement perdue**, sans erreur ni
+champ vide suspect. Ajouter un champ extractible = trois points à câbler :
+`ParsedListing`, `applyParsedFields`, et le badge.
 
 Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 `CashflowDetailProvider` — montés dans `layout.tsx`, consommés via hooks.
@@ -258,8 +266,8 @@ valeur exacte de la chaîne.
 - **Charges annuelles** : un immeuble entier n'a pas de copropriété (on
   possède tout le bâtiment) — `estimateChargesCopro(surfaceM2, immeuble)`
   utilise un barème et un libellé différents ("Charges d'exploitation
-  annuelles" au lieu de "Charges copro annuelles", ~12 €/m²/an au lieu de
-  ~20 €/m²/an, plancher 1500 € au lieu de 800 €). Le libellé UI doit suivre
+  annuelles" au lieu de "Charges copro annuelles", ~13 €/m²/an au lieu de
+  ~22 €/m²/an, plancher 1500 € au lieu de 800 €). Le libellé UI doit suivre
   `isImmeuble()`, pas rester générique.
 - **Assurance PNO** (`estimateAssurance(immeuble, nbLots, surfaceM2, typeBien)`)
   : dynamique selon surface et type de bien. Appartement : 2.5 €/m²
@@ -367,7 +375,7 @@ dans le prompt IA (via des consignes structurées) pour garantir la cohérence :
   rénové). N'impactent pas les charges.
 - **DPE** : facteur multiplicateur par lettre (A=1.04 → G=0.91). Impacte le
   loyer uniquement.
-- **Ancienneté** : immeuble >50 ans = +15 % charges, ≤20 ans = -10 % charges.
+- **Ancienneté** : immeuble >50 ans = +10 % charges, ≤20 ans = -5 % charges.
   N'impacte pas le loyer (couvert par le DPE et l'état du bien).
 
 ## Règles d'affichage des justifications
@@ -1833,6 +1841,33 @@ Les autres onglets (donnees, financiere, simulation) n'ont pas de skeleton
 global — ils rendent immédiatement avec les données déjà chargées. Les
 skeletons inline (`Skeleton` shimmer) sont utilisés par champ pendant les
 recalculs (`rentPending`, `chargesPending`).
+
+# Ajouter un bien — champs financiers optionnels repliés
+
+Dans « Données financières », **Travaux**, **Charges copro** et **Taxe foncière**
+sont repliés par défaut derrière une pastille « + » (`ChampOptionnel`), même
+habillage que l'`OptionalRateField` de la Simulation financière. Seul le **Prix**
+— le seul champ obligatoire — est un input d'emblée.
+
+Ça retire du formulaire trois champs que l'utilisateur laisse vides la plupart du
+temps, et surtout ça supprime les libellés à rallonge (« Charges copro annuelles
+(laisser vide = estimées) ») qui passaient à deux lignes. Le « laisser vide = »
+est remonté en une seule phrase au-dessus du groupe.
+
+- **`ChampOptionnel` s'ouvre VIDE** — contrairement à `OptionalRateField`, il n'y
+  a pas de valeur de repli sensée (un montant de travaux ou de charges ne
+  s'invente pas). C'est donc l'état « ouvert » qui est mémorisé (`champsOuverts`),
+  pas la valeur : sinon le champ se refermerait aussitôt ouvert.
+- **Un champ déjà renseigné est déplié d'office** (`value != null`), sans avoir à
+  figurer dans `champsOuverts`. C'est le cas du bookmarklet : une donnée trouvée
+  dans l'annonce doit se voir et se corriger, pas se découvrir au clic.
+- Le `✕` **vide la valeur ET referme** — les deux, sinon un champ vidé mais
+  toujours déplié laisserait croire à une saisie en cours.
+- Les trois n'ont pas la même sémantique quand ils restent vides : **Travaux = 0**
+  (pas de travaux), **Charges et TF = estimées** après création. D'où la phrase
+  d'explication placée sur le seul groupe « Charges annuelles ».
+- `travaux` n'est **pas** dans `ParsedListing` : il ne peut jamais arriver
+  pré-rempli, sa pastille est donc toujours celle du départ.
 
 # Point d'entrée "Ajouter un bien"
 

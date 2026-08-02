@@ -13,7 +13,7 @@ import { renderBoldInline } from "@/components/richText";
 const TRANSITION_MS = 300;
 
 const MAJORATION_MEUBLE = 0.12;
-const PROVISION_CHARGES_M2 = 2.5;
+const PROVISION_CHARGES_M2_DEFAUT = 2.0;
 
 interface AnilData {
   loyerM2: number;
@@ -104,9 +104,12 @@ export default function LoyerDetailPanel({
   const loyerAnnuel = hasLoyer ? loyer * 12 : null;
   const aiEstimated = isAiEstimated(apt, "loyer_retenu");
 
-  const anilCCm2 = anil ? anil.loyerM2 * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2 : null;
-  const anilMinCC = anil ? anil.min * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2 : null;
-  const anilMaxCC = anil ? anil.max * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2 : null;
+  const provM2 = apt.charges_copro_annuelles != null && apt.charges_copro_annuelles > 0 && hasSurface
+    ? apt.charges_copro_annuelles / 12 / surface!
+    : PROVISION_CHARGES_M2_DEFAUT;
+  const anilCCm2 = anil ? anil.loyerM2 * (1 + MAJORATION_MEUBLE) + provM2 : null;
+  const anilMinCC = anil ? anil.min * (1 + MAJORATION_MEUBLE) + provM2 : null;
+  const anilMaxCC = anil ? anil.max * (1 + MAJORATION_MEUBLE) + provM2 : null;
   const anilMedian = anilCCm2 != null && hasSurface ? Math.round(anilCCm2 * surface) : null;
   const anilMinTotal = anilMinCC != null && hasSurface ? Math.round(anilMinCC * surface) : null;
   const anilMaxTotal = anilMaxCC != null && hasSurface ? Math.round(anilMaxCC * surface) : null;
@@ -170,7 +173,10 @@ export default function LoyerDetailPanel({
                   Chargement des données de marché…
                 </div>
               )}
-              {anil && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface && (
+              {anil && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface && (() => {
+                const hcMeubleTotal = Math.round(anil.loyerM2 * (1 + MAJORATION_MEUBLE) * surface);
+                const chargesMensuelles = Math.round(provM2 * surface!);
+                return (
                 <section className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex rounded-lg bg-ink-100 p-1.5 text-ink-500">
@@ -182,51 +188,34 @@ export default function LoyerDetailPanel({
                   </div>
                   <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
                     <p className="text-sm text-ink-600">
-                      Point de départ : le loyer médian observé dans la commune (source ANIL {anil.annee}, {anil.nbObs.toLocaleString("fr-FR")} annonces),
-                      converti en <strong>CC meublé</strong>.
+                      Loyer médian meublé dans la commune (source ANIL {anil.annee}, {anil.nbObs.toLocaleString("fr-FR")} annonces), majoré de {Math.round(MAJORATION_MEUBLE * 100)} % par rapport au nu.
                     </p>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-lg bg-ink-50 p-3">
-                        <p className="text-[11px] text-ink-400">HC nu</p>
-                        <p className="mt-0.5 font-mono text-base font-semibold text-ink-700">
-                          {formatEuros(Math.round(anil.loyerM2 * surface))}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-center text-ink-300">
-                        <ArrowDown className="h-4 w-4 rotate-[-90deg]" />
-                      </div>
-                      <div className="rounded-lg bg-accent-50 p-3">
-                        <p className="text-[11px] text-accent-500">CC meublé</p>
-                        <p className="mt-0.5 font-mono text-base font-semibold text-accent-700">
-                          {formatEuros(anilMedian)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-ink-400">
-                      <span>Majoration meublé +{Math.round(MAJORATION_MEUBLE * 100)}%</span>
-                      <span>Charges +{hasSurface ? formatEuros(Math.round(PROVISION_CHARGES_M2 * surface)) : `${PROVISION_CHARGES_M2} €/m²`}/mois</span>
-                      <span>{surface} m²</span>
-                    </div>
-                    <div className="border-t border-ink-100 pt-2">
-                      <ul className="divide-y divide-ink-100 text-sm">
-                        <Row label="Loyer médian marché CC" value={anilMedian} suffix="/mois" />
-                        <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
-                          <span>Fourchette</span>
-                          <span className="font-medium text-ink-800">
-                            {formatEuros(anilMinTotal)} – {formatEuros(anilMaxTotal)}<span className="text-ink-400 text-xs ml-0.5">/mois</span>
-                          </span>
-                        </li>
-                      </ul>
-                    </div>
+                    <ul className="divide-y divide-ink-100 text-sm">
+                      <Row label="Loyer HC meublé" value={hcMeubleTotal} suffix="/mois" />
+                      <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
+                        <span>+ Provision charges</span>
+                        <span className="font-medium text-ink-800">
+                          {formatEuros(chargesMensuelles)}<span className="text-ink-400 text-xs ml-0.5">/mois</span>
+                        </span>
+                      </li>
+                      <Row label="Loyer CC meublé (référence)" value={anilMedian} suffix="/mois" bold />
+                      <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
+                        <span>Fourchette CC</span>
+                        <span className="font-medium text-ink-800">
+                          {formatEuros(anilMinTotal)} – {formatEuros(anilMaxTotal)}<span className="text-ink-400 text-xs ml-0.5">/mois</span>
+                        </span>
+                      </li>
+                    </ul>
                   </div>
                   <div className="flex items-start gap-1.5">
                     <Info className="h-3 w-3 text-ink-300 mt-0.5 shrink-0" />
                     <p className="text-[11px] text-ink-400">
-                      Source : Carte des loyers ANIL {anil.annee}. Conversion en CC meublé (LMNP) par Immoscore.
+                      Source : Carte des loyers ANIL {anil.annee} (loyers HC nu) · majoration meublé +{Math.round(MAJORATION_MEUBLE * 100)} % · {surface} m².
                     </p>
                   </div>
                 </section>
-              )}
+                );
+              })()}
 
               {/* ── ÉTAPE 2 : Ajustement IA ── */}
               {aiEstimated && (
@@ -278,10 +267,6 @@ export default function LoyerDetailPanel({
                 </div>
                 <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    {/* Carte sœur de « Écart vs marché » : même gabarit, donc même
-                        échelle de teintes que TONE_PANEL_STYLES (label 700 /
-                        valeur 800 / sub 600), déclinée sur l'accent de marque.
-                        Les deux se lisent côte à côte — elles doivent s'accorder. */}
                     <div className="rounded-xl bg-accent-50 p-4">
                       <p className="text-xs font-medium text-accent-700">Loyer mensuel CC</p>
                       <p className="mt-1 text-3xl font-bold text-accent-800">
@@ -292,7 +277,7 @@ export default function LoyerDetailPanel({
                         {aiEstimated && " · estimation IA"}
                       </p>
                     </div>
-                    {ecartPct != null ? (
+                    {ecartPct != null && (
                       <div className={`rounded-xl p-4 ${ecartTone(ecartPct, "wrap")}`}>
                         <p className={`text-xs font-medium ${ecartTone(ecartPct, "label")}`}>Écart vs marché</p>
                         <p className={`mt-1 text-3xl font-bold font-mono ${ecartTone(ecartPct, "value")}`}>
@@ -302,26 +287,8 @@ export default function LoyerDetailPanel({
                           vs {anilMedian != null ? formatEuros(anilMedian) : "médian"}
                         </p>
                       </div>
-                    ) : (
-                      <div className="rounded-xl bg-ink-50 p-4">
-                        <p className="text-xs font-medium text-ink-500">Loyer annuel</p>
-                        <p className="mt-1 text-3xl font-bold text-ink-900">
-                          {formatEuros(loyerAnnuel!)}
-                        </p>
-                        <p className="mt-1 text-[11px] text-ink-500">× 12 mois</p>
-                      </div>
                     )}
                   </div>
-
-                  <ul className="divide-y divide-ink-100 text-sm">
-                    <Row
-                      label="Loyer mensuel CC"
-                      value={loyer}
-                      suffix="/mois"
-                      badge={aiEstimated && <AiEstimatedBadge />}
-                    />
-                    <Row label="Loyer annuel" value={loyerAnnuel!} suffix="/an" bold />
-                  </ul>
                 </div>
               </section>
 

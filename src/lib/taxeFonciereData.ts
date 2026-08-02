@@ -95,25 +95,25 @@ export function estimateTaxeFonciereLocale(
  *
  * Échelle dérivée des données ARC/CLAIRIMM 2024 et corrélée au taux de TF
  * (proxy du niveau d'urbanisation et du coût de la vie locale) :
- *  - IDF dense (TF ≥ 30) : ~32 €/m²/an (syndic cher, gardien, ascenseur fréquent)
- *  - Grandes métropoles (TF ≥ 22) : ~26 €/m²/an
- *  - Villes moyennes (TF ≥ 17) : ~22 €/m²/an
- *  - Rural / petites villes : ~18 €/m²/an
+ *  - IDF dense (TF ≥ 30) : ~28 €/m²/an (syndic cher, gardien, ascenseur fréquent)
+ *  - Grandes métropoles (TF ≥ 22) : ~22 €/m²/an
+ *  - Villes moyennes (TF ≥ 17) : ~19 €/m²/an
+ *  - Rural / petites villes : ~15 €/m²/an
  *
  * Pour un immeuble entier (pas de syndic) : taux réduit de ~40 %.
  */
 export function getCoproEurM2(codePostal: string, immeuble: boolean): number {
   const tfRate = getTfEurM2(codePostal);
   if (immeuble) {
-    if (tfRate >= 30) return 18;
-    if (tfRate >= 22) return 14;
-    if (tfRate >= 17) return 12;
-    return 10;
+    if (tfRate >= 30) return 16;
+    if (tfRate >= 22) return 13;
+    if (tfRate >= 17) return 11;
+    return 9;
   }
-  if (tfRate >= 30) return 32;
-  if (tfRate >= 22) return 26;
-  if (tfRate >= 17) return 22;
-  return 18;
+  if (tfRate >= 30) return 28;
+  if (tfRate >= 22) return 22;
+  if (tfRate >= 17) return 19;
+  return 15;
 }
 
 /**

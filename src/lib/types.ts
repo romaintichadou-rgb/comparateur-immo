@@ -144,6 +144,7 @@ export interface Apartment {
 
   // Financier — location
   loyer_retenu: number | null;
+  loyer_hc: number | null;
   loyer_justification: string;
 
   // Financier — charges annuelles
@@ -229,6 +230,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     taxe_fonciere_justification: "",
     assurance_annuelle: null,
     loyer_retenu: null,
+    loyer_hc: null,
     loyer_justification: "",
     hypothese_gestion_pct: DEFAULT_HYPOTHESE_GESTION_PCT,
     quote_part_terrain_pct: null,
@@ -282,6 +284,7 @@ const apartmentBaseFields = {
   taxe_fonciere_justification: z.string(),
   assurance_annuelle: z.number().nullable(),
   loyer_retenu: z.number().nullable(),
+  loyer_hc: z.number().nullable(),
   loyer_justification: z.string(),
   hypothese_gestion_pct: z.number(),
   quote_part_terrain_pct: z.number().nullable(),
@@ -342,6 +345,7 @@ export const apartmentInputSchema = z
     taxe_fonciere_justification: data.taxe_fonciere_justification ?? "",
     assurance_annuelle: data.assurance_annuelle ?? null,
     loyer_retenu: data.loyer_retenu ?? null,
+    loyer_hc: data.loyer_hc ?? null,
     loyer_justification: data.loyer_justification ?? "",
     hypothese_gestion_pct: data.hypothese_gestion_pct ?? DEFAULT_HYPOTHESE_GESTION_PCT,
     quote_part_terrain_pct: data.quote_part_terrain_pct ?? null,

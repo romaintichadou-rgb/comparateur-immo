@@ -11,8 +11,10 @@ import {
   Home,
   Info,
   Loader2,
+  Plus,
   Sparkles,
   User,
+  X,
 } from "lucide-react";
 import {
   DEFAULT_HYPOTHESE_GESTION_PCT,
@@ -70,6 +72,7 @@ function emptyInput(): ApartmentInput {
     taxe_fonciere_justification: "",
     assurance_annuelle: null,
     loyer_retenu: null,
+    loyer_hc: null,
     loyer_justification: "",
     hypothese_gestion_pct: DEFAULT_HYPOTHESE_GESTION_PCT,
     quote_part_terrain_pct: null,
@@ -124,6 +127,10 @@ function applyParsedFields(
     dpe: data.dpe ?? "",
     ges: data.ges ?? "",
     charges_copro_annuelles: data.charges_copro_annuelles ?? null,
+    // Était absente : `taxe_fonciere` existe dans `ParsedListing` depuis
+    // toujours, mais n'était recopiée nulle part — une taxe foncière extraite
+    // de l'annonce était donc silencieusement perdue.
+    taxe_fonciere: data.taxe_fonciere ?? null,
     adresse: data.adresse ?? "",
     quartier: data.quartier ?? "",
     ville: data.ville ?? "",
@@ -138,7 +145,9 @@ function applyParsedFields(
 function decodePrefill(encoded: string): (ParsedListing & { url?: string; plateforme?: Plateforme }) | null {
   try {
     return JSON.parse(decodeURIComponent(escape(atob(encoded))));
-  } catch {
+  } catch (e) {
+    console.error("[Immoscore] decodePrefill failed:", e);
+    console.error("[Immoscore] prefill length:", encoded.length, "first 200 chars:", encoded.slice(0, 200));
     return null;
   }
 }
@@ -208,6 +217,20 @@ export default function AddApartmentFlow() {
   const [procPhase, setProcPhase] = useState<ProcPhase>("creating");
   const [banner, setBanner] = useState<Banner>(initial.banner);
   const [champsExtraits, setChampsExtraits] = useState<Set<string>>(initial.champsExtraits);
+
+  // Champs financiers optionnels dépliés à la main. L'état « déplié » ne peut
+  // pas se déduire de la seule valeur : on ouvre le champ VIDE, il se refermerait
+  // aussitôt. Un champ déjà renseigné (bookmarklet) s'affiche déplié sans être
+  // ici — c'est `ChampOptionnel` qui fait le `??`.
+  const [champsOuverts, setChampsOuverts] = useState<Set<string>>(new Set());
+  const ouvrirChamp = (cle: string) =>
+    setChampsOuverts((s) => new Set(s).add(cle));
+  const fermerChamp = (cle: string) =>
+    setChampsOuverts((s) => {
+      const n = new Set(s);
+      n.delete(cle);
+      return n;
+    });
   const [form, setForm] = useState<ApartmentInput>(initial.form);
 
   function set<K extends keyof ApartmentInput>(key: K, value: ApartmentInput[K]) {
@@ -312,26 +335,38 @@ export default function AddApartmentFlow() {
       return;
     }
 
-    // 2) Estimation loyer + charges (best-effort, séquentiels) — AVANT
-    //    l'analyse, car le rendement du bloc "Potentiel locatif" en dépend.
+    // 2) Estimation charges PUIS loyer (best-effort, séquentiels) — les
+    //    charges doivent être connues AVANT le loyer pour que la provision
+    //    HC→CC utilise les vraies charges, pas le fallback.
+    //    On SAUTE l'estimation pour les champs déjà fournis (bookmarklet ou
+    //    saisie manuelle) : une valeur connue ne doit pas être écrasée.
     setProcPhase("estimating");
-    try {
-      await fetch("/api/estimate-rent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apartmentId }),
-      });
-    } catch {
-      // non bloquant : le loyer pourra être réestimé depuis la fiche.
+    const needCopro = form.charges_copro_annuelles == null;
+    const needTf = form.taxe_fonciere == null;
+    if (needCopro || needTf) {
+      const field = needCopro && needTf ? undefined
+        : needCopro ? "charges_copro_annuelles"
+        : "taxe_fonciere";
+      try {
+        await fetch("/api/estimate-charges", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apartmentId, ...(field && { field }) }),
+        });
+      } catch {
+        // non bloquant : les charges pourront être réestimées depuis la fiche.
+      }
     }
-    try {
-      await fetch("/api/estimate-charges", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apartmentId }),
-      });
-    } catch {
-      // non bloquant : les charges pourront être réestimées depuis la fiche.
+    if (form.loyer_retenu == null) {
+      try {
+        await fetch("/api/estimate-rent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apartmentId }),
+        });
+      } catch {
+        // non bloquant : le loyer pourra être réestimé depuis la fiche.
+      }
     }
 
     // 3) Analyse IA complète (best-effort) — relançable depuis la fiche.
@@ -469,20 +504,12 @@ export default function AddApartmentFlow() {
               </section>
 
               <section className="space-y-8 rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
-                <div>
-                  <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
-                    <SectionIcon icon={Banknote} />
-                    Données financières
-                  </h2>
-                  <p className="mt-3 rounded-lg bg-ink-50 px-3.5 py-2.5 text-xs leading-relaxed text-ink-500">
-                    Les frais de notaire, l&apos;assurance et les frais de gestion sont pré-estimés
-                    automatiquement (modifiables depuis la fiche du bien après création). Les
-                    champs ci-dessous laissés vides (charges copro, taxe foncière) seront eux
-                    aussi pré-estimés. Le loyer sera estimé via IA juste après l&apos;enregistrement.
-                  </p>
-                </div>
+                <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
+                  <SectionIcon icon={Banknote} />
+                  Données financières
+                </h2>
 
-                <Subsection title="Achat" accent="bg-ink-400">
+                <Subsection title="Achat" accent="bg-ink-400" noBorder>
                   <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
                     <NumberField
                       label="Prix"
@@ -498,33 +525,48 @@ export default function AddApartmentFlow() {
                         </>
                       }
                     />
-                    <NumberField
+                    <ChampOptionnel
                       label="Travaux"
                       value={form.travaux}
                       onChange={(v) => set("travaux", v)}
                       suffix="€"
+                      ouvert={champsOuverts.has("travaux")}
+                      onOuvrir={() => ouvrirChamp("travaux")}
+                      onFermer={() => fermerChamp("travaux")}
                     />
                   </div>
                 </Subsection>
 
                 <Subsection title="Charges annuelles" accent="bg-amber-400">
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
-                    <NumberField
+                  {/* Le « (laisser vide = estimées) » qui allongeait chaque
+                      libellé sur deux lignes est remonté ici, dit une fois. */}
+                  <p className="mb-3 text-xs text-ink-400">
+                    Laisse vide pour estimer automatiquement.
+                  </p>
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-5">
+                    <ChampOptionnel
                       label={
                         isImmeuble(form.type_bien)
-                          ? "Charges d'exploitation annuelles (laisser vide = estimées)"
-                          : "Charges copro annuelles (laisser vide = estimées)"
+                          ? "Charges d'exploitation annuelles"
+                          : "Charges copro annuelles"
                       }
                       value={form.charges_copro_annuelles}
                       onChange={(v) => set("charges_copro_annuelles", v)}
                       suffix="€/an"
                       hint={extrait("charges_copro_annuelles") && <ExtractedBadge />}
+                      ouvert={champsOuverts.has("charges_copro_annuelles")}
+                      onOuvrir={() => ouvrirChamp("charges_copro_annuelles")}
+                      onFermer={() => fermerChamp("charges_copro_annuelles")}
                     />
-                    <NumberField
-                      label="Taxe foncière (laisser vide = estimée)"
+                    <ChampOptionnel
+                      label="Taxe foncière"
                       value={form.taxe_fonciere}
                       onChange={(v) => set("taxe_fonciere", v)}
                       suffix="€/an"
+                      hint={extrait("taxe_fonciere") && <ExtractedBadge />}
+                      ouvert={champsOuverts.has("taxe_fonciere")}
+                      onOuvrir={() => ouvrirChamp("taxe_fonciere")}
+                      onFermer={() => fermerChamp("taxe_fonciere")}
                     />
                   </div>
                 </Subsection>
@@ -613,17 +655,88 @@ function BannerCard({ banner }: { banner: NonNullable<Banner> }) {
   );
 }
 
+/**
+ * Champ numérique OPTIONNEL, replié par défaut derrière une pastille « + ».
+ *
+ * Même geste que l'`OptionalRateField` de la Simulation financière — d'où le
+ * même habillage — mais sans valeur de repli au clic : ici il n'existe pas de
+ * défaut sensé (un montant de travaux ou de charges ne s'invente pas). Le champ
+ * s'ouvre donc VIDE, et c'est l'état « ouvert » qui est mémorisé, pas la valeur.
+ *
+ * Il est déplié d'office quand `value` est déjà renseigné — cas du bookmarklet
+ * qui a trouvé la donnée dans l'annonce : elle doit se voir et se corriger sans
+ * qu'on ait à cliquer pour la découvrir.
+ */
+function ChampOptionnel({
+  label,
+  value,
+  onChange,
+  suffix,
+  hint,
+  ouvert,
+  onOuvrir,
+  onFermer,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (v: number | null) => void;
+  suffix: string;
+  hint?: React.ReactNode;
+  ouvert: boolean;
+  onOuvrir: () => void;
+  onFermer: () => void;
+}) {
+  if (!ouvert && value == null) {
+    return (
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="flex items-center gap-1.5 font-medium text-ink-700">
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={onOuvrir}
+          className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-ink-300 px-3 py-2 text-sm font-medium text-ink-400 transition-colors hover:border-ink-400 hover:text-ink-600"
+        >
+          <Plus className="h-3 w-3" />
+          {label}
+        </button>
+      </label>
+    );
+  }
+  return (
+    <div className="flex items-end gap-1">
+      <div className="min-w-0 flex-1">
+        <NumberField label={label} value={value} onChange={onChange} suffix={suffix} hint={hint} />
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          onChange(null);
+          onFermer();
+        }}
+        title="Retirer ce champ"
+        aria-label={`${label} : retirer`}
+        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 function Subsection({
   title,
   accent,
   children,
+  noBorder = false,
 }: {
   title: string;
   accent: string;
   children: React.ReactNode;
+  noBorder?: boolean;
 }) {
   return (
-    <div className="border-t border-ink-100 pt-6 first:border-t-0 first:pt-0">
+    <div className={noBorder ? "" : "border-t border-ink-100 pt-6"}>
       <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
         <span className={`h-1.5 w-1.5 rounded-full ${accent}`} />
         {title}

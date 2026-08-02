@@ -78,6 +78,11 @@ function mergeJsonLdCandidate(data: ParsedListing, item: unknown): void {
     if (bedrooms) data.nb_chambres = bedrooms;
   }
 
+  if (typeof obj.yearBuilt !== "undefined" && !data.annee_construction) {
+    const yb = toNumber(obj.yearBuilt);
+    if (yb && yb >= 1800 && yb <= 2030) data.annee_construction = yb;
+  }
+
   if (typeof obj.itemCondition === "string" && !data.etat_bien) {
     const ic = obj.itemCondition.toLowerCase();
     if (ic.includes("new")) data.etat_bien = "Neuf";
@@ -122,6 +127,19 @@ function mergeJsonLdCandidate(data: ParsedListing, item: unknown): void {
       if (name.includes("ascenseur") && data.ascenseur === undefined) {
         const val = String(p.value).toLowerCase();
         data.ascenseur = val === "oui" || val === "true" || val === "1";
+      }
+      if ((name.includes("ann") && name.includes("construction")) && !data.annee_construction) {
+        const y = toNumber(p.value);
+        if (y && y >= 1800 && y <= 2030) data.annee_construction = y;
+      }
+      if (name.includes("taxe") && name.includes("fonci") && !data.taxe_fonciere) {
+        const tf = toNumber(p.value);
+        if (tf && tf >= 100 && tf <= 10000) data.taxe_fonciere = tf;
+      }
+      if ((name.includes("étage") || name.includes("etage")) && !name.includes("nombre") && !data.etage) {
+        const ev = String(p.value).trim();
+        if (/^\d+$/.test(ev)) data.etage = ev;
+        else if (/rdc|rez/i.test(ev)) data.etage = "RDC";
       }
     }
   }
@@ -177,7 +195,7 @@ export function extractFromFreeText(text: string): ParsedListing {
   const pieces = firstMatch(text, /(\d+)\s?pi[eè]ces?\b/i);
   if (pieces) data.nb_pieces = toNumber(pieces);
 
-  const chambres = firstMatch(text, /(\d+)\s?chambres?\b/i);
+  const chambres = firstMatch(text, /(\d+)\s?ch(?:ambres?|bres?)\b/i);
   if (chambres) data.nb_chambres = toNumber(chambres);
 
   const etage = firstMatch(text, /(\d+)(?:er|e|[eè]me)?\s?[eé](?:tage(?!s)|t\.)/i)
@@ -198,8 +216,14 @@ export function extractFromFreeText(text: string): ParsedListing {
     ?? firstMatch(text, /[ée]missions?[^A-G]{0,40}classe\s+([A-G])\b/i);
   if (ges) data.ges = ges.toUpperCase();
 
+  if (/\b[àa]\s+r[eé]nover\b/i.test(text)) data.etat_bien = "À rénover";
+  else if (/\b[àa]\s+rafra[iî]chir\b/i.test(text)) data.etat_bien = "À rafraîchir";
+  else if (/\bbon\s+[eé]tat\b/i.test(text) || /\b(?:r[eé]nov[eé]|refait|r[eé]habilit[eé]|restaur[eé]|entretenu)\b/i.test(text)) data.etat_bien = "Bon état";
+  else if (/\b(?:programme|bien|logement|construction|[eé]tat|vente\s+de)\s+neuf\b/i.test(text) || /\brefait\s+[àa]\s+neuf\b/i.test(text)) data.etat_bien = "Neuf";
+
   const annee = firstMatch(text, /construit\w* en (\d{4})/i)
     ?? firstMatch(text, /ann[eé]e de construction\s*[:\-]?\s*(\d{4})/i)
+    ?? firstMatch(text, /ann\.?\s*const\.?\s*[:\-]?\s*(\d{4})/i)
     ?? firstMatch(text, /(?:immeuble|r[eé]sidence|b[aâ]timent)\s+(?:de|du)\s+(\d{4})/i)
     ?? firstMatch(text, /(?:b[aâ]ti|[eé]difi[eé]|[eé]rig[eé]|livr[eé])\w*\s+en\s+(\d{4})/i)
     ?? firstMatch(text, /dat\w+\s+(?:de|du)\s+(\d{4})/i);
@@ -209,6 +233,29 @@ export function extractFromFreeText(text: string): ParsedListing {
   if (typeBien) {
     const map: Record<string, string> = { studio: "Studio", appartement: "Appartement", duplex: "Duplex", loft: "Loft", maison: "Maison", immeuble: "Immeuble" };
     data.type_bien = map[typeBien.toLowerCase()];
+  }
+
+  const chargesMensuelles = firstMatch(text, /charges\s+mensuelles\s+copro\s*[:\-]?\s*(\d[\d\s]*)\s*€/i);
+  if (chargesMensuelles) {
+    const cmv = toNumber(chargesMensuelles);
+    if (cmv && cmv >= 10 && cmv <= 2000) data.charges_copro_annuelles = cmv * 12;
+  }
+
+  if (!data.charges_copro_annuelles) {
+    const chargesCopro = firstMatch(text, /charges?\s+(?:de\s+)?copropri[eé]t[eé]\s*[:\-]?\s*(\d[\d\s]*)\s*€/i);
+    if (chargesCopro) {
+      const ccv = toNumber(chargesCopro);
+      if (ccv && ccv >= 100 && ccv <= 20000) data.charges_copro_annuelles = ccv;
+    }
+  }
+
+  const taxeFonciere = firstMatch(text, /taxe\s+fonci[eè]re\s*[:\-]?\s*(\d[\d\s]*)\s*€/i)
+    ?? firstMatch(text, /T\.?\s*F\.?\s*[:\-]?\s*(\d[\d\s]*)\s*€/)
+    ?? firstMatch(text, /imp[oô]t\s+foncier\s*[:\-]?\s*(\d[\d\s]*)\s*€/i)
+    ?? firstMatch(text, /foncier\s+(?:annuel)?\s*[:\-]?\s*(\d[\d\s]*)\s*€/i);
+  if (taxeFonciere) {
+    const tfv = toNumber(taxeFonciere);
+    if (tfv && tfv >= 100 && tfv <= 10000) data.taxe_fonciere = tfv;
   }
 
   const codePostal = firstMatch(text, /\b(\d{5})\b/);

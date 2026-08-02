@@ -12,6 +12,7 @@ export interface ChargesEstimationInput {
   surface_m2: number | null;
   nb_lots: number | null;
   annee_construction: number | null;
+  etage: string | null;
   ascenseur: boolean | null;
   etat_bien: string;
   prix: number | null;
@@ -137,17 +138,24 @@ const CONSIGNE_RECENCE =
 const AI_WEIGHT = 0.4;
 
 
+function etageNum(etage: string | null): number | null {
+  if (etage == null) return null;
+  if (/rdc|rez/i.test(etage)) return 0;
+  const m = etage.match(/\d+/);
+  return m ? parseInt(m[0], 10) : null;
+}
+
 function computeDeterministicCopro(input: ChargesEstimationInput): number {
   const immeuble = isImmeuble(input.type_bien);
   let base = estimateChargesCopro(input.surface_m2, immeuble, input.code_postal);
 
-  if (input.ascenseur === true) base *= 1.20;
-  else if (input.ascenseur === false) base *= 0.85;
+  const floor = etageNum(input.etage);
+  if (floor != null && floor >= 3 && input.ascenseur === true) base *= 1.20;
 
   if (input.annee_construction != null) {
     const age = new Date().getFullYear() - input.annee_construction;
-    if (age > 50) base *= 1.15;
-    else if (age <= 20) base *= 0.90;
+    if (age > 50) base *= 1.10;
+    else if (age <= 20) base *= 0.95;
   }
 
   const plancher = immeuble ? 1500 : 800;
@@ -183,6 +191,7 @@ export async function estimateCharges(
   const secteur = buildSecteur(input);
   const model = process.env.GEMINI_CHARGES_MODEL || process.env.GEMINI_RENT_MODEL || "gemini-2.5-flash";
 
+  const etageTxt = input.etage != null ? `étage ${input.etage}` : "";
   const ascenseurTxt = input.ascenseur === true ? "avec ascenseur" : input.ascenseur === false ? "sans ascenseur" : "";
   const anneeTxt = input.annee_construction != null ? `${input.annee_construction}` : "année inconnue";
   const prixTxt = input.prix != null ? `, ${input.prix.toLocaleString("fr-FR")} €` : "";
@@ -207,7 +216,7 @@ export async function estimateCharges(
     format = FORMAT_JSON_COPRO_ONLY;
   }
 
-  const prompt = `Bien situé à ${secteur} : ${input.type_bien || "bien"}, ${input.surface_m2 ?? "?"} m², ${anneeTxt}, ${ascenseurTxt}, état ${input.etat_bien || "inconnu"}${prixTxt}.
+  const prompt = `Bien situé à ${secteur} : ${input.type_bien || "bien"}, ${input.surface_m2 ?? "?"} m², ${anneeTxt}, ${[etageTxt, ascenseurTxt].filter(Boolean).join(" ")}, état ${input.etat_bien || "inconnu"}${prixTxt}.
 
 ${buildConsigneType(input)}
 

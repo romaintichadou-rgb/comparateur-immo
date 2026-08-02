@@ -16,6 +16,7 @@ export interface ParsedListing {
   dpe?: string;
   ges?: string;
   charges_copro_annuelles?: number;
+  taxe_fonciere?: number;
   adresse?: string;
   quartier?: string;
   ville?: string;

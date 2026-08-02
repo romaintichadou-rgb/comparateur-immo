@@ -68,24 +68,21 @@ function rcParM2(codePostal: string, tauxCommune?: number | null): number {
   const deptRC = tfEurM2 / tauxDept;
   if (deptRC <= NATIONAL_RC_M2) return deptRC;
 
-  // Le dampening corrige le biais de covariance : dans les départements
-  // urbains, la moyenne simple du taux surestime le RC. Mais l'intensité
-  // du biais dépend de l'écart entre le taux communal et la moyenne dept :
-  // - taux communal ≤ moyenne → pas de biais pour cette commune → pas de dampening
-  // - taux communal > moyenne → biais probable → dampening proportionnel
-  // - sans taux communal (fallback) → dampening maximal (0.3)
-  let dampFactor = 0.3;
   if (tauxCommune != null && tauxCommune > 0) {
     const ratio = (tauxCommune / 100) / tauxDept;
-    if (ratio <= 1) {
-      dampFactor = 1.0;
-    } else {
-      const excess = ratio - 1;
-      dampFactor = Math.max(0.3, 1.0 - 0.7 * Math.min(excess / 0.3, 1.0));
-    }
+    if (ratio <= 1) return deptRC;
+
+    // Communes à taux élevé ont typiquement des valeurs cadastrales plus
+    // basses (corrélation négative taux/RC bien documentée en fiscalité
+    // locale). On atténue le RC départemental proportionnellement à l'écart
+    // au-dessus de la moyenne, avec un plancher à 60 % du RC départemental.
+    const excessPct = ratio - 1;
+    const dampFactor = Math.max(0.6, 1.0 - excessPct * 2.0);
+    return Math.max(NATIONAL_RC_M2 * 0.6, deptRC * dampFactor);
   }
 
-  return NATIONAL_RC_M2 + (deptRC - NATIONAL_RC_M2) * dampFactor;
+  // Fallback sans taux communal : dampening conservateur
+  return NATIONAL_RC_M2 + (deptRC - NATIONAL_RC_M2) * 0.3;
 }
 
 /**

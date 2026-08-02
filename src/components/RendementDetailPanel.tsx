@@ -140,7 +140,7 @@ export default function RendementDetailPanel({
               <div className="grid grid-cols-2 gap-3">
                 <ResultTile
                   label="Rendement brut"
-                  formule="Loyer annuel ÷ budget total"
+                  formule="Revenu brut annuel ÷ budget total"
                   calcul={`${formatEuros(loyerAnnuel)} ÷ ${formatEuros(budgetTotal)}`}
                   value={formatPercent(apt.rendement_brut)}
                   tone="neutral"
@@ -173,7 +173,7 @@ export default function RendementDetailPanel({
                   </h3>
                   <ul className="divide-y divide-ink-100 text-sm">
                     <Row
-                      label="Loyer annuel"
+                      label="Revenu brut annuel"
                       value={loyerAnnuel}
                       badge={isAiEstimated(apt, "loyer_retenu") && <AiEstimatedBadge />}
                     />

@@ -25,12 +25,13 @@ export interface RentEstimationInput {
 
 export interface RentEstimationResult {
   loyer: number | null;
+  loyerHC: number | null;
   justification: string;
   ancreAnil: { loyerM2HC: number; loyerM2CC: number; surface: number; loyerAncre: number } | null;
 }
 
-const MAJORATION_MEUBLE = 0.12;
-const PROVISION_CHARGES_M2_DEFAUT = 2.5;
+export const MAJORATION_MEUBLE = 0.12;
+const PROVISION_CHARGES_M2_DEFAUT = 2.0;
 
 function provisionChargesM2(input: RentEstimationInput): number {
   if (
@@ -313,7 +314,13 @@ export async function estimateRent(
 
   const justif = sanitizeJustification(rawJustif, input.surface_m2, "€/mois", 6);
 
-  return { loyer: finalLoyer, justification: justif, ancreAnil };
+  let loyerHC: number | null = null;
+  if (finalLoyer != null && input.surface_m2 != null && input.surface_m2 > 0) {
+    const provTotal = provM2 * input.surface_m2;
+    loyerHC = Math.round(Math.max(0, finalLoyer - provTotal) / (1 + MAJORATION_MEUBLE));
+  }
+
+  return { loyer: finalLoyer, loyerHC, justification: justif, ancreAnil };
 }
 
 function extractJson(text: string): { loyer_mensuel_eur?: number | null; justification?: string } | null {

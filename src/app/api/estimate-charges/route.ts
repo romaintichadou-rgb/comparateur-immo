@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       surface_m2: apartment.surface_m2,
       nb_lots: apartment.nb_lots,
       annee_construction: apartment.annee_construction,
+      etage: apartment.etage,
       ascenseur: apartment.ascenseur,
       etat_bien: apartment.etat_bien,
       prix: apartment.prix,

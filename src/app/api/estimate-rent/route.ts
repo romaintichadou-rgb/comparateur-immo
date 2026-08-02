@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       ? await fetchLoyerReference(apartment.code_insee)
       : null;
 
-    const { loyer, justification } = await estimateRent({
+    const { loyer, loyerHC, justification } = await estimateRent({
       ville: apartment.ville,
       quartier: apartment.quartier,
       code_postal: apartment.code_postal,
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
 
     const updated = await updateApartment(apartmentId, {
       loyer_retenu: loyer,
+      loyer_hc: loyerHC,
       loyer_justification: justification,
       champs_manuels: champsManuels,
       champs_estimes_ia: champsEstimesIa,

@@ -56,3 +56,13 @@ export function computeDerived(apartment: Apartment): ApartmentWithComputed {
     rendement_net,
   };
 }
+
+const MAJORATION_MEUBLE = 0.12;
+
+export function recalcLoyerCC(loyerHC: number, chargesCoproAnnuelles: number): number {
+  return Math.round(loyerHC * (1 + MAJORATION_MEUBLE) + chargesCoproAnnuelles / 12);
+}
+
+export function deriveLoyerHC(loyerCC: number, chargesCoproAnnuelles: number): number {
+  return Math.round(Math.max(0, loyerCC - chargesCoproAnnuelles / 12) / (1 + MAJORATION_MEUBLE));
+}

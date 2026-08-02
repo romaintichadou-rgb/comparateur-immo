@@ -5,7 +5,7 @@ import { capitalEffectif, resolveInputs, simulate } from "@/lib/simulation";
 import { buildVerdicts, computeScoreGlobal, type RendementSeuils } from "./scoring";
 import { computeDecision, ecartPrixMarche } from "./decision";
 import { buildBlocPrix } from "./blocs/prix";
-import { buildBlocLocation, MAJORATION_MEUBLE, PROVISION_CHARGES_M2 } from "./blocs/location";
+import { buildBlocLocation, MAJORATION_MEUBLE, provisionChargesM2 } from "./blocs/location";
 import { buildBlocRisque } from "./blocs/risque";
 import { buildBlocSimulation } from "./blocs/simulation";
 import type { Argument, BlocAnalyse, BlocKey, Decision, Recommandation, Verdict } from "./types";
@@ -643,7 +643,8 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
   function buildLevierLoyer(): Recommandation | null {
     if (!ctx.loyerRef || apt.surface_m2 == null || apt.surface_m2 <= 0 || apt.loyer_retenu == null)
       return null;
-    const maxCC_m2 = ctx.loyerRef.max * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2;
+    const provM2 = provisionChargesM2(apt);
+    const maxCC_m2 = ctx.loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2;
     const loyerMaxAnil = Math.round(maxCC_m2 * apt.surface_m2);
     // On vise le haut de fourchette ANIL, mais borné à une hausse réaliste.
     const plafondRealiste = Math.round(apt.loyer_retenu * (1 + LOYER_UPLIFT_MAX));
@@ -680,7 +681,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         const args: Argument[] = [];
         const surface = apt.surface_m2 ?? 0;
         const loyerActuel = apt.loyer_retenu ?? 0;
-        const minCC_m2 = ctx.loyerRef.min * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2;
+        const minCC_m2 = ctx.loyerRef.min * (1 + MAJORATION_MEUBLE) + provM2;
         const loyerMinAnil = Math.round(minCC_m2 * surface);
         const gain = loyerCible - loyerActuel;
         const annee = ctx.loyerRef.annee ? ` ${ctx.loyerRef.annee}` : "";

@@ -27,12 +27,19 @@ const SRC_LOYERS: Source = {
   url: "https://www.data.gouv.fr/fr/datasets/6751be987c09f4be821c6934/",
 };
 
-// Provision de charges locatives récupérables, en €/m²/mois, servant à
-// convertir un loyer HC en CC pour comparer à la Carte des loyers (HC).
-// Exportée pour que le moteur de recommandations (recommandations.ts) cible le
-// haut de fourchette ANIL sur la même base de conversion, sans dupliquer la
-// constante (risque de dérive).
-export const PROVISION_CHARGES_M2 = 2.5;
+// Fallback provision de charges locatives récupérables, en €/m²/mois, quand les
+// charges réelles du bien ne sont pas disponibles.
+export const PROVISION_CHARGES_M2_DEFAUT = 2.0;
+
+export function provisionChargesM2(apt: Apartment): number {
+  if (apt.charges_copro_annuelles != null && apt.charges_copro_annuelles > 0 && apt.surface_m2 != null && apt.surface_m2 > 0) {
+    return apt.charges_copro_annuelles / 12 / apt.surface_m2;
+  }
+  return PROVISION_CHARGES_M2_DEFAUT;
+}
+
+/** @deprecated Use PROVISION_CHARGES_M2_DEFAUT */
+export const PROVISION_CHARGES_M2 = PROVISION_CHARGES_M2_DEFAUT;
 
 // Les données ANIL sont dominées par la location nue (~75 % du parc locatif
 // français). En LMNP, le bien est loué meublé : un logement meublé se loue
@@ -70,7 +77,8 @@ export function buildBlocLocation(
   // la location nue) est converti en CC meublé : majoration meublé sur le
   // loyer HC, puis ajout de la provision de charges.
   const loyerBienM2CC = apt.loyer_retenu != null && surface != null ? apt.loyer_retenu / surface : null;
-  const marcheM2CC = loyerRef ? loyerRef.loyerM2 * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2 : null;
+  const provM2 = provisionChargesM2(apt);
+  const marcheM2CC = loyerRef ? loyerRef.loyerM2 * (1 + MAJORATION_MEUBLE) + provM2 : null;
 
   const donneesManquantes: string[] = [];
   let loyerOptimiste = false;
@@ -92,8 +100,8 @@ export function buildBlocLocation(
       // Pour un immeuble, on relève les seuils : dépasser le max (ou la médiane)
       // d'un logement unique est attendu, pas un signal d'excès en soi.
       const seuilMax = immeuble
-        ? (loyerRef.max * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2) * 1.25
-        : loyerRef.max * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2;
+        ? (loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2) * 1.25
+        : loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2;
       const seuilEcart = immeuble ? 0.3 : 0.1;
       const auDessusMax = loyerBienM2CC > seuilMax;
       const optimisteEtNonVerifie = loyerNonVerifie && ecart != null && ecart > seuilEcart;
@@ -130,8 +138,8 @@ export function buildBlocLocation(
   if (loyerRef && surface != null && marcheM2CC != null) {
     sources.push(SRC_LOYERS);
     const median = Math.round(marcheM2CC * surface);
-    const min = Math.round((loyerRef.min * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2) * surface);
-    const max = Math.round((loyerRef.max * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2) * surface);
+    const min = Math.round((loyerRef.min * (1 + MAJORATION_MEUBLE) + provM2) * surface);
+    const max = Math.round((loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2) * surface);
     const perimetreLabel = perimetre === "rayon500" ? "rayon 500 m" : "arrondissement";
     faits.push({
       label: immeuble ? "Loyer de marché à surface équivalente" : "Loyer de marché médian",
@@ -146,7 +154,7 @@ export function buildBlocLocation(
       label: "Fourchette de loyer",
       value: `${min.toLocaleString("fr-FR")} – ${max.toLocaleString("fr-FR")}`,
       unit: "€/mois CC",
-      detail: `${(loyerRef.min * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2).toFixed(1)} – ${(loyerRef.max * (1 + MAJORATION_MEUBLE) + PROVISION_CHARGES_M2).toFixed(1)} €/m² CC meublé · ${surface} m²`,
+      detail: `${(loyerRef.min * (1 + MAJORATION_MEUBLE) + provM2).toFixed(1)} – ${(loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2).toFixed(1)} €/m² CC meublé · ${surface} m²`,
       perimetre: perimetreLabel,
       source: SRC_LOYERS.label,
       gravite: "info",

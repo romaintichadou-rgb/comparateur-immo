@@ -40,7 +40,7 @@ import {
   type ApartmentWithComputed,
   type Statut,
 } from "@/lib/types";
-import { computeDerived } from "@/lib/calculations";
+import { computeDerived, recalcLoyerCC, deriveLoyerHC } from "@/lib/calculations";
 import {
   estimateAssurance,
   estimateChargesCopro,
@@ -478,6 +478,15 @@ export default function ApartmentDetail({
   function saveField(key: string) {
     if (!(key in finPatch)) return;
     const fieldPatch = { [key]: (finPatch as Record<string, unknown>)[key] } as ApartmentPatch;
+    if (key === "charges_copro_annuelles" && apt.loyer_retenu != null && !apt.champs_manuels.includes("loyer_retenu")) {
+      const newCharges = (finPatch as Record<string, unknown>)[key] as number | null;
+      if (newCharges != null) {
+        const hc = apt.loyer_hc ?? deriveLoyerHC(apt.loyer_retenu, apt.charges_copro_annuelles ?? 0);
+        (fieldPatch as Record<string, unknown>).loyer_retenu = recalcLoyerCC(hc, newCharges);
+        if (apt.loyer_hc == null) (fieldPatch as Record<string, unknown>).loyer_hc = hc;
+        (fieldPatch as Record<string, unknown>).champs_manuels = Array.from(new Set([...apt.champs_manuels, "charges_copro_annuelles" as const]));
+      }
+    }
     save(fieldPatch, () => {
       setFinPatch((p) => { const { [key]: _, ...rest } = p as Record<string, unknown>; return rest; });
       setEditingFields((prev) => { const next = new Set(prev); next.delete(key); return next; });
@@ -527,8 +536,25 @@ export default function ApartmentDetail({
           body: JSON.stringify(body),
         });
         if (res.ok) {
-          setApt((await res.json()).apartment);
+          const updated = (await res.json()).apartment;
+          setApt(updated);
           ok = true;
+          if (key === "charges_copro_annuelles" && updated.loyer_retenu != null && !updated.champs_manuels.includes("loyer_retenu") && updated.charges_copro_annuelles != null) {
+            const hc = updated.loyer_hc ?? deriveLoyerHC(updated.loyer_retenu, apt.charges_copro_annuelles ?? 0);
+            const newLoyer = recalcLoyerCC(hc, updated.charges_copro_annuelles);
+            if (newLoyer !== updated.loyer_retenu) {
+              const loyerPatch: Record<string, unknown> = { loyer_retenu: newLoyer, champs_manuels: updated.champs_manuels };
+              if (updated.loyer_hc == null) loyerPatch.loyer_hc = hc;
+              try {
+                const r = await fetch(`/api/apartments/${apt.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(loyerPatch),
+                });
+                if (r.ok) setApt((await r.json()).apartment);
+              } catch {}
+            }
+          }
         }
       } catch {}
       setEstimatingFields((prev) => { const next = new Set(prev); next.delete(key); return next; });
@@ -562,20 +588,6 @@ export default function ApartmentDetail({
       else ok = false;
     } catch { ok = false; }
 
-    if (needs.rent) {
-      showBanner("Recalcul du loyer estimé…");
-      try {
-        const res = await fetch("/api/estimate-rent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apartmentId: apt.id }),
-        });
-        if (res.ok) setApt((await res.json()).apartment);
-        else ok = false;
-      } catch { ok = false; }
-    }
-    setRentPending(false);
-
     if (needs.charges) {
       showBanner("Recalcul des charges et taxe foncière…");
       try {
@@ -589,6 +601,20 @@ export default function ApartmentDetail({
       } catch { ok = false; }
     }
     setChargesPending(false);
+
+    if (needs.rent) {
+      showBanner("Recalcul du loyer estimé…");
+      try {
+        const res = await fetch("/api/estimate-rent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apartmentId: apt.id }),
+        });
+        if (res.ok) setApt((await res.json()).apartment);
+        else ok = false;
+      } catch { ok = false; }
+    }
+    setRentPending(false);
 
     if (needs.assurance) {
       try {
