@@ -574,15 +574,23 @@ focus ring `ring-2 ring-accent-500/20`.
 | **`src/app/auth/reset-password/page.tsx`** | **Réinitialisation MDP après email** | ✅ Complet |
 | `src/app/compte/page.tsx` + `ComptePage.tsx` | Page compte protégée avec profil utilisateur | ✅ Complet |
 | `src/lib/db.ts` : `getUserProfile()` | Récupère plan, biens, analyses | ✅ Complet |
-| **`src/app/api/auth-status/route.ts`** | **Vérification session (pour bookmarklet)** | ✅ Complet |
 | `src/components/Navbar.tsx` | `UserMenu` dropdown avec avatar, menu, déconnexion | ✅ Complet |
 | `src/components/EmptyHomeState.tsx` | État vide « premier bien », invite URL | ✅ Complet |
-| `src/lib/bookmarklet.ts` | Vérification session avant redirection | ✅ Complet |
 
 **Implémentation :**
 - Reset password : formulaire avec toggle eye/eye-off, validation 8 char, réutilise `changerMotDePasse()`
 - Profil utilisateur : 3 cartes (Plan / Biens / Analyses), affichage adapté au plan (free/pro/tester)
-- Bookmarklet : appel `/api/auth-status` avant redirection, gestion login automatique si déconnecté, fallback réseau
+
+⚠️ **Le bookmarklet n'a PAS eu besoin d'être modifié pour l'auth**, contrairement
+à ce que le plan laissait attendre. Il redirige vers
+`/appartements/nouveau?prefill=…` et le proxy fait le reste : sans session il
+renvoie sur `/login?suivant=…` en conservant la query string, donc l'annonce
+n'est pas perdue et l'utilisateur y revient après connexion.
+
+Une version intermédiaire y avait ajouté un `fetch('/api/auth-status')` : elle
+a cassé le bookmarklet en silence et a été retirée avec sa route. Les trois
+raisons sont documentées en tête de `src/lib/bookmarklet.ts` — les lire avant
+toute retouche de cette chaîne.
 
 ## Les deux migrations, et pourquoi elles sont séparées
 
@@ -2331,7 +2339,29 @@ supposer qu'une nouvelle panne est inédite) :
 
 Le bookmarklet (`src/lib/bookmarklet.ts`) est le chemin principal pour
 importer une annonce — le scraping serveur est bloqué sur la plupart des
-sites (DataDome, Cloudflare). Pipeline par priorité (première valeur gagne) :
+sites (DataDome, Cloudflare).
+
+## ⚠️ Trois règles avant de toucher à `BOOKMARKLET_SOURCE`
+
+`buildBookmarkletHref` supprime TOUS les sauts de ligne et substitue
+`__APP_ORIGIN__` par un `String.replace` **sans `/g`**. Trois conséquences,
+toutes rencontrées d'un coup lors d'une seule modification :
+
+1. **Aucun commentaire `//` dans la chaîne.** Sur une seule ligne, il avale
+   tout ce qui suit. Le bookmarklet ne fait alors plus rien — sans erreur en
+   console, sans échec de build. Documenter dans l'en-tête TypeScript.
+2. **Une seule occurrence de `__APP_ORIGIN__`.** Les suivantes resteraient
+   littérales dans l'URL produite.
+3. **Pas de `fetch()` vers notre API.** Le script tourne sur le domaine de
+   l'annonce : l'appel est cross-origin, CORS le bloque. Et c'est inutile —
+   le proxy redirige déjà vers `/login?suivant=…` en conservant la query
+   string.
+
+**`npm run check:bookmarklet`** compile le script GÉNÉRÉ et vérifie ces
+points. Ni `build` ni `lint` ne voient ce genre de casse : la source reste du
+TypeScript parfaitement valide. Lancer ce script après toute retouche.
+
+## Pipeline par priorité (première valeur gagne)
 
 1. **JSON-LD** (schema.org) — cross-plateforme, données structurées fiables
    (prix, adresse, surface, pièces, photo)

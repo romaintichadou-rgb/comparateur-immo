@@ -25,6 +25,29 @@
  *
  * Le code est volontairement écrit en ES5/syntaxe permissive pour rester
  * exécutable tel quel sur un maximum de pages tierces sans étape de build.
+ *
+ * ── TROIS RÈGLES À NE PAS OUBLIER EN ÉDITANT CETTE CHAÎNE ────────────────
+ *
+ * 1. **Aucun commentaire `//` ici.** `buildBookmarkletHref` supprime TOUS les
+ *    sauts de ligne : le script devient une seule ligne, et un `//` avale donc
+ *    tout ce qui suit. Le bookmarklet ne fait alors plus rien du tout, sans la
+ *    moindre erreur en console. Utiliser une expression de commentaire de bloc
+ *    si c'est indispensable, sinon documenter ICI, dans l'en-tête TypeScript.
+ *
+ * 2. **Un seul `__APP_ORIGIN__`.** La substitution est un `String.replace`
+ *    sans `/g` : seule la PREMIÈRE occurrence est remplacée, les suivantes
+ *    resteraient littérales dans l'URL produite.
+ *
+ * 3. **Pas de `fetch()` vers notre API.** Le script s'exécute sur le domaine
+ *    de l'annonce ; un appel vers l'app est cross-origin et se fait bloquer
+ *    par CORS. Vérifier la session ici est de toute façon inutile : le proxy
+ *    redirige déjà `/appartements/nouveau?prefill=…` vers
+ *    `/login?suivant=…`, en conservant la query string — l'annonce n'est donc
+ *    pas perdue, et l'utilisateur y revient après connexion.
+ *
+ * Ces trois points ont été violés d'un coup par une seule modification (lot
+ * 4, « bookmarklet avec vérification de session ») : le bookmarklet est resté
+ * silencieusement mort jusqu'au test manuel suivant.
  */
 const BOOKMARKLET_SOURCE = `(function(){
 var w=window.open('about:blank','_blank');
@@ -390,16 +413,8 @@ d.url=location.href;
 d.plateforme=pf;
 try{
 var enc=btoa(unescape(encodeURIComponent(JSON.stringify(d))));
-var prefillUrl='__APP_ORIGIN__/appartements/nouveau?prefill='+encodeURIComponent(enc);
-// Vérifier la session avant de rediriger — si pas connecté, passer par login
-fetch('__APP_ORIGIN__/api/auth-status').then(function(r){
-var loginUrl='__APP_ORIGIN__/login?suivant='+encodeURIComponent('/appartements/nouveau?prefill='+encodeURIComponent(enc));
-var destination=r.ok?prefillUrl:loginUrl;
-if(w){w.location.href=destination;setTimeout(collapseVoir,200);}else{location.href=destination;}
-}).catch(function(){
-// Si l'appel échoue (réseau, etc), essayer d'aller directement — le proxy redirigera vers login si besoin
-if(w){w.location.href=prefillUrl;setTimeout(collapseVoir,200);}else{location.href=prefillUrl;}
-});
+var url='__APP_ORIGIN__/appartements/nouveau?prefill='+encodeURIComponent(enc);
+if(w){w.location.href=url;setTimeout(collapseVoir,200);}else{location.href=url;}
 }catch(err){if(w)w.close();alert('Bookmarklet Immoscore: '+err.message);}
 }
 function collapseVoir(){

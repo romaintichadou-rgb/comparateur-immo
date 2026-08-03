@@ -273,12 +273,20 @@ compris en appelant `/api/apartments/<id-de-B>` à la main.
   - Type `UserProfile` exporte pour typage client
 - ✅ Navbar — `UserMenu` dropdown avec menu, avatar, déconnexion
 - ✅ `EmptyHomeState` — état vide « premier bien », invite à coller une URL
-- ✅ **Bookmarklet amélioré**
-  - Route `/api/auth-status` (publique) vérifie la session
-  - Bookmarklet appelle auth-status AVANT redirection
-  - Connecté → `/appartements/nouveau?prefill=...`
-  - Non connecté → `/login?suivant=/appartements/nouveau?prefill=...`
-  - Fallback si appel échoue : essayer direct (proxy redirige si besoin)
+- ✅ **Bookmarklet — inchangé, et c'est la bonne réponse**
+  - Il redirige directement vers `/appartements/nouveau?prefill=…`
+  - Le proxy fait déjà le reste : pas de session → `/login?suivant=…`, query
+    string conservée, retour sur l'annonce après connexion
+  - ⚠️ Une première version ajoutait un `fetch('/api/auth-status')` avant la
+    redirection. **Trois défauts d'un coup**, corrigés depuis (voir les règles
+    en tête de `src/lib/bookmarklet.ts`) : commentaires `//` dans une chaîne
+    dont on supprime les sauts de ligne (tout ce qui suit devient mort),
+    `String.replace` sans `/g` sur `__APP_ORIGIN__`, et un `fetch()`
+    cross-origin que CORS bloque de toute façon depuis la page d'annonce.
+    La route `/api/auth-status` a été supprimée avec.
+  - Garde-fou ajouté : `npm run check:bookmarklet` compile le script GÉNÉRÉ.
+    C'est le seul contrôle qui voit ce genre de casse — ni `build` ni `lint`
+    ne l'attrapent, la source restant du TypeScript valide.
 - ✅ Charte respectée : boutons sans icône, tailles standard (`py-3` pour CTA plein, `py-2.5` pour bouton inline)
 - ✅ Focus rings `ring-2 ring-accent-500/20` sur inputs
 - ✅ Messages d'erreur/succès en banneau
@@ -286,7 +294,6 @@ compris en appelant `/api/apartments/<id-de-B>` à la main.
 
 **Sécurité :**
 - `requireSession()` sur `/compte` et `/auth/reset-password` — page non accessible si déconnecté
-- `/api/auth-status` publique mais retourne 401 si pas de session → bookmarklet peut vérifier
 - Pas de révélation d'existence d'email (cas de suppression : message générique)
 
 ### Lot 5 — Fondations monétisation
