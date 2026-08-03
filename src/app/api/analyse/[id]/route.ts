@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reponseErreur } from "../../erreurs";
 import { revalidatePath } from "next/cache";
-import { getApartment, updateApartment } from "@/lib/db";
+import { getApartment, updateApartment, checkAndIncrementAnalyseQuota } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { runAnalyse } from "@/lib/analyse/run";
 
@@ -18,6 +18,9 @@ export async function POST(
 ) {
   const { id } = await params;
   try {
+    // Vérifier le quota d'analyses IA avant l'appel Gemini
+    await checkAndIncrementAnalyseQuota();
+
     let apartment = await getApartment(id);
     if (!apartment) {
       return NextResponse.json({ error: "Introuvable" }, { status: 404 });
