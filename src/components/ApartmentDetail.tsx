@@ -107,8 +107,13 @@ function DisplayValue({
         <span className="text-xs font-medium text-ink-500">{label}</span>
         {badge}
       </div>
-      <div className="flex items-baseline gap-3">
-        <span className="font-mono text-2xl font-semibold tabular-nums text-ink-800">
+      {/* `flex-wrap` + valeur insécable : les deux boutons font ~180 px, la
+          valeur suffixée ~140 px — sur mobile ça dépassait, et c'est le SUFFIXE
+          qui se coupait (« 1 741 €/mois » puis « CC » seul à la ligne). Les
+          boutons passent désormais à la ligne d'un bloc, le montant reste
+          entier. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="whitespace-nowrap font-mono text-2xl font-semibold tabular-nums text-ink-800">
           {fmt} <span className="text-sm font-normal text-ink-400">{suffix}</span>
         </span>
         <span className="flex items-center gap-1">
@@ -839,7 +844,7 @@ export default function ApartmentDetail({
             {formatApartmentTitle(apt)}
           </h1>
           {localisation && <p className="truncate text-sm text-ink-500">{localisation}</p>}
-          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-400">
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-400">
             {/* Sans adresse précise, la sous-ligne `localisation` affiche déjà
                 « quartier, ville » — on n'affiche donc le quartier ici que
                 lorsqu'une adresse précise existe (la sous-ligne montre alors la
@@ -919,8 +924,8 @@ export default function ApartmentDetail({
       </div>
 
       {/* Onglets */}
-      <div className="pb-8">
-        <nav className="-mx-4 flex gap-6 overflow-x-auto border-b border-ink-100 px-4 sm:mx-0 sm:px-0">
+      <div className="pb-6 sm:pb-8">
+        <nav className="no-scrollbar -mx-4 flex gap-6 overflow-x-auto border-b border-ink-100 px-4 sm:mx-0 sm:px-0">
           {TABS.map((tab) => (
             <Link
               key={tab.key}

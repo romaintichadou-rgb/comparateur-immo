@@ -125,7 +125,7 @@ dans les boutons CTA.
 
 | Composant | Fichier | Rôle |
 |---|---|---|
-| `StatCard` | `StatCard.tsx` | Carte métrique tonale (label/valeur/sub/tone). Mode simple ou avant→après. Affordance cliquable : pointillé sous la valeur + "Calcul →". |
+| `StatCard` | `StatCard.tsx` | Carte métrique tonale (label/valeur/sub/tone). Mode simple ou avant→après. Affordance cliquable : pointillé sous la valeur + « Calcul → » en pied de carte, **dans le flux** (`mt-auto`), jamais en `absolute` — voir « les quatre pièges du mobile ». |
 | `SectionHeader` | `SectionHeader.tsx` | En-tête de section : icon-pill accent + titre uppercase. Props : `icon`, `title`, `as` (h2/h3), `className`. Toujours préférer ce composant plutôt que recréer le pattern manuellement. |
 | `SectionTitle` | `SectionHeader.tsx` | Titre de section **sans icône**. Utilise `font-display` (Fraunces) pour garantir la cohérence typographique de tous les H2/H3. Props : `as` (h2/h3), `className`. À préférer aux `<h2>`/`<h3>` bruts pour éviter les erreurs de font. |
 | `Skeleton` | `Skeleton.tsx` | Barre shimmer de chargement. |
@@ -166,7 +166,7 @@ Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 | Padding de StatCard | 16px | `p-4` |
 | Gap dans une grille de cartes | 12px | `gap-3` |
 | Espacement entre sections (FlatSection) | 56px | `pt-14 pb-14` |
-| Espacement onglet → contenu | 32px | `pb-8` |
+| Espacement onglet → contenu | 24px mobile / 32px desktop | `pb-6 sm:pb-8` |
 | Séparateur de section | — | `border-t border-ink-100/50` |
 | Séparateur de faits | — | `divide-y divide-ink-100/50` |
 
@@ -236,6 +236,58 @@ Mobile-first (`sm:` = 640px est le breakpoint principal). Conventions :
 - Grilles : `grid-cols-1 sm:grid-cols-2` (ou `lg:grid-cols-*` pour les layouts larges)
 - Mini carte : `hidden sm:block` (masquée sur mobile)
 - Zones de tap mobile : minimum 44px (`py-3 px-4` sur les onglets)
+
+### Les quatre pièges du mobile, tous rencontrés en vrai
+
+Une colonne de 375 px casse ce qui tenait à 1280 px. Les quatre patterns ci-dessous
+sont la correction de bugs **observés**, pas des précautions théoriques.
+
+**1. Une rangée d'éléments non `flex-wrap` déborde SOUS son voisin.** La ligne
+tag + date + « Relancer » de la carte verdict (`AnalyseIA`) n'avait pas
+`flex-wrap` : sur mobile le tag passait à deux lignes, la rangée dépassait de sa
+colonne et « Relancer » s'affichait **par-dessus la jauge**. Toute rangée de
+métadonnées doit porter `flex-wrap` + un `gap-y-*` (sans quoi les lignes se
+touchent une fois enroulées).
+
+**2. Un badge en `absolute` recouvre le contenu dès qu'une carte se resserre.**
+Le « Calcul → » de `StatCard` était en `absolute bottom-2.5 right-3` : sur toute
+carte **sans `sub`** (les highlights de bloc), la valeur est la dernière ligne et
+le badge se posait dessus. Il vit désormais dans le FLUX, en pied de carte
+(`mt-auto flex justify-between`), avec le `sub` à sa gauche. Préférer un pied de
+carte en flux à un badge positionné : `mt-auto` garde l'alignement en grille.
+
+**3. Une espace ordinaire dans un montant le coupe en deux.** `formatEurosSigned`
+séparait le signe du nombre par une espace normale → « − » finissait seul sa
+ligne et « 123 € » passait à la suivante, dans `StatCard` comme dans le hero de
+`SimulationFinanciere`. Le séparateur est une **espace insécable** (U+00A0),
+comme celle que `formatEuros` place déjà avant le « € ». Corriger au FORMATEUR,
+pas par un `whitespace-nowrap` dans chaque composant qui affiche un montant.
+
+**4. Valeur + boutons sur une ligne : c'est la valeur qui se casse.** Dans
+`DisplayValue` (onglet Opération), « Modifier » + « Estimer avec IA » font ~180 px
+et poussaient le suffixe à la ligne (« 1 741 €/mois » puis « CC » orphelin). La
+valeur porte `whitespace-nowrap` et le conteneur `flex-wrap` : ce sont les
+**boutons** qui passent à la ligne, d'un bloc.
+
+### Scrollbar : la masquer sur une NAVIGATION, jamais sur un tableau
+
+`.no-scrollbar` (`globals.css`) masque la scrollbar sans désactiver le
+défilement. Réservée aux barres de navigation qui débordent — onglets de la fiche
+(`ApartmentDetail`), sélecteur de leviers (`OptimiserView`) : le contenu tronqué
+en bord d'écran annonce déjà qu'on peut défiler, et la scrollbar macOS
+« toujours visible » posait un trait gris épais sous les onglets.
+
+⚠️ **Ne pas l'appliquer à un tableau qui déborde** (année par année,
+`ApartmentsTable`) : là, rien d'autre ne signale les colonnes hors champ — la
+scrollbar est la seule affordance.
+
+### Un SVG à taille fixe vole la place du texte
+
+`VerdictGauge` avait `width={100} height={100}` en dur : sur 375 px, elle ne
+laissait que ~205 px au verdict et la raison tombait sur cinq lignes. Les
+dimensions passent par les CLASSES (`size-20 sm:size-25`), le `viewBox` mettant
+le dessin à l'échelle ; les attributs `width`/`height` ne servent plus qu'à fixer
+le ratio de repli.
 
 ## Icônes
 

@@ -21,7 +21,10 @@ export function formatEuros(value: number | null | undefined): string {
 export function formatEurosSigned(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   const rounded = Math.round(value) || 0; // normalise -0 → 0
-  return `${rounded >= 0 ? "+" : "−"} ${formatEuros(Math.abs(rounded))}`;
+  // Espace INSÉCABLE après le signe, même raison que celle de `formatEuros`
+  // pour le « € » : sur une colonne étroite (mobile), une espace ordinaire
+  // laissait le « − » finir seul sa ligne et le montant passer à la suivante.
+  return `${rounded >= 0 ? "+" : "−"} ${formatEuros(Math.abs(rounded))}`;
 }
 
 /**

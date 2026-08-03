@@ -98,7 +98,11 @@ function VerdictGauge({
   const offset = GAUGE_CIRCUMFERENCE * (1 - filled);
   return (
     <svg
-      className="shrink-0"
+      /* Dimensions pilotées par les CLASSES, pas par width/height (qui ne font
+         plus que fixer le ratio de repli) : à 100 px fixes, la jauge ne laissait
+         que ~205 px au verdict sur un écran de 375 px, et la raison tombait sur
+         cinq lignes. Le viewBox met le dessin à l'échelle tout seul. */
+      className="size-20 shrink-0 sm:size-25"
       width={GAUGE_SIZE}
       height={GAUGE_SIZE}
       viewBox={`0 0 ${GAUGE_SIZE} ${GAUGE_SIZE}`}
@@ -340,7 +344,11 @@ export default function AnalyseIA({
       <section className={`rounded-2xl border p-6 sm:p-8 ${styles.border} ${styles.grad}`}>
         <div className="flex items-start justify-between gap-5 sm:gap-6">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-3">
+            {/* `flex-wrap` obligatoire : sans lui, ces trois éléments (dont un
+                tag qui passe à deux lignes sur mobile) débordaient de la colonne
+                et le bouton « Relancer » se retrouvait affiché PAR-DESSUS la
+                jauge. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${CATEGORIE_TAG_STYLES[scoreCategorie(score).tone]}`}>
                 {scoreCategorie(score).label}
               </span>

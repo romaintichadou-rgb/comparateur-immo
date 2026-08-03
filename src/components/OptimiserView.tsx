@@ -259,7 +259,7 @@ function SelecteurLevier({
   onSelect: (i: number) => void;
 }) {
   return (
-    <div className="-mx-1 mb-4 overflow-x-auto px-1 py-0.5">
+    <div className="no-scrollbar -mx-1 mb-4 overflow-x-auto px-1 py-0.5">
       <div
         role="tablist"
         aria-label="Leviers d'optimisation"

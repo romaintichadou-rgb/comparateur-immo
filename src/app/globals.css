@@ -130,6 +130,22 @@ body {
   animation: banner-slide-down 0.25s ease-out;
 }
 
+/* Masque la scrollbar d'une zone qui défile horizontalement, SANS désactiver le
+   défilement. Réservé aux barres de NAVIGATION (onglets de la fiche, sélecteur
+   de leviers) : le contenu y est tronqué en bord d'écran, ce qui annonce déjà
+   qu'on peut faire défiler, et la scrollbar macOS "toujours visible" ajoutait
+   un trait gris épais sous les onglets.
+   À NE PAS poser sur un TABLEAU qui déborde (année par année, liste de biens) :
+   là, rien d'autre ne signale les colonnes hors champ — la scrollbar est la
+   seule affordance. */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Accessibilité : on coupe les animations décoratives si l'utilisateur le
    demande (le skeleton reste un aplat neutre, la barre un segment figé). */
 @media (prefers-reduced-motion: reduce) {
