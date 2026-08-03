@@ -16,7 +16,7 @@ export default async function LoginPage({
   return (
     <AuthForm
       action={connexion}
-      titre="Content de te revoir"
+      titre="Se connecter"
       sousTitre="Connecte-toi pour retrouver tes biens et tes analyses."
       libelleBouton="Se connecter"
       suivant={suivant}

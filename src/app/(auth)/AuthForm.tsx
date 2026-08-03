@@ -97,7 +97,7 @@ export default function AuthForm({
                 href="/mot-de-passe-oublie"
                 className="text-xs text-accent-600 transition-colors hover:text-accent-800"
               >
-                Oublié ?
+                Mot de passe oublié ?
               </Link>
             )}
           </div>
