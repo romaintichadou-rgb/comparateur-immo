@@ -299,6 +299,56 @@ dans les section headers, `h-4 w-4` / `size-4` dans les onglets et les
 
 `APP_NAME`, `PIN_RED`, `PIN_RED_STROKE` — ne pas redéfinir localement.
 
+# Multi-utilisateurs — état d'avancement
+
+Plan complet : `docs/plan-authentification.md` (6 lots). **Seul le lot 1 est
+fait** — le socle DB. L'app tourne encore en mono-utilisateur : elle utilise la
+`service_role` key, qui **contourne RLS par design**. Les policies existent mais
+ne protègent rien tant que les requêtes ne passent pas par la session de
+l'utilisateur (lot 3).
+
+## Les deux migrations, et pourquoi elles sont séparées
+
+| Migration | Contenu | Quand l'exécuter |
+|---|---|---|
+| `0008_auth_multi_user.sql` | `profiles`, `user_id` **nullable** sur `apartments` et `app_settings`, backfill, trigger d'inscription, policies RLS | Lot 1 — maintenant |
+| `0009_user_id_not_null.sql` | `user_id` **not null**, refonte de la PK de `app_settings`, trigger étendu | **Fin du lot 3 seulement** |
+
+⚠️ **Exécuter la 0009 trop tôt casse l'app**, de deux façons indépendantes :
+
+1. `apartments.user_id not null` → `createApartment()` ne renseigne pas la
+   colonne : toute création de bien échoue.
+2. `drop column app_settings.id` → `getSettings()` et `updateSettings()` lisent
+   `.eq("id", 1)` : toute lecture de réglages échoue.
+
+C'est la règle générale derrière ce découpage : **on ne change une table que
+dans le même mouvement que le code qui la lit.** Une première version de la
+0008 faisait les deux d'un coup — elle aurait rendu l'app inutilisable dès le
+lot 1, alors que le plan promet un app fonctionnelle à la fin de chaque lot.
+
+**Prérequis de la 0008** : au moins un compte doit exister dans `auth.users`
+avant de la lancer (elle s'arrête avec un message sinon). Tant que l'UI de
+connexion n'existe pas (lot 2), le créer à la main : Dashboard Supabase →
+Authentication → Users → « Add user », avec « Auto Confirm User ».
+
+## Ce que le backfill rattache
+
+Les biens et les réglages existants vont au **plus ancien compte**
+(`order by created_at limit 1`) — celui qui utilisait l'app en mono-utilisateur.
+Les migrations sont exécutées **à la main sur CHAQUE projet** (dev et prod) :
+dev d'abord, vérification, puis prod.
+
+## `profiles` : deux colonnes qui préparent la monétisation
+
+`plan` (`'free'` | `'pro'`) et `analyses_ce_mois` + `periode_compteur`.
+
+Le compteur n'est pas décoratif : l'analyse IA appelle Gemini, **seul coût
+variable de l'app**, invisible tant qu'un seul utilisateur le déclenche. Il sert
+trois fois — protection contre l'abus, mesure avant de fixer un prix, et levier
+de monétisation. Il est posé au lot 1 parce qu'il coûte une ligne de SQL
+maintenant et une migration douloureuse plus tard ; il ne sera **branché** qu'au
+lot 5. Aucun Stripe, aucun tier de prix avant d'avoir mesuré.
+
 # Modélisation "Immeuble" (bien de rapport multi-lots)
 
 Tout le modèle (`Apartment`, estimations, calculs, Analyse IA) suppose par
