@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { ArrowDown, Banknote, Calculator, ChevronDown, Landmark, PieChart, Plus, SlidersHorizontal, TrendingUp, X } from "lucide-react";
+import { ArrowDown, Calculator, ChevronDown, Landmark, PieChart, Plus, SlidersHorizontal, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
-import { FINANCEMENT_MODE_COURT, type AppSettings } from "@/lib/settings";
+import type { AppSettings } from "@/lib/settings";
 import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
   defaultInputs,
@@ -145,7 +145,6 @@ function HypRow({ label, value, badge }: { label: string; value: string; badge?:
   );
 }
 
-/** Titre de sous-section dans le panneau Financement déplié (Crédit, Fiscalité…). */
 function FinSectionTitle({ icon: Icon, children }: { icon: typeof Landmark; children: ReactNode }) {
   return (
     <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-500">
@@ -155,7 +154,6 @@ function FinSectionTitle({ icon: Icon, children }: { icon: typeof Landmark; chil
   );
 }
 
-/** Ligne du panneau Financement déplié — plus spacieuse que HypRow. */
 function FinRow({ label, value, badge, suffix }: { label: string; value: string; badge?: ReactNode; suffix?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2 py-1.5 text-[13px]">
@@ -263,10 +261,9 @@ export default function SimulationFinanciere({
   // UNE carte en édition à la fois. `snapshot` est la copie d'avant-édition qui
   // rend « Annuler » possible — il n'existait pas : on éditait en direct et le
   // seul retour en arrière était de retaper les valeurs de mémoire.
-  const [editingId, setEditingId] = useState<null | "credit" | "hypotheses">(null);
+  const [editingId, setEditingId] = useState<null | "hypotheses">(null);
   const [snapshot, setSnapshot] = useState<SimulationInputs | null>(null);
-  const [confirmReset, setConfirmReset] = useState<null | "credit" | "hypotheses">(null);
-  const [finOpen, setFinOpen] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [hypOpen, setHypOpen] = useState(false);
   const [tableOpen, setTableOpen] = useState(true);
 
@@ -290,10 +287,6 @@ export default function SimulationFinanciere({
     [apartment, quotePartDraft],
   );
   const result = useMemo(() => simulate(apartmentSim, resolus), [apartmentSim, resolus]);
-  const surchargesCredit = (inputs.montantEmprunte != null ? 1 : 0)
-    + (inputs.tauxCreditPct != null ? 1 : 0)
-    + (inputs.dureeAnnees != null ? 1 : 0)
-    + (inputs.tauxAssurancePct != null ? 1 : 0);
   const surchargesHyp = (inputs.regimeFiscal != null && inputs.regimeFiscal !== REGIME_FISCAL_DEFAUT ? 1 : 0)
     + (inputs.tmiPct != null ? 1 : 0)
     + (apartment.quote_part_terrain_pct != null ? 1 : 0)
@@ -306,12 +299,11 @@ export default function SimulationFinanciere({
     setInputs((i) => ({ ...i, [key]: value }));
   }
 
-  function startEdit(id: "credit" | "hypotheses") {
+  function startEdit() {
     setSnapshot(inputs);
-    if (id === "hypotheses") setQuotePartDraft({ value: apartment.quote_part_terrain_pct ?? null });
-    setEditingId(id);
-    if (id === "credit") setFinOpen(true);
-    if (id === "hypotheses") setHypOpen(true);
+    setQuotePartDraft({ value: apartment.quote_part_terrain_pct ?? null });
+    setEditingId("hypotheses");
+    setHypOpen(true);
   }
 
   function cancelEdit() {
@@ -367,21 +359,6 @@ export default function SimulationFinanciere({
 
   const handleSaveInputs = () => persist(inputs);
 
-  async function resetCredit() {
-    const patched: SimulationInputs = {
-      ...inputs,
-      montantEmprunte: null,
-      tauxCreditPct: null,
-      dureeAnnees: null,
-      tauxAssurancePct: null,
-    };
-    setInputs(patched);
-    setSnapshot(null);
-    setEditingId(null);
-    setConfirmReset(null);
-    await persist(patched);
-  }
-
   async function resetHypotheses() {
     const patched: SimulationInputs = {
       ...inputs,
@@ -396,7 +373,7 @@ export default function SimulationFinanciere({
     setQuotePartDraft(null);
     setSnapshot(null);
     setEditingId(null);
-    setConfirmReset(null);
+    setConfirmReset(false);
     await persist(patched, { quote_part_terrain_pct: null });
   }
 
@@ -432,18 +409,7 @@ export default function SimulationFinanciere({
   return (
     <div className="space-y-6">
       <ConfirmDialog
-        open={confirmReset === "credit"}
-        title="Réinitialiser le crédit ?"
-        description="Le montant emprunté repassera en calcul automatique, et le taux, la durée et l'assurance suivront de nouveau ton Profil investisseur."
-        confirmLabel="Réinitialiser"
-        loadingLabel="Réinitialisation…"
-        destructive
-        loading={saving}
-        onConfirm={resetCredit}
-        onCancel={() => setConfirmReset(null)}
-      />
-      <ConfirmDialog
-        open={confirmReset === "hypotheses"}
+        open={confirmReset}
         title="Réinitialiser les hypothèses ?"
         description="La fiscalité suivra de nouveau ton Profil investisseur, la quote-part terrain repassera en calcul automatique, et les revalorisations, indexation et vacance seront désactivées."
         confirmLabel="Réinitialiser"
@@ -451,7 +417,7 @@ export default function SimulationFinanciere({
         destructive
         loading={saving}
         onConfirm={resetHypotheses}
-        onCancel={() => setConfirmReset(null)}
+        onCancel={() => setConfirmReset(false)}
       />
 
       {/* Cash-flow mensuel détaillé (remonté en tête pour montrer le détail d'abord) */}
@@ -525,189 +491,6 @@ export default function SimulationFinanciere({
           </button>
         </div>
       )}
-
-      {/* Section collapsible Financement — regroupe la mensualité hero (toujours
-          visible) et les hypothèses (dépliables). La mensualité montait du panneau
-          KPI, les hypothèses descendaient du panneau gris EditableCard. */}
-      <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "credit" ? "border-accent-300" : "border-ink-200"}`}>
-        {/* En-tête cliquable */}
-        <button
-          type="button"
-          onClick={() => !editingId && setFinOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-5 py-3"
-        >
-          <span className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center rounded-lg bg-accent-50 p-1.5 text-accent-600">
-              <Landmark className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-              Financement
-            </span>
-          </span>
-          <ChevronDown
-            className={`h-4 w-4 text-ink-400 transition-transform ${finOpen ? "rotate-180" : ""}`}
-          />
-        </button>
-
-        {/* Hero : mensualité + summary tags — toujours visible */}
-        <div className="px-5 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-ink-700">Mensualité de crédit</p>
-              <p className="mt-0.5 text-[11px] text-ink-400">assurance emprunteur incluse</p>
-            </div>
-            <p className="shrink-0 font-mono text-2xl font-bold tabular-nums text-ink-900">
-              {euros(result.mensualiteTotale)} €
-              <span className="text-[13px] font-normal text-ink-400">/mois</span>
-            </p>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Crédit {formatNombre(resolus.tauxCreditPct)} %
-            </span>
-            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              {formatNombre(resolus.dureeAnnees)} ans
-            </span>
-            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Apport {euros(result.apport)} €
-            </span>
-          </div>
-        </div>
-
-        {/* Corps dépliable */}
-        {finOpen && (
-          <div className="px-5 pb-4">
-            <div className="pt-1">
-              {editingId === "credit" ? (
-                <>
-                  <div className="space-y-3 py-4">
-                    <div className="pr-8">
-                      <NumberField
-                        label="Montant emprunté"
-                        value={result.montantEmprunte}
-                        onChange={(v) => set("montantEmprunte", v)}
-                        suffix="€"
-                        hint={
-                          result.montantAutomatique ? (
-                            <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
-                          ) : result.montantPlafonne ? (
-                            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                              ramené au coût total
-                            </span>
-                          ) : undefined
-                        }
-                      />
-                    </div>
-                    <ChampHerite
-                      label="Taux du crédit"
-                      suffix="%/an"
-                      override={inputs.tauxCreditPct}
-                      resolu={resolus.tauxCreditPct}
-                      onChange={(v) => set("tauxCreditPct", v)}
-                    />
-                    <ChampHerite
-                      label="Durée"
-                      suffix="ans"
-                      override={inputs.dureeAnnees}
-                      resolu={resolus.dureeAnnees}
-                      onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
-                    />
-                    <ChampHerite
-                      label="Assurance emprunteur"
-                      suffix="%/an"
-                      override={inputs.tauxAssurancePct}
-                      resolu={resolus.tauxAssurancePct}
-                      onChange={(v) => set("tauxAssurancePct", v)}
-                    />
-                    <p className="text-[11px] leading-relaxed text-ink-400">
-                      En mode <strong className="font-medium text-ink-500">auto</strong>, l&apos;emprunt
-                      suit le prix d&apos;achat + les travaux (hors frais de notaire, supposés couverts
-                      par l&apos;apport). Saisis un montant pour le figer ; vide le champ pour repasser
-                      en auto.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-end gap-2 pt-3">
-                    <button
-                      type="button"
-                      onClick={cancelEdit}
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveEdit}
-                      disabled={saving}
-                      className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {saving ? "Enregistrement…" : "Enregistrer"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="py-3.5">
-                    <FinSectionTitle icon={Banknote}>Crédit immobilier</FinSectionTitle>
-                    <FinRow
-                      label="Montant emprunté"
-                      value={`${euros(result.montantEmprunte)} €`}
-                      badge={
-                        result.montantAutomatique ? (
-                          <Pastille>auto</Pastille>
-                        ) : result.montantPlafonne ? (
-                          <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                            plafonné
-                          </span>
-                        ) : undefined
-                      }
-                    />
-                    <FinRow
-                      label="Taux nominal"
-                      value={`${formatNombre(resolus.tauxCreditPct)} %`}
-                      badge={inputs.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
-                    />
-                    <FinRow
-                      label="Durée"
-                      value={`${formatNombre(resolus.dureeAnnees)} ans`}
-                      badge={inputs.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
-                    />
-                    <FinRow
-                      label="Assurance"
-                      value={`${formatNombre(resolus.tauxAssurancePct)} %`}
-                      badge={inputs.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
-                    />
-                  </div>
-
-                  <div className="py-3.5">
-                    <FinSectionTitle icon={PieChart}>Apport personnel</FinSectionTitle>
-                    <FinRow label="Frais de notaire + complément" value={`${euros(result.apport)} €`} />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 py-3.5">
-                    {surchargesCredit > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmReset("credit")}
-                        className="min-h-[44px] rounded-lg px-3 py-2 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
-                      >
-                        Réinitialiser
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => startEdit("credit")}
-                      disabled={editingId !== null}
-                      className="rounded-lg border border-accent-300 bg-white px-5 py-2 text-[13px] font-medium text-accent-600 transition-colors hover:border-accent-600 hover:bg-accent-50 disabled:opacity-50"
-                    >
-                      Modifier
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
 
       {/* Hypothèses — Fiscalité + Projection, séparées du financement */}
       <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "hypotheses" ? "border-accent-300" : "border-ink-200"}`}>
@@ -892,7 +675,7 @@ export default function SimulationFinanciere({
                     {surchargesHyp > 0 && (
                       <button
                         type="button"
-                        onClick={() => setConfirmReset("hypotheses")}
+                        onClick={() => setConfirmReset(true)}
                         className="min-h-[44px] rounded-lg px-3 py-2 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
                       >
                         Réinitialiser
@@ -900,7 +683,7 @@ export default function SimulationFinanciere({
                     )}
                     <button
                       type="button"
-                      onClick={() => startEdit("hypotheses")}
+                      onClick={() => startEdit()}
                       disabled={editingId !== null}
                       className="rounded-lg border border-accent-300 bg-white px-5 py-2 text-[13px] font-medium text-accent-600 transition-colors hover:border-accent-600 hover:bg-accent-50 disabled:opacity-50"
                     >
@@ -1015,7 +798,7 @@ export default function SimulationFinanciere({
       {/* Sticky bar pendant l'édition — feedback temps réel du cash-flow */}
       {editingId !== null && (
         <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-200 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
             <span className="text-xs text-ink-500">Cash-flow mensuel</span>
             <span className={`font-mono text-lg font-bold tabular-nums ${cashflowTextClass(cfLMNP, cashflowSeuils)}`}>
               {formatEurosSigned(cfLMNP)}<span className="ml-0.5 text-xs font-normal text-ink-400">/mois</span>

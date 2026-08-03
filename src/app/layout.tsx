@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import { RendementDetailProvider } from "@/components/RendementDetailProvider";
 import { LoyerDetailProvider } from "@/components/LoyerDetailProvider";
 import { CashflowDetailProvider } from "@/components/CashflowDetailProvider";
+import { getSession } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
@@ -44,18 +45,20 @@ export const metadata: Metadata = {
   description: "Le score d'un investissement locatif, en un coup d'œil",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getSession();
+
   return (
     <html
       lang="fr"
       className={`${fraunces.variable} ${plexSans.variable} ${geistMono.variable} ${outfit.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-ink-50 text-ink-900">
-        <Navbar />
+        <Navbar email={session?.email} />
         {/* overflow-x-clip (et non -hidden) : empêche le débordement horizontal
             sans faire de <main> un conteneur de défilement — sinon `position:
             sticky` des descendants (colonne latérale du formulaire, carte de

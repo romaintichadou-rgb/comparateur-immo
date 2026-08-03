@@ -118,6 +118,16 @@ dans les boutons CTA.
   reprend la couleur de l'état actif en plus léger (`hover:bg-accent-50
   hover:text-accent-700`) plutôt qu'un gris neutre — le survol doit annoncer
   ce que devient le lien une fois actif.
+  - **État connecté** : `UserMenu` — avatar circulaire (initiale de l'email,
+    fond `accent-100`, 36px) avec dropdown au clic. Le dropdown (`shadow-lg`,
+    `rounded-xl`, `border border-ink-200`) contient : en-tête email → liens de
+    navigation (« Profil investisseur » en `sm:hidden` car déjà dans la nav
+    desktop, « Mon compte ») → séparateur → « Déconnexion » (action destructive
+    visuellement séparée par `border-t`). Dismiss : click-outside + Escape +
+    auto-close au changement de route. Les liens de navigation (`NAV_LINKS`)
+    ne s'affichent que quand `email` est truthy.
+  - **État déconnecté** : bouton « Se connecter » (`bg-accent-600`, petit
+    format navbar).
 
 # Composants partagés & conventions UI
 
@@ -422,13 +432,41 @@ bookmarklet survit à une session expirée — l'annonce n'est pas perdue en rou
 
 ### Navbar sur les écrans d'auth
 
-`ROUTES_AUTH` (`Navbar.tsx`) masque les liens de navigation sur `/login`,
-`/signup` et `/mot-de-passe-oublie` : ils pointent tous vers des pages qui
-exigent une session, et y cliquer depuis l'écran de connexion ne ferait que
-ramener à l'écran de connexion. Le wordmark, lui, reste cliquable.
+`ROUTES_AUTH` (`Navbar.tsx`) masque les liens de navigation ET le `UserMenu`
+sur `/login`, `/signup` et `/mot-de-passe-oublie` : ils pointent tous vers
+des pages qui exigent une session, et y cliquer depuis l'écran de connexion ne
+ferait que ramener à l'écran de connexion. Le wordmark, lui, reste cliquable.
 
-L'état connecté (email, déconnexion) n'est **pas** encore dans la navbar :
-c'est le lot 4. `deconnexion()` existe déjà dans `actions.ts`.
+### Écrans d'auth — split layout
+
+Les trois écrans d'auth (login, signup, mot-de-passe-oublié) partagent
+`AuthShell.tsx` : split 45/55 desktop (brand panel gauche avec `bg-tech-grid`,
+`AppMark`, wordmark, tagline + form panel blanc à droite), form seul sur mobile
+(brand panel `hidden` sous `lg:`). `AuthForm.tsx` gère login et signup
+(formulaire générique avec `ChampMotDePasse` — toggle eye/eyeOff, lien
+« Oublié ? » inline). `MotDePasseOublieForm.tsx` gère le mot de passe oublié
+avec le même shell. Inputs à 44px touch targets (`py-3`), focus ring
+`ring-2 ring-accent-500/20`.
+
+## Lot 4 — Les écrans de compte (partiellement implémenté)
+
+**Structure complète, finitions en cours.**
+
+| Fichier | Contenu | État |
+|---|---|---|
+| `src/app/(auth)/login/page.tsx` | Écran connexion | ✅ Complet |
+| `src/app/(auth)/signup/page.tsx` | Écran inscription | ✅ Complet |
+| `src/app/(auth)/mot-de-passe-oublie/page.tsx` + `MotDePasseOublieForm.tsx` | Demande réinitialisation | ✅ Complet |
+| `src/app/auth/callback/route.ts` | Callback Supabase (PKCE + ancien format) | ✅ Complet |
+| `src/app/compte/page.tsx` + `ComptePage.tsx` | Page compte protégée (`requireSession`) | ⏳ Structure (manque : plan, biens/limite, analyses) |
+| `src/components/Navbar.tsx` | `UserMenu` dropdown avec avatar, menu, déconnexion | ✅ Complet |
+| `src/components/EmptyHomeState.tsx` | État vide « premier bien », invite URL | ✅ Complet |
+
+**Finitions restantes :**
+- [ ] Écran réinitialisation mot de passe (`/auth/callback?next=/compte` après lien email) — le callback existe, reste la page
+- [ ] Page `/compte` enrichie : afficher plan (Gratuit/Pro/Testeur), nombre de biens et limite, analyses ce mois
+- [ ] Bookmarklet : redirection vers `/login?suivant=…` si déconnecté (via proxy), retour automatique à l'annonce après connexion
+- [ ] Test croisé deux comptes : vérifier que chacun ne voit que ses biens
 
 ## Les deux migrations, et pourquoi elles sont séparées
 

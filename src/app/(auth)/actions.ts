@@ -86,3 +86,66 @@ export async function deconnexion() {
   revalidatePath("/", "layout");
   redirect("/login");
 }
+
+export async function motDePasseOublie(_precedent: EtatAuth, formData: FormData): Promise<EtatAuth> {
+  const email = String(formData.get("email") ?? "").trim();
+  const origin = String(formData.get("origin") ?? "").trim();
+  if (!email) return { erreur: "Renseigne ton adresse email." };
+
+  const baseUrl = origin || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${baseUrl}/auth/callback?next=/compte`,
+  });
+
+  if (error) {
+    if (/rate.?limit/i.test(error.message)) {
+      return { erreur: "Trop de demandes d'email. Réessaie dans une heure." };
+    }
+    return { erreur: error.message };
+  }
+
+  return { message: `Si un compte existe pour ${email}, un lien de réinitialisation vient d'être envoyé.` };
+}
+
+export async function changerMotDePasse(_precedent: EtatAuth, formData: FormData): Promise<EtatAuth> {
+  const motDePasse = String(formData.get("motDePasse") ?? "");
+  const confirmation = String(formData.get("confirmation") ?? "");
+
+  if (!motDePasse) return { erreur: "Saisis un nouveau mot de passe." };
+  if (motDePasse.length < 8) return { erreur: "Le mot de passe doit faire au moins 8 caractères." };
+  if (motDePasse !== confirmation) return { erreur: "Les deux mots de passe ne correspondent pas." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: motDePasse });
+
+  if (error) return { erreur: error.message };
+  return { message: "Mot de passe modifié." };
+}
+
+export async function supprimerCompte(): Promise<EtatAuth> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { erreur: "Session expirée." };
+
+  // La suppression d'un utilisateur Supabase Auth requiert la service_role key.
+  // `on delete cascade` sur profiles/apartments nettoie toutes les données.
+  const adminUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const res = await fetch(`${adminUrl}/auth/v1/admin/users/${user.id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${adminKey}`,
+      apikey: adminKey,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { erreur: body.message ?? "Erreur lors de la suppression du compte." };
+  }
+
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect("/login");
+}

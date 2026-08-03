@@ -14,12 +14,12 @@ const STEPS = [
     desc: "Une URL Leboncoin, SeLoger, PAP ou Orpi — ou saisis les infos à la main.",
   },
   {
-    title: "L'IA fait le calcul",
-    desc: "Loyer estimé, rendement, quartier et risques analysés automatiquement.",
+    title: "L'app calcule tout",
+    desc: "Rendement, cash-flow, quartier, risques : chaque bien reçoit un score sur 10.",
   },
   {
-    title: "Compare et décide",
-    desc: "Un score global par bien, côte à côte, pour trancher sans tableur.",
+    title: "Achète le bon bien",
+    desc: "Compare tes pistes côte à côte et identifie l'investissement le plus rentable.",
   },
 ];
 
@@ -55,12 +55,12 @@ export default function EmptyHomeState() {
           <AppMark className="h-9 w-9 text-accent-600" />
         </span>
       </div>
-      <h1 className="mt-6 font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
-        Compare tes investissements locatifs en un coup d&apos;œil
+      <h1 className="mt-6 font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
+        Trouve tes prochains investissements locatifs
       </h1>
       <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ink-500 sm:text-base">
-        Ajoute une annonce, laisse l&apos;app estimer le rendement et analyser le quartier — et
-        décide en connaissance de cause, sans tableur à jour manuellement.
+        Ajoute une annonce, l&apos;app calcule tout — rendement, cash-flow, risques —
+        et t&apos;aide à décider quel bien acheter.
       </p>
 
       <div className="mt-10 text-left">

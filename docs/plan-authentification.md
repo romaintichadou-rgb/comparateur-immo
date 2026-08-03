@@ -79,22 +79,64 @@ existantes.
 **Ordre imposé** : créer le compte AVANT de passer `user_id` en `not null`
 (voir les pièges, §5).
 
-### D4 — Jusqu'où aller sur la monétisation ? → **compter, ne pas facturer**
+### D4 — Monétisation → **freemium sur le nombre de biens**
 
-Pas de Stripe maintenant. Mais deux champs qui coûtent une ligne de SQL
-aujourd'hui et qui seraient douloureux à ajouter plus tard :
+Le levier principal est le **nombre de biens**, pas les analyses IA. Un
+investisseur qui veut comparer un 2e bien est en recherche active — c'est le
+moment naturel où il perçoit la valeur et accepte de payer. Gater sur les
+analyses IA frustrerait sans donner de chemin clair à l'achat.
 
-- `plan` sur le profil (`'free'` pour tout le monde au départ) ;
-- un **compteur d'analyses IA**.
+**Trois plans dans `profiles.plan` :**
 
-Le second n'est pas cosmétique. L'analyse IA appelle Gemini : c'est le **seul
-coût variable réel** de l'app, et il est aujourd'hui invisible parce qu'un seul
-utilisateur le déclenche. Ouvert au public, c'est le poste qui explose, et
-c'est aussi le vecteur d'abus le plus évident. Le compteur sert donc trois fois :
-protection contre l'abus, mesure avant de fixer un prix, et levier de
-monétisation naturel le jour venu (« 3 analyses/mois en gratuit »).
+| Plan | Qui l'a | Prix | Biens | Analyses IA |
+|---|---|---|---|---|
+| `free` | Tout nouveau compte | Gratuit | **1** | Illimitées sur ce bien |
+| `pro` | Abonnés | **5,99 €/mois** | **Illimités** | **50/mois** |
+| `tester` | Fondateur + beta-testeurs | — | **Illimités** | **Illimitées** |
 
-Mesurer d'abord, tarifer ensuite — on ne fixe pas un prix sur une intuition.
+- Le premier bien doit montrer 100 % de la valeur du produit — brider
+  l'expérience sur le premier bien revient à cacher le produit derrière le
+  paywall.
+- `tester` est traité comme `pro` dans le code (`plan !== 'free'`), sans
+  plafond d'analyses. Il n'est jamais proposé en interface — attribution par
+  `UPDATE profiles SET plan = 'tester'` dans le SQL Editor de Supabase.
+
+**Ce qu'on compte comme « 1 analyse » :**
+
+Une analyse = un clic sur « Analyser » (le bouton qui lance `runAnalyse`). Ce
+décompte est lisible par l'utilisateur : c'est un geste explicite, pas un
+appel technique invisible. Les estimations ponctuelles déclenchées à l'ajout
+ou à la relance d'un champ (loyer, charges, taxe foncière) ne comptent PAS —
+elles font partie de l'expérience d'ajout du bien.
+
+**Coût Gemini par utilisateur Pro (Gemini 2.5 Flash) :**
+
+| Poste | Détail | Coût/analyse |
+|---|---|---|
+| Tokens (4 appels Gemini) | ~10k input + ~6k output | ~0,003 $ |
+| Google Search (1 appel loyer) | Grounding API | ~0,035 $ |
+| **Total** | | **~0,04 $ (≈ 0,037 €)** |
+
+Scénarios par utilisateur Pro :
+
+| Usage | Analyses/mois | Coût Gemini | Marge sur 5,99 € |
+|---|---|---|---|
+| Léger | 10 | 0,37 € | 5,62 € (94 %) |
+| Moyen | 25 | 0,93 € | 5,06 € (84 %) |
+| Intensif (plafond) | 50 | 1,85 € | 4,14 € (69 %) |
+
+Le poste Google Search représente ~90 % du coût Gemini. Même au plafond
+de 50 analyses/mois, la marge brute reste au-dessus de 4 € par utilisateur.
+
+**Compteur d'analyses IA :**
+
+- `analyses_ce_mois` + `periode_compteur` sur `profiles`.
+- Incrémenté uniquement par `runAnalyse` (pas par les estimations de champ).
+- Remise à zéro automatique quand `periode_compteur` < mois courant.
+- `pro` : bloqué à 50/mois avec message clair.
+- `free` : pas de plafond (le bien unique limite naturellement le volume).
+- `tester` : aucun plafond.
+- Pas de Stripe pour l'instant — juste le gate + un message d'upgrade.
 
 ---
 
@@ -128,7 +170,8 @@ auth.users (id, email, ...)
 -- Nouveau : les données applicatives du compte
 profiles (
   id uuid primary key references auth.users on delete cascade,
-  plan text not null default 'free',
+  plan text not null default 'free'
+       check (plan in ('free', 'pro', 'tester')),
   analyses_ce_mois integer not null default 0,
   periode_compteur date not null default date_trunc('month', now()),
   created_at timestamptz not null default now()
@@ -144,10 +187,16 @@ obligation RGPD, et c'est une ligne de SQL si on la pose maintenant.
 
 ---
 
-## 4. Le phasage
+## 4. Le phasage & état actuel
 
 Six lots livrables. Chacun laisse l'app dans un état qui fonctionne — pas de
 big bang où l'app est cassée pendant une semaine.
+
+**État au 3 août 2026 :**
+- ✅ **Lot 2 (Lot 1 aussi selon git log)** : complet
+- ✅ **Lot 3** : complet (selon git log)
+- ⏳ **Lot 4** : structure complète, finitions (bookmarklet, enrichissement `/compte`)
+- ⏳ **Lot 5-6** : non commencé
 
 ### Lot 1 — Le socle DB *(le plus risqué, à faire en premier et à froid)*
 
@@ -162,15 +211,30 @@ big bang où l'app est cassée pendant une semaine.
 **Test de sortie** : depuis le SQL Editor, avec le rôle d'un utilisateur A,
 `select * from apartments` ne renvoie que les biens de A.
 
-### Lot 2 — Auth & session
+### Lot 2 — Auth & session ✅ TERMINÉ
 
-- `npm i @supabase/ssr` (le package qui gère les cookies de session en App Router).
-- Deux fabriques de client : navigateur et serveur.
-- `verifySession()` dans `db.ts`, mémoïsé via `cache()`.
-- `proxy.ts` pour les redirections optimistes.
-- Variables d'env : ajouter `NEXT_PUBLIC_SUPABASE_URL` et
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY` (l'anon key est publique par nature — c'est
-  RLS qui protège, pas le secret de la clé).
+**Fichiers créés/modifiés :**
+- ✅ `npm i @supabase/ssr` (cookies de session en App Router)
+- ✅ `lib/supabase/client.ts` — client navigateur (anon key, auth uniquement)
+- ✅ `lib/supabase/server.ts` — client serveur (créé par requête, applique RLS)
+- ✅ `lib/auth.ts` — barrière de sécurité (`getSession()`, `requireSession()`, `getApiSession()`)
+- ✅ `proxy.ts` — redirections optimistes avant `requireSession()`
+- ✅ `src/app/(auth)/actions.ts` — Server Actions : `connexion`, `inscription`, `deconnexion`, `motDePasseOublie`, `changerMotDePasse`, `supprimerCompte`
+- ✅ `src/app/(auth)/AuthShell.tsx` — layout split desktop/mobile avec brand panel
+- ✅ `src/app/(auth)/AuthForm.tsx` — formulaire générique (login/signup)
+- ✅ `src/app/(auth)/login/page.tsx`
+- ✅ `src/app/(auth)/signup/page.tsx`
+- ✅ `src/app/(auth)/mot-de-passe-oublie/page.tsx` + `MotDePasseOublieForm.tsx`
+- ✅ `src/app/auth/callback/route.ts` — échange de code/token PKCE, ancien format
+- ✅ `src/app/layout.tsx` — `getSession()` passe email à Navbar
+- ✅ Variables d'env : `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`
+
+**Architecture validée :**
+- Client navigateur = anon key (pas de donnée, auth seule)
+- Client serveur = session par cookie (RLS s'applique)
+- Barrière unique = `requireSession()` dans `db.ts`
+- Redirections optimistes = `proxy.ts` (confort UX)
+- Message d'erreur générique = "Email ou mot de passe incorrect" (ne révèle pas les adresses)
 
 ### Lot 3 — Cloisonnement des données
 
@@ -182,24 +246,59 @@ big bang où l'app est cassée pendant une semaine.
 **Test de sortie** : deux comptes, deux navigateurs. A ne voit rien de B, y
 compris en appelant `/api/apartments/<id-de-B>` à la main.
 
-### Lot 4 — Les écrans de compte
+### Lot 4 — Les écrans de compte ✅ PARTIELLEMENT TERMINÉ (structure complète, finitions en cours)
 
-- `/login`, `/signup`, `/mot-de-passe-oublie`.
-- `/compte` : email, mot de passe, suppression du compte.
-- Navbar : état connecté, menu, déconnexion.
-- État vide « premier bien » pour un compte neuf (`EmptyHomeState` existe déjà).
-- Bookmarklet : redirection vers `/login` si déconnecté, avec retour sur
-  l'annonce après connexion.
+**Fichiers créés/modifiés :**
+- ✅ `/login`, `/signup`, `/mot-de-passe-oublie` — pages complètes
+- ✅ `/compte` — page protégée (`requireSession`), affiche email
+- ✅ `ComptePage.tsx` — formulaire changement mot de passe, suppression de compte
+- ✅ Navbar — `UserMenu` dropdown avec menu, avatar, déconnexion
+- ✅ `EmptyHomeState` — état vide « premier bien », invite à coller une URL
+- ✅ Charte respectée : boutons sans icône, tailles standard (`py-3` pour CTA plein, `py-2.5` pour bouton inline)
+- ✅ Focus rings `ring-2 ring-accent-500/20` sur inputs
+- ✅ Messages d'erreur/succès en banneau
+- ✅ Navbar masque les NAV_LINKS sur les routes d'auth
 
-Charte : boutons sans icône, tailles standard, `SectionTitle` pour les titres
-(voir `AGENTS.md`).
+**À finir :**
+- [ ] Bookmarklet : redirection vers `/login` si déconnecté (`?suivant=` posé par proxy)
+- [ ] Test croisé deux comptes (localStorage du bookmarklet vs session Supabase)
+- [ ] Page `/compte` enrichie : afficher plan (Lot 5), nombre de biens/limite, analyses ce mois
+- [ ] Écran de réinitialisation mot de passe (`/auth/callback?next=/compte` après lien email)
 
 ### Lot 5 — Fondations monétisation
 
-- Incrémenter le compteur à chaque analyse IA, remise à zéro mensuelle.
-- Quota souple : bloquer au-delà d'un seuil généreux, message clair.
-- Afficher « X analyses ce mois » dans `/compte`.
-- **Pas de Stripe, pas de page de prix, pas de tiers.**
+**Gate principal : nombre de biens**
+
+- `POST /api/apartments` : si `plan = 'free'` et que l'utilisateur a déjà 1
+  bien → refuser (HTTP 403) avec un message clair orientant vers le plan Pro.
+- Le gate vérifie dans `db.ts` (pas dans l'API seule) pour que la protection
+  reste même si une nouvelle route d'ajout est créée plus tard.
+- `plan = 'tester'` et `plan = 'pro'` passent sans limite.
+
+**Compteur d'analyses IA**
+
+- Incrémenter `analyses_ce_mois` à chaque appel à `runAnalyse` (pas aux
+  estimations de champ).
+- Remise à zéro automatique quand `periode_compteur` < mois courant.
+- `pro` : bloqué à 50/mois avec message clair.
+- `free` : pas de plafond visible (le bien unique limite naturellement).
+- `tester` : aucun plafond.
+
+**Plan `tester`**
+
+- Ton compte passe en `tester` au backfill (migration ou UPDATE manuel).
+- Attribution d'autres testeurs : `UPDATE profiles SET plan = 'tester'` dans
+  le SQL Editor de Supabase. Pas d'interface admin pour l'instant.
+
+**Page `/compte` enrichie**
+
+- Afficher le plan actuel (`Gratuit` / `Pro` / `Testeur`).
+- Afficher le nombre de biens / limite.
+- Afficher « X analyses ce mois » (info, pas menace).
+- Pas de bouton d'upgrade tant que Stripe n'est pas branché — juste un
+  message « Contacte-nous » ou une page d'attente.
+
+**Pas de Stripe, pas de page de prix, pas de tiers.**
 
 ### Lot 6 — Durcissement avant ouverture
 
@@ -266,7 +365,8 @@ Volontairement hors périmètre — les nommer évite de les redécouvrir comme 
 
 | Écarté | Pourquoi |
 |---|---|
-| Stripe, page de prix, plans payants | On mesure l'usage avant de fixer un prix. Le socle (`plan`, compteur) est posé, le reste attend des utilisateurs réels. |
+| Stripe, page de prix, paiement en ligne | On mesure l'usage avant de fixer un prix. Le gate (1 bien gratuit) et le compteur IA sont posés, le paiement attend des utilisateurs réels. |
+| Interface d'admin (gestion des plans, des comptes) | Volume trop faible pour justifier un dev. Un UPDATE en base suffit pour promouvoir un testeur ou un beta. |
 | Partage de biens entre comptes, équipes | Multiplie la complexité du modèle de droits. Rien ne dit que c'est demandé. |
 | Rôles et permissions fines | Un seul rôle : propriétaire de ses biens. |
 | OAuth Google/Apple | Email + mot de passe suffit pour ouvrir. S'ajoute en une soirée plus tard, sans rien casser. |
@@ -282,5 +382,6 @@ Volontairement hors périmètre — les nommer évite de les redécouvrir comme 
 2. **D3 — tes biens actuels rattachés à ton compte** (l'alternative étant de
    repartir d'une base vide).
 3. **Email + mot de passe** au lancement, Google plus tard.
-4. **Le seuil du quota d'analyses** — chiffre à choisir, ajustable à tout moment
-   puisqu'on ne facture pas encore.
+4. **Le plafond d'analyses IA sur `pro`** — 50/mois, ajustable à tout moment.
+5. **Ton compte en `tester`** — le backfill de la migration ou un UPDATE manuel
+   suffit. Confirme que c'est bien le plan.

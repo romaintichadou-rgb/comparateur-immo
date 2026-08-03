@@ -221,5 +221,46 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
   return updated;
 }
 
+// --- Profil utilisateur ---
+
+export interface UserProfile {
+  plan: "free" | "pro" | "tester";
+  nombreBiens: number;
+  analysesAuMoisCourant: number;
+  periodeCmpteur: string; // ISO date YYYY-MM-01
+}
+
+/**
+ * Retourne les données de profil de l'utilisateur connecté :
+ * plan (gratuit/pro/testeur), nombre de biens, analyses ce mois.
+ */
+export async function getUserProfile(): Promise<UserProfile> {
+  const { supabase, userId } = await contexte();
+
+  // Récupérer le plan et le compteur d'analyses
+  const { data: profileRow, error: profileError } = await supabase
+    .from("profiles")
+    .select("plan, analyses_ce_mois, periode_compteur")
+    .eq("id", userId)
+    .single();
+
+  if (profileError) throw new Error(profileError.message);
+
+  // Compter les biens
+  const { count: nombreBiens, error: countError } = await supabase
+    .from("apartments")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (countError) throw new Error(countError.message);
+
+  return {
+    plan: profileRow.plan ?? "free",
+    nombreBiens: nombreBiens ?? 0,
+    analysesAuMoisCourant: profileRow.analyses_ce_mois ?? 0,
+    periodeCmpteur: profileRow.periode_compteur ?? new Date().toISOString().slice(0, 7) + "-01",
+  };
+}
+
 // Ré-export pratique pour les routes API.
 export type { ApartmentInput };

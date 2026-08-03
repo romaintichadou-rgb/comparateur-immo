@@ -64,6 +64,7 @@ import {
 import AnalyseIA from "@/components/AnalyseIA";
 import OptimiserView from "@/components/OptimiserView";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
+import FinancementSection from "@/components/FinancementSection";
 import { cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { renderBoldInline } from "@/components/richText";
 import { SectionHeader, SectionTitle } from "@/components/SectionHeader";
@@ -1075,6 +1076,13 @@ export default function ApartmentDetail({
                   </>
                 )}
           </section>
+
+          <FinancementSection
+            apartment={live}
+            settings={settings}
+            cashflowSeuils={cashflowSeuils}
+            onSaved={setApt}
+          />
 
           <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
             <SectionHeader icon={TrendingUp} title="Revenus" />

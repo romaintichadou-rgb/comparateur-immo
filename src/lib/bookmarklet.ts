@@ -390,8 +390,16 @@ d.url=location.href;
 d.plateforme=pf;
 try{
 var enc=btoa(unescape(encodeURIComponent(JSON.stringify(d))));
-var url='__APP_ORIGIN__/appartements/nouveau?prefill='+encodeURIComponent(enc);
-if(w){w.location.href=url;setTimeout(collapseVoir,200);}else{location.href=url;}
+var prefillUrl='__APP_ORIGIN__/appartements/nouveau?prefill='+encodeURIComponent(enc);
+// Vérifier la session avant de rediriger — si pas connecté, passer par login
+fetch('__APP_ORIGIN__/api/auth-status').then(function(r){
+var loginUrl='__APP_ORIGIN__/login?suivant='+encodeURIComponent('/appartements/nouveau?prefill='+encodeURIComponent(enc));
+var destination=r.ok?prefillUrl:loginUrl;
+if(w){w.location.href=destination;setTimeout(collapseVoir,200);}else{location.href=destination;}
+}).catch(function(){
+// Si l'appel échoue (réseau, etc), essayer d'aller directement — le proxy redirigera vers login si besoin
+if(w){w.location.href=prefillUrl;setTimeout(collapseVoir,200);}else{location.href=prefillUrl;}
+});
 }catch(err){if(w)w.close();alert('Bookmarklet Immoscore: '+err.message);}
 }
 function collapseVoir(){
