@@ -919,7 +919,7 @@ export default function ApartmentDetail({
       </div>
 
       {/* Onglets */}
-      <div>
+      <div className="pb-8">
         <nav className="-mx-4 flex gap-6 overflow-x-auto border-b border-ink-100 px-4 sm:mx-0 sm:px-0">
           {TABS.map((tab) => (
             <Link
