@@ -398,14 +398,36 @@ Trois décisions à ne pas défaire :
   sans attendre un survol. La carte reste la dernière de la page : séparée des
   actions courantes, mais lisible.
 
-⚠️ **Le `sub` de `StatCard` est en `ink-400`** — 3,6:1 sur blanc, sous AA. Non
-corrigé ici : le composant sert une dizaine d'écrans, le changer déborde d'une
-tâche sur `/compte`. À traiter globalement.
-
 ⚠️ **Le CTA standard de la charte fait 40 px de haut** (`px-5 py-2.5`), sous
 les 44 px recommandés pour une cible tactile. C'est le gabarit de TOUS les CTA
 de l'app : ne pas le corriger bouton par bouton, ce serait troquer une
 incohérence contre une autre.
+
+## Gris secondaires de `StatCard` : `ink-500`, jamais `ink-400`
+
+La carte est toujours posée sur du blanc. Mesuré sur cette base :
+**`ink-400` = 3,64:1**, sous le minimum WCAG AA de 4,5:1 ; **`ink-500` =
+7,62:1**. `sub` et `avant` sont donc en `ink-500`.
+
+Ce ne sont pas des ornements : `sub` porte « Interdit dès 2028 » sur la carte
+DPE — un avertissement réglementaire — et `avant` est le montant auquel on
+compare celui d'après.
+
+**`avant` reste une « référence neutre »** comme le veut la charte : ce qui
+compte est qu'elle ne prenne pas la couleur de la tonalité, pas qu'elle soit
+pâle. `ink-500` est toujours un gris neutre. La hiérarchie label / valeur /
+sub tient par la graisse et la taille, pas par un délavage.
+
+⚠️ **L'affordance « Calcul → » reste à `ink-300` (1,72:1), délibérément.**
+C'est le seul élément de la carte qui n'est pas du contenu : un indice de
+découvrabilité, qui s'éclaircit au survol. La monter au niveau du texte la
+ferait concurrencer la valeur qu'elle annote. À revoir si l'on veut traiter le
+fait qu'un indice au survol seul n'existe pas au doigt — mais c'est une
+décision de design, pas une correction de contraste.
+
+Les nombreux `text-ink-400` ailleurs dans l'app (`AnalyseIA`, `OptimiserView`)
+n'ont pas été touchés : fonds et rôles y varient, chacun demande sa propre
+mesure.
 
 ## Les trois écrans d'upgrade
 
@@ -2184,10 +2206,12 @@ gardent leurs leviers non-matériels jusqu'à la prochaine relance d'analyse.
   Simulation). `cashflowSeuils` = `{ vert: settings.cashflowSeuilVertEuros,
   rouge: settings.cashflowSeuilRougeEuros }`, passé par `ApartmentDetail`. Un
   cash-flow de −60 € est donc VERT si le seuil vert du profil est −100.
-  **L'ancienne valeur (avant) reste TOUJOURS grise** (`text-ink-400`, référence
+  **L'ancienne valeur (avant) reste TOUJOURS grise** (`text-ink-500`, référence
   neutre) ; seule la nouvelle valeur proposée porte la couleur du profil. Les
   prix/loyer (pas de seuils profil) restent directionnels côté après (baisse/
-  hausse = vert).
+  hausse = vert). Ce gris était `ink-400` — 3,64:1 sur blanc, sous AA ; ce qui
+  compte ici est qu'il soit NEUTRE, pas qu'il soit pâle (voir « Gris
+  secondaires de `StatCard` »).
 
 ## Arguments par levier — preuves et méthode
 

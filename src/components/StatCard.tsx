@@ -1,6 +1,23 @@
 import { ArrowRight } from "lucide-react";
 import { TONE_TEXT_CLASS, type RendementTone } from "@/lib/analyse/scoring";
 
+/**
+ * ⚠️ Les gris secondaires de cette carte sont en `ink-500`, PAS `ink-400`.
+ *
+ * La carte est toujours posée sur du blanc. Mesuré sur cette base :
+ * `ink-400` = **3,64:1**, sous le minimum WCAG AA de 4,5:1 ; `ink-500` =
+ * **7,62:1**. Or `sub` et `avant` portent du contenu, pas de la décoration —
+ * « Interdit dès 2028 » sur la carte DPE est un avertissement réglementaire,
+ * et `avant` est un montant qu'on compare à celui d'après.
+ *
+ * `avant` reste une RÉFÉRENCE NEUTRE, comme le veut la charte : ce qui compte
+ * est qu'elle ne prenne pas la couleur de la tonalité, pas qu'elle soit pâle.
+ * `ink-500` est toujours un gris neutre.
+ *
+ * La hiérarchie label / valeur / sub tient par la graisse et la taille
+ * (`font-medium`, `text-2xl font-bold`, `text-xs`), pas par un délavage.
+ */
+
 export type StatCardTone = RendementTone;
 
 export function StatCard({
@@ -28,7 +45,7 @@ export function StatCard({
       <p className="text-xs font-medium text-ink-500">{label}</p>
       {avant != null ? (
         <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 font-mono tabular-nums">
-          <span className="text-sm text-ink-400">{avant}</span>
+          <span className="text-sm text-ink-500">{avant}</span>
           <ArrowRight className="h-3 w-3 shrink-0 self-center text-ink-300" aria-hidden />
           <span className={`text-2xl font-bold ${TONE_TEXT_CLASS[tone]}${dotted}`}>{value}</span>
         </p>
@@ -48,7 +65,7 @@ export function StatCard({
      la grille. */
   const footer = (sub || onClick) && (
     <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-      {sub ? <p className="text-xs text-ink-400">{sub}</p> : <span aria-hidden />}
+      {sub ? <p className="text-xs text-ink-500">{sub}</p> : <span aria-hidden />}
       {onClick && (
         <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[11px] font-medium text-ink-300 transition-colors group-hover:text-ink-500">
           Calcul{" "}
