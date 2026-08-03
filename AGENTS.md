@@ -166,8 +166,21 @@ Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 | Padding de StatCard | 16px | `p-4` |
 | Gap dans une grille de cartes | 12px | `gap-3` |
 | Espacement entre sections (FlatSection) | 56px | `pt-14 pb-14` |
+| Espacement onglet → contenu | 32px | `pb-8` |
 | Séparateur de section | — | `border-t border-ink-100/50` |
 | Séparateur de faits | — | `divide-y divide-ink-100/50` |
+
+## Pattern « Sections sans card »
+
+**Description du bien**, **Simulation financière**, **Optimiser** : sections sans bordure ni fond.
+Pattern : titre simple + contenu directement visible, pas d'encadrement.
+
+- **Titre** : utiliser `SectionTitle` (jamais `<h2>` brut). Garanti en `font-display` (Fraunces).
+- **Pas de card** : `border-0`, `bg-transparent`, pas de `rounded-*` ni `p-5` autour de la section entière.
+- **Contenu** : visible immédiatement, respiration par `pb-8` sous la nav (onglets).
+- **Bouton d'action** : « Modifier », etc., aligné à droite du titre dans une flexbox `justify-between`.
+
+C'est le pattern « minimal » du produit. Ne pas ajouter de card (bordure + padding + fond) à une section juste parce qu'on voudrait « l'encadrer » — utiliser plutôt des cartes **à l'intérieur** de la section (ex. StatCard dans "Optimiser").
 
 ## Largeur de page — choisie par ARCHÉTYPE, pas au jugé
 
