@@ -66,7 +66,7 @@ import OptimiserView from "@/components/OptimiserView";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
 import { cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { renderBoldInline } from "@/components/richText";
-import { SectionHeader } from "@/components/SectionHeader";
+import { SectionHeader, SectionTitle } from "@/components/SectionHeader";
 import { memeProfil, type AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
@@ -1261,7 +1261,7 @@ export default function ApartmentDetail({
         <div className="min-w-0 space-y-6">
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-ink-900">Description du bien</h2>
+              <SectionTitle>Description du bien</SectionTitle>
               {editingDesc ? (
                 <div className="flex shrink-0 gap-2">
                   <button

@@ -20,3 +20,21 @@ export function SectionHeader({
     </Tag>
   );
 }
+
+/** Titre de section sans icône. Utilise font-display (Fraunces) pour tous les H2/H3.
+ * À préférer aux h2/h3 bruts pour garantir la cohérence typographique. */
+export function SectionTitle({
+  children,
+  as: Tag = "h2",
+  className = "",
+}: {
+  children: string;
+  as?: "h2" | "h3";
+  className?: string;
+}) {
+  return (
+    <Tag className={`font-display text-lg font-semibold text-ink-900 ${className}`}>
+      {children}
+    </Tag>
+  );
+}

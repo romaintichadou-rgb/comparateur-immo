@@ -127,6 +127,7 @@ dans les boutons CTA.
 |---|---|---|
 | `StatCard` | `StatCard.tsx` | Carte métrique tonale (label/valeur/sub/tone). Mode simple ou avant→après. Affordance cliquable : pointillé sous la valeur + "Calcul →". |
 | `SectionHeader` | `SectionHeader.tsx` | En-tête de section : icon-pill accent + titre uppercase. Props : `icon`, `title`, `as` (h2/h3), `className`. Toujours préférer ce composant plutôt que recréer le pattern manuellement. |
+| `SectionTitle` | `SectionHeader.tsx` | Titre de section **sans icône**. Utilise `font-display` (Fraunces) pour garantir la cohérence typographique de tous les H2/H3. Props : `as` (h2/h3), `className`. À préférer aux `<h2>`/`<h3>` bruts pour éviter les erreurs de font. |
 | `Skeleton` | `Skeleton.tsx` | Barre shimmer de chargement. |
 | `ConfirmDialog` | `ConfirmDialog.tsx` | Modale de confirmation destructive (titre, description, bouton rouge). |
 | `ErrorScreen` | `ErrorScreen.tsx` | Page d'erreur/not-found plein écran. |
