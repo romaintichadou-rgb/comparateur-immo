@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reponseErreur } from "../../erreurs";
 import { revalidatePath } from "next/cache";
 import { deleteApartment, getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
@@ -71,11 +72,19 @@ export async function GET(
   { params }: RouteContext<"/api/apartments/[id]">
 ) {
   const { id } = await params;
-  const apartment = await getApartment(id);
-  if (!apartment) {
-    return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  // Cette route était la seule sans try/catch : `NonAuthentifieError`
+  // remontait brute et Next.js répondait 500 à un simple défaut de session.
+  try {
+    const apartment = await getApartment(id);
+    if (!apartment) {
+      // Bien inexistant OU appartenant à un autre compte — `getApartment()`
+      // filtre sur `user_id` et ne distingue pas les deux cas, exprès.
+      return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+    }
+    return NextResponse.json({ apartment: computeDerived(apartment) });
+  } catch (err) {
+    return reponseErreur(err);
   }
-  return NextResponse.json({ apartment: computeDerived(apartment) });
 }
 
 export async function PATCH(
@@ -154,10 +163,7 @@ export async function PATCH(
     revalidatePath("/");
     return NextResponse.json({ apartment: computeDerived(updated) });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    return reponseErreur(err);
   }
 }
 
@@ -167,13 +173,15 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    await deleteApartment(id);
+    const supprime = await deleteApartment(id);
+    if (!supprime) {
+      // Même réponse que GET et PATCH sur un bien qu'on ne possède pas :
+      // répondre « ok » ferait croire à une suppression qui n'a pas eu lieu.
+      return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+    }
     revalidatePath("/");
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    return reponseErreur(err);
   }
 }

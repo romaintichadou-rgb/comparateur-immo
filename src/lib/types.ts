@@ -105,6 +105,12 @@ export type ChampEstimable = (typeof CHAMPS_ESTIMABLES)[number];
 export interface Apartment {
   // Identification
   id: string;
+  /** Propriétaire du bien (`auth.users.id`). Renseigné par `db.ts` à partir de
+   * la session — jamais par un payload client, qui pourrait alors s'attribuer
+   * le bien d'un autre compte. Absent des analyses/patches côté client, d'où
+   * l'optionnalité : le type décrit une LIGNE en base, que le client ne
+   * reconstruit jamais en entier. */
+  user_id?: string;
   url: string;
   plateforme: Plateforme;
   description: string;

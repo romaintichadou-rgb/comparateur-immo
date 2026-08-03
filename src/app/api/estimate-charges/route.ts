@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reponseErreur } from "../erreurs";
+import { NonAuthentifieError } from "@/lib/auth";
 import { getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { estimateCharges, type ChargesField } from "@/lib/chargesEstimation";
@@ -84,6 +86,10 @@ export async function POST(req: NextRequest) {
     const updated = await updateApartment(apartmentId, patch);
     return NextResponse.json({ apartment: computeDerived(updated) });
   } catch (err) {
+    // Avant le message générique : un utilisateur déconnecté ne doit pas lire
+    // un diagnostic de clé Gemini (voir estimate-rent).
+    if (err instanceof NonAuthentifieError) return reponseErreur(err);
+
     console.error("estimate-charges failed:", err);
     const message =
       err instanceof Error && err.message.includes("GEMINI_API_KEY manquant")

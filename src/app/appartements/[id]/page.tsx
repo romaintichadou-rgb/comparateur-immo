@@ -3,11 +3,16 @@ import { getApartment, getSettings } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import ApartmentDetail from "@/components/ApartmentDetail";
 import SetupNotice from "@/components/SetupNotice";
+import { requireSession } from "@/lib/auth";
 
 export default async function ApartmentPage({
   params,
   searchParams,
 }: PageProps<"/appartements/[id]">) {
+  // Voir src/app/page.tsx : redirige avant que le try/catch ne
+  // requalifie une session expirée en panne de configuration.
+  await requireSession();
+
   const { id } = await params;
   const sp = await searchParams;
 

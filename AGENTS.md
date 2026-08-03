@@ -301,14 +301,79 @@ dans les section headers, `h-4 w-4` / `size-4` dans les onglets et les
 
 # Multi-utilisateurs — état d'avancement
 
-Plan complet : `docs/plan-authentification.md` (6 lots). **Lots 1 et 2 faits**
-— socle DB, puis authentification. Le lot 3 (cloisonnement) reste à faire.
+Plan complet : `docs/plan-authentification.md` (6 lots). **Lots 1 à 3 faits** —
+socle DB, authentification, cloisonnement. L'app est multi-utilisateurs :
+chaque compte ne voit et ne modifie que ses biens.
 
-🚨 **L'app N'EST PAS encore multi-utilisateurs. Ne pas la déployer publiquement
-en l'état.** `db.ts` utilise toujours la `service_role` key, qui contourne RLS
-par design, et ne filtre par aucun `user_id`. Vérifié concrètement : un second
-compte créé pour le test voyait les 7 biens du compte principal. Se connecter
-fonctionne ; être cloisonné, non. C'est l'objet du lot 3.
+Restent les lots 4 (écrans de compte), 5 (quotas) et 6 (durcissement avant
+ouverture publique : rate limiting, emails, monitoring).
+
+## Cloisonnement (lot 3) — deux barrières, volontairement redondantes
+
+`db.ts` n'utilise **plus** la `service_role` key. Chaque requête passe par le
+client de la SESSION (`supabase/server.ts`) **et** filtre sur `user_id` :
+
+1. **RLS** (policies de la 0008) : Postgres refuse de lui-même la ligne d'un
+   autre compte.
+2. **Filtre applicatif** : `.eq("user_id", userId)` sur chaque requête.
+
+La redondance est le but. Une policy désactivée par erreur dans le dashboard,
+le filtre tient ; un filtre oublié, RLS tient. C'est le seul endroit du projet
+où l'on paie une redondance de plein gré — le mode d'échec est une fuite de
+données personnelles.
+
+⚠️ **Ne jamais réintroduire la `service_role` key dans `db.ts`** pour
+« simplifier » ou contourner un souci de policy : elle contourne RLS par
+design et supprimerait la première barrière.
+
+### `contexte()` — pourquoi aucune fonction ne prend d'`userId` en paramètre
+
+Toutes les fonctions de `db.ts` appellent `contexte()`, qui lève
+`NonAuthentifieError` (via `requireUserId()`) s'il n'y a pas de session. Aucune
+n'accepte d'`userId` en argument : il n'existe donc pas de variante « sans
+session » qui renverrait tout, et un appelant ne peut pas se tromper de compte.
+La sécurité ne dépend pas de la discipline de l'appelant.
+
+`db.ts` **lève** une erreur au lieu de rediriger, parce qu'il sert deux
+contextes qui n'ont pas la même réponse à « pas de session » : un Server
+Component doit rediriger vers `/login`, une route d'API doit répondre 401 en
+JSON (un `fetch()` qui reçoit du HTML de connexion échoue de façon obscure).
+Le DAL signale, chaque contexte traduit — via `reponseErreur()`
+(`app/api/erreurs.ts`) ou `requireSession()`.
+
+### Trois pièges rencontrés en testant à deux comptes
+
+**1. `user_id` écrit APRÈS l'étalement de `input`** dans `createApartment()` :
+sinon un payload contenant `user_id` s'attribuerait le bien d'un autre compte.
+L'ordre de ces lignes est une règle de sécurité, pas un style. Vérifié : un
+POST avec un `user_id` forgé est bien attribué à l'appelant réel.
+
+**2. Une suppression filtrée ne lève aucune erreur quand elle ne touche rien.**
+`DELETE` répondait « ok » sur le bien d'un autre compte, là où `GET` et `PATCH`
+répondaient 404 — trompeur pour l'utilisateur légitime dont le bien aurait déjà
+été supprimé. `deleteApartment()` renvoie donc un `boolean`, et la route traduit
+en 404.
+
+**3. Un handler sans `try/catch` répond 500 au lieu de 401.** `GET
+/api/apartments/[id]` était le seul dans ce cas : `NonAuthentifieError`
+remontait brute. Tout handler appelant `db.ts` doit passer par
+`reponseErreur()`.
+
+### Routes sans `db.ts` : protection EXPLICITE obligatoire
+
+`/api/parse` et `/api/loyer-reference` n'appellent pas le DAL — elles
+n'héritent donc d'aucune protection et vérifient la session elles-mêmes via
+`getApiSession()`. Laissée ouverte, `/api/parse` irait chercher n'importe
+quelle URL au nom du serveur : un proxy de scraping gratuit pour qui la
+découvre. **Toute nouvelle route qui n'appelle pas `db.ts` doit faire cette
+vérification à la main.**
+
+### Ce qui n'est PAS distingué, exprès
+
+`getApartment()` renvoie `null` aussi bien pour un bien inexistant que pour le
+bien d'un autre compte, et l'API répond 404 dans les deux cas. Répondre « ce
+bien existe mais n'est pas à toi » confirmerait l'existence d'un identifiant à
+qui le devine.
 
 ## Auth (lot 2)
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reponseErreur } from "../erreurs";
 import { getSettings, updateSettings } from "@/lib/db";
 import { settingsPatchSchema } from "@/lib/settings";
 
@@ -7,10 +8,7 @@ export async function GET() {
     const settings = await getSettings();
     return NextResponse.json({ settings });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    return reponseErreur(err);
   }
 }
 
@@ -24,9 +22,6 @@ export async function PATCH(req: NextRequest) {
     const settings = await updateSettings(parsed.data);
     return NextResponse.json({ settings });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    return reponseErreur(err);
   }
 }

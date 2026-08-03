@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reponseErreur } from "../../erreurs";
 import { revalidatePath } from "next/cache";
 import { getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
@@ -34,9 +35,6 @@ export async function POST(
     revalidatePath("/");
     return NextResponse.json({ apartment: computeDerived(updated), narrationStatus });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    return reponseErreur(err);
   }
 }

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reponseErreur } from "../erreurs";
+import { NonAuthentifieError } from "@/lib/auth";
 import { getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { estimateRent } from "@/lib/rentEstimation";
@@ -68,6 +70,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ apartment: computeDerived(updated) });
   } catch (err) {
+    // Testé AVANT le message générique ci-dessous : sans ça, un utilisateur
+    // simplement déconnecté lirait « Vérifie GEMINI_API_KEY », et chercherait
+    // une panne de clé d'API là où il suffit de se reconnecter.
+    if (err instanceof NonAuthentifieError) return reponseErreur(err);
+
     // Ne jamais renvoyer un message d'erreur brut (SDK Gemini, JSON d'erreur
     // Google...) tel quel au client : loggé côté serveur pour le debug, mais
     // seul un message clair et actionnable est montré à l'utilisateur. Le

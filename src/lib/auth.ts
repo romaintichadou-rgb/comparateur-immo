@@ -67,3 +67,34 @@ export const requireSession = cache(async (): Promise<Session> => {
 export async function getApiSession(): Promise<Session | null> {
   return getSession();
 }
+
+/**
+ * Erreur levée par le Data Access Layer quand aucune session n'est active.
+ *
+ * Pourquoi une exception plutôt qu'un `redirect()` : `db.ts` est appelé aussi
+ * bien depuis des Server Components (où rediriger a du sens) que depuis des
+ * Route Handlers (où il faut un 401 JSON — un `fetch()` qui reçoit la page de
+ * connexion en HTML échoue de façon incompréhensible). Le DAL signale, chaque
+ * contexte traduit.
+ */
+export class NonAuthentifieError extends Error {
+  constructor() {
+    super("Authentification requise");
+    this.name = "NonAuthentifieError";
+  }
+}
+
+/**
+ * Identifiant de l'utilisateur courant, ou exception.
+ *
+ * C'est la fonction qu'appelle CHAQUE requête de `db.ts`. Elle est volontairement
+ * sans échappatoire : il n'existe pas de variante « sans session » qui
+ * renverrait tout. Un oubli d'appel ne peut donc pas produire une fuite —
+ * il produit une erreur de compilation, puisque les fonctions de `db.ts`
+ * ne prennent pas d'`userId` en paramètre optionnel.
+ */
+export async function requireUserId(): Promise<string> {
+  const session = await getSession();
+  if (!session) throw new NonAuthentifieError();
+  return session.userId;
+}

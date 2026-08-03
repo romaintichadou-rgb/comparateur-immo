@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reponseErreur } from "../erreurs";
 import { revalidatePath } from "next/cache";
 import { createApartment, listApartments } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
@@ -17,10 +18,7 @@ export async function GET() {
     const withComputed = apartments.map(computeDerived);
     return NextResponse.json({ apartments: withComputed });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    return reponseErreur(err);
   }
 }
 
@@ -107,9 +105,6 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erreur inconnue" },
-      { status: 500 }
-    );
+    return reponseErreur(err);
   }
 }
