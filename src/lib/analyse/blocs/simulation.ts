@@ -44,16 +44,21 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
   }
 
   const seuils = cashflowSeuilsFromSettings(settings);
+  const cfLMNP = result.cashflowMensuelMoyenLMNP;
   const cfAn1 = result.cashflowMensuelAn1;
-  const cfMoyen = result.cashflowMensuelMoyen;
 
   // Source unique (scoring.ts) : mêmes seuils, même tonalité que les
   // MetricCards, l'onglet Optimiser et le tableau de simulation.
   const tone = (v: number) => cashflowTone(v, seuils) as "positif" | "attention" | "alerte";
 
   const highlights: BlocHighlight[] = [
-    { label: "Cash-flow mensuel — année 1", value: formatEurosSigned(cfAn1), tone: tone(cfAn1) },
-    { label: "Cash-flow mensuel moyen", value: formatEurosSigned(cfMoyen), tone: tone(cfMoyen) },
+    {
+      label: result.anneesExonerees > 1
+        ? `Cash-flow mensuel (moyen ${result.anneesExonerees} ans)`
+        : "Cash-flow mensuel",
+      value: formatEurosSigned(cfLMNP),
+      tone: tone(cfLMNP),
+    },
   ];
 
   const faits: Fait[] = [
@@ -75,41 +80,29 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
     anneesSansImpotFait(result.annees),
   ];
 
-  // Note /10 = facteur principal (CF année 1 vs seuils profil, 70%) +
-  // soutenabilité (dégradation CF moyen vs an1, 30%) + ajustement fiscal.
+  // Note /10 = facteur principal (CF LMNP vs seuils profil, 80%) +
+  // bonus fiscal (durée exonération, 20%).
   const range = Math.max(seuils.vert - seuils.rouge, 50);
 
-  // Facteur principal : cash-flow année 1 situé par rapport aux seuils profil.
-  let scoreAn1: number;
-  if (cfAn1 >= seuils.vert + range) scoreAn1 = 5;
-  else if (cfAn1 >= seuils.vert)
-    scoreAn1 = 4 + Math.min((cfAn1 - seuils.vert) / range, 1);
-  else if (cfAn1 >= seuils.rouge)
-    scoreAn1 = 2 + 2 * ((cfAn1 - seuils.rouge) / (seuils.vert - seuils.rouge));
-  else if (cfAn1 >= seuils.rouge - range)
-    scoreAn1 = Math.max(0, 2 * ((cfAn1 - (seuils.rouge - range)) / range));
-  else scoreAn1 = 0;
+  // Facteur principal : cash-flow moyen LMNP situé par rapport aux seuils profil.
+  let scoreCF: number;
+  if (cfLMNP >= seuils.vert + range) scoreCF = 5;
+  else if (cfLMNP >= seuils.vert)
+    scoreCF = 4 + Math.min((cfLMNP - seuils.vert) / range, 1);
+  else if (cfLMNP >= seuils.rouge)
+    scoreCF = 2 + 2 * ((cfLMNP - seuils.rouge) / (seuils.vert - seuils.rouge));
+  else if (cfLMNP >= seuils.rouge - range)
+    scoreCF = Math.max(0, 2 * ((cfLMNP - (seuils.rouge - range)) / range));
+  else scoreCF = 0;
 
-  // Facteur secondaire : soutenabilité dans le temps. Si le CF moyen se
-  // dégrade par rapport à l'année 1, pénalité proportionnelle ; s'il
-  // s'améliore, léger bonus.
-  let soutenabilite = 0;
-  const delta = cfMoyen - cfAn1;
-  if (delta < -range) soutenabilite = -1;
-  else if (delta < 0) soutenabilite = -1 * (Math.abs(delta) / range);
-  else if (delta > range * 0.5) soutenabilite = 0.5;
-  else if (delta > 0) soutenabilite = 0.5 * (delta / (range * 0.5));
+  // Bonus fiscal : durée d'exonération LMNP.
+  let bonusFiscal = 0;
+  if (result.anneesExonerees >= 15) bonusFiscal = 0.5;
+  else if (result.anneesExonerees >= 10) bonusFiscal = 0.35;
+  else if (result.anneesExonerees >= 5) bonusFiscal = 0.15;
+  else if (result.anneesExonerees === 0) bonusFiscal = -0.25;
 
-  let base = scoreAn1 * 0.7 + (scoreAn1 + soutenabilite) * 0.3;
-
-  // Avantage fiscal LMNP : des années sans impôt améliorent la rentabilité
-  // réelle, pas d'avantage fiscal = charge supplémentaire dès le départ.
-  const nbAnneesSansImpot = result.annees.findIndex((a) => a.impot >= 1);
-  const anneesSansImpotEff = nbAnneesSansImpot === -1 ? result.annees.length : nbAnneesSansImpot;
-  if (anneesSansImpotEff >= 10) base += 0.5;
-  else if (anneesSansImpotEff >= 5) base += 0.25;
-  else if (anneesSansImpotEff === 0) base -= 0.25;
-
+  const base = scoreCF + bonusFiscal;
   const note = clampNote(Math.max(0, base) * 2);
 
   return {

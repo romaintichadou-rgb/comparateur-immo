@@ -14,7 +14,7 @@ import {
   ClipboardList,
   ExternalLink,
   Home,
-  KeyRound,
+  TrendingUp,
   Lightbulb,
   Loader2,
   Mail,
@@ -969,32 +969,6 @@ export default function ApartmentDetail({
       {activeTab === "financiere" && (
         <div className="space-y-6">
           {/* Résultat principal : la rentabilité au premier coup d'œil */}
-          <div id="fin-resultats" className="grid scroll-mt-24 grid-cols-1 gap-3 sm:grid-cols-3">
-            <ResultCard
-              label="Budget total de l'opération"
-              sub="achat + notaire + travaux"
-              value={formatEuros(live.budget_total)}
-              tone="neutral"
-            />
-            <ResultCard
-              label="Loyer mensuel CC"
-              sub={isAiEstimated(apt, "loyer_retenu") ? "estimation IA" : "charges comprises"}
-              value={formatEuros(live.loyer_retenu)}
-              tone="neutral"
-              loading={rentPending}
-              onClick={() => openLoyerDetail(live)}
-            />
-            <ResultCard
-              label="Rendement net"
-              sub="après charges, hors crédit et fiscalité"
-              value={formatPercent(live.rendement_net)}
-              tone={rendementNetTone(live.rendement_net, seuilsRendement)}
-              emphase
-              loading={rendementPending}
-              onClick={() => openRendementDetail(live, seuilsRendement)}
-            />
-          </div>
-
           {finDirty && (
             <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
               <p className="text-xs text-accent-700">Modifications non enregistrées.</p>
@@ -1008,20 +982,20 @@ export default function ApartmentDetail({
             </div>
           )}
 
-          <section id="fin-achat" className="space-y-4 scroll-mt-24 rounded-xl border border-ink-200 bg-white p-5">
+          <section id="fin-achat" className="space-y-4 scroll-mt-24 rounded-xl border border-ink-200 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <SectionHeader icon={Banknote} title="Achat" />
                   {editingAchat ? (
                     <div className="flex shrink-0 gap-2">
                       <button
                         onClick={handleCancelAchat}
-                        className="rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
+                        className="rounded-lg border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
                       >
                         Annuler
                       </button>
                       <button
                         onClick={handleSaveAchat}
-                        className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
+                        className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
                       >
                         Enregistrer
                       </button>
@@ -1037,44 +1011,68 @@ export default function ApartmentDetail({
                 </div>
 
                 {editingAchat ? (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <NumberField label="Prix" value={value(achatPatch, "prix")} onChange={(v) => setAchatPatch((p) => ({ ...p, prix: v }))} suffix="€" />
-                    <NumberField
-                      label="Travaux"
-                      value={value(achatPatch, "travaux")}
-                      onChange={(v) => setAchatPatch((p) => ({ ...p, travaux: v }))}
-                      suffix="€"
-                    />
-                    <div className="sm:col-span-2">
-                      <NumberField
+                  <div className="space-y-3">
+                    <ul className="divide-y divide-ink-100 text-sm">
+                      <AchatEditRow label="Prix d'achat" value={value(achatPatch, "prix")} onChange={(v) => setAchatPatch((p) => ({ ...p, prix: v }))} />
+                      <AchatEditRow
                         label="Frais de notaire"
                         value={fraisNotaireLive}
                         onChange={(v) => setAchatPatch((p) => ({ ...p, frais_notaire_estimes: v }))}
-                        suffix="€"
-                        hint={!fraisNotaireManuel && fraisNotaireLive != null && <EstimatedBadge />}
+                        badge={!fraisNotaireManuel && fraisNotaireLive != null && <EstimatedBadge />}
                       />
-                    </div>
-                    <ReadOnlyField mono label="Budget total (calculé)" value={formatEuros(live.budget_total)} />
-                    <ReadOnlyField mono label="Prix / m² — achat + travaux (calculé)" value={formatEuros(live.prix_m2)} />
+                      <AchatEditRow label="Travaux" value={value(achatPatch, "travaux")} onChange={(v) => setAchatPatch((p) => ({ ...p, travaux: v }))} />
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="font-semibold text-ink-900">Budget total</span>
+                        <span className="shrink-0 font-mono text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
+                      </li>
+                    </ul>
+                    {live.prix_m2 != null && (
+                      <p className="text-xs text-ink-400">
+                        Prix au m² (achat + travaux) : <span className="font-mono tabular-nums font-medium text-ink-600">{formatEuros(live.prix_m2)}</span>
+                      </p>
+                    )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <ReadOnlyField mono label="Prix" value={formatEuros(apt.prix)} />
-                    <ReadOnlyField mono label="Travaux" value={apt.travaux != null ? formatEuros(apt.travaux) : "—"} />
-                    <ReadOnlyField
-                      mono
-                      label="Frais de notaire"
-                      value={fraisNotaireLive == null ? "—" : formatEuros(fraisNotaireLive)}
-                      badge={!fraisNotaireManuel && fraisNotaireLive != null && <EstimatedBadge />}
-                    />
-                    <ReadOnlyField mono label="Budget total (calculé)" value={formatEuros(live.budget_total)} />
-                    <ReadOnlyField mono label="Prix / m² — achat + travaux (calculé)" value={formatEuros(live.prix_m2)} />
-                  </div>
+                  <>
+                    <ul className="divide-y divide-ink-100 text-sm">
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="flex items-baseline gap-x-2 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>Prix d&apos;achat</span>
+                        </span>
+                        <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">{formatEuros(apt.prix)}</span>
+                      </li>
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>Frais de notaire</span>
+                          {!fraisNotaireManuel && fraisNotaireLive != null && <span className="shrink-0 self-center"><EstimatedBadge /></span>}
+                        </span>
+                        <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">{fraisNotaireLive != null ? formatEuros(fraisNotaireLive) : "—"}</span>
+                      </li>
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="flex items-baseline gap-x-2 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>Travaux</span>
+                        </span>
+                        <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">{apt.travaux != null ? formatEuros(apt.travaux) : formatEuros(0)}</span>
+                      </li>
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="font-semibold text-ink-900">Budget total</span>
+                        <span className="shrink-0 font-mono text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
+                      </li>
+                    </ul>
+                    {live.prix_m2 != null && (
+                      <p className="text-xs text-ink-400">
+                        Prix au m² (achat + travaux) : <span className="font-mono tabular-nums font-medium text-ink-600">{formatEuros(live.prix_m2)}</span>
+                      </p>
+                    )}
+                  </>
                 )}
           </section>
 
           <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-            <SectionHeader icon={KeyRound} title="Location" />
+            <SectionHeader icon={TrendingUp} title="Revenus" />
             {rentPending ? (
               <div className="space-y-3">
                 <PendingFieldLabel label="Loyer mensuel, charges comprises" />
@@ -1503,6 +1501,49 @@ function PendingFieldLabel({ label }: { label: string }) {
         <Loader2 className="h-3 w-3 animate-spin" /> estimation en cours
       </span>
     </span>
+  );
+}
+
+function AchatEditRow({
+  label,
+  value,
+  onChange,
+  badge,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (v: number | null) => void;
+  badge?: React.ReactNode;
+}) {
+  const [texte, setTexte] = useState(value != null ? String(value) : "");
+  const [prev, setPrev] = useState(value);
+  if (value !== prev) {
+    setPrev(value);
+    setTexte(value != null ? String(value) : "");
+  }
+  function handle(t: string) {
+    setTexte(t);
+    if (t === "") { onChange(null); return; }
+    const n = Number(t);
+    if (!Number.isNaN(n)) onChange(n);
+  }
+  return (
+    <li className="flex items-center justify-between gap-3 py-2">
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ink-600">
+        <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+        <span>{label}</span>
+        {badge && <span className="shrink-0">{badge}</span>}
+      </span>
+      <div className="relative w-36 shrink-0">
+        <input
+          type="number"
+          className="w-full rounded-md border border-ink-300 bg-white px-3 py-1.5 pr-8 text-left text-sm text-ink-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+          value={texte}
+          onChange={(e) => handle(e.target.value)}
+        />
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">€</span>
+      </div>
+    </li>
   );
 }
 

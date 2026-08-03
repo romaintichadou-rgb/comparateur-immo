@@ -140,6 +140,13 @@ export interface SimulationResult {
   cashflowMensuelAn1: number;
   /** Cash-flow mensuel moyen sur toute la durée du prêt (après impôt). */
   cashflowMensuelMoyen: number;
+  /**
+   * LMNP : cash-flow mensuel moyen sur les années exonérées d'impôt,
+   * année 1 toujours incluse. Fallback sur année 1 si aucune année à 0.
+   */
+  cashflowMensuelMoyenLMNP: number;
+  /** Nombre d'années avec impôt = 0 (pour le label). */
+  anneesExonerees: number;
   /** Cash-flow mensuel moyen AVANT impôt (année 1). */
   cashflowMensuelAvantImpotAn1: number;
   /** Total des impôts payés sur la durée. */
@@ -419,6 +426,13 @@ export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): Sim
     total: totalLoyers + economieFiscale + participation,
   };
 
+  // LMNP : moyenne sur les années exonérées (impôt < 1 €), année 1 toujours incluse.
+  const anneesExo = annees.filter((a) => a.impot < 1);
+  const anneesLMNP = anneesExo.length > 0
+    ? (anneesExo[0].annee === 1 ? anneesExo : [an1, ...anneesExo])
+    : [an1];
+  const cfMoyenLMNP = anneesLMNP.reduce((s, a) => s + a.cashflowMensuel, 0) / anneesLMNP.length;
+
   return {
     montantEmprunte: capital,
     montantAutomatique: inputs.montantEmprunte == null,
@@ -431,6 +445,8 @@ export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): Sim
     annees,
     cashflowMensuelAn1: an1.cashflowMensuel,
     cashflowMensuelMoyen: totalCashflow / inputs.dureeAnnees / 12,
+    cashflowMensuelMoyenLMNP: cfMoyenLMNP,
+    anneesExonerees: anneesExo.length,
     cashflowMensuelAvantImpotAn1: (an1.cashflowAnnuel + an1.impot) / 12,
     totalImpots,
     coutCredit: totalInterets + assuranceMensuelle * 12 * inputs.dureeAnnees,

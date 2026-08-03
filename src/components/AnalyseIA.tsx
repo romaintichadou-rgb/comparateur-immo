@@ -270,10 +270,8 @@ export default function AnalyseIA({
   const medianeM2 = typeof faitMediane?.value === "number" ? faitMediane.value : null;
 
   const simu = simulate(apartment, resolveInputs(apartment.simulation_inputs, settings));
-  // Année 1 : c'est LA définition du "cash-flow mensuel" non qualifié dans
-  // toute l'app (MetricCards, Optimiser, recommandations). Le cash-flow moyen
-  // reste affiché à côté, mais toujours explicitement libellé "moyen".
-  const cashflow = simu?.cashflowMensuelAn1 ?? null;
+  const cashflow = simu?.cashflowMensuelMoyenLMNP ?? null;
+  const anneesExo = simu?.anneesExonerees ?? 0;
   const netTone = rendementNetTone(apartment.rendement_net, seuilsRendement);
   const dpe = dpeInfo(apartment.dpe);
 
@@ -409,7 +407,7 @@ export default function AnalyseIA({
         <StatCard
           label="Cash-flow mensuel"
           value={formatEurosSigned(cashflow)}
-          sub={cashflow == null ? "Données manquantes" : "Net, la première année"}
+          sub={cashflow == null ? "Données manquantes" : anneesExo > 1 ? `Moyen sur ${anneesExo} ans sans impôt` : "Net après impôt"}
           tone={cfTone}
           onClick={() => openCashflowDetail(apartment, cashflowSeuils, settings)}
         />

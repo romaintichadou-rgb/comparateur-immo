@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Banknote, Calculator, Info, Landmark, PieChart, Plus, ReceiptText, TrendingUp, X } from "lucide-react";
+import { ArrowDown, Banknote, Calculator, ChevronDown, Landmark, PieChart, Plus, SlidersHorizontal, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { FINANCEMENT_MODE_COURT, type AppSettings } from "@/lib/settings";
 import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
@@ -99,14 +99,14 @@ function ChampHerite({
       </div>
       {/* Emplacement réservé même sans bouton : sinon les champs surchargés
           sont plus étroits que les autres et la colonne devient irrégulière. */}
-      <div className="mb-[3px] w-7 shrink-0">
+      <div className="mb-[3px] w-11 shrink-0 flex justify-center">
         {!herite && (
           <button
             type="button"
             onClick={() => onChange(null)}
             title="Revenir à la valeur du profil investisseur"
             aria-label={`${label} : revenir au profil`}
-            className="rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -145,13 +145,27 @@ function HypRow({ label, value, badge }: { label: string; value: string; badge?:
   );
 }
 
-/** Ligne d'une carte de RÉSULTAT : plus lisible qu'une ligne d'hypothèse. */
-function ResultLine({ label, value }: { label: string; value: string }) {
+/** Titre de sous-section dans le panneau Financement déplié (Crédit, Fiscalité…). */
+function FinSectionTitle({ icon: Icon, children }: { icon: typeof Landmark; children: ReactNode }) {
   return (
-    <li className="flex items-baseline justify-between gap-3 py-2">
-      <span className="text-ink-600">{label}</span>
-      <span className="shrink-0 font-mono tabular-nums text-ink-900">{value}</span>
-    </li>
+    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-500">
+      <Icon className="h-3.5 w-3.5 text-ink-400" />
+      {children}
+    </p>
+  );
+}
+
+/** Ligne du panneau Financement déplié — plus spacieuse que HypRow. */
+function FinRow({ label, value, badge, suffix }: { label: string; value: string; badge?: ReactNode; suffix?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-1.5 text-[13px]">
+      <span className="text-ink-500">{label}</span>
+      <span className="flex shrink-0 items-center gap-1.5">
+        {badge}
+        <span className="font-mono font-medium tabular-nums text-ink-800">{value}</span>
+        {suffix && <span className="text-[10px] text-ink-400">{suffix}</span>}
+      </span>
+    </div>
   );
 }
 
@@ -161,130 +175,6 @@ function hypPct(v: number | null): string {
   return v == null ? "—" : `${formatNombre(v)} %`;
 }
 
-/**
- * Nombre d'hypothèses que l'utilisateur a fixées lui-même, c.-à-d. tout ce qui
- * ne suit plus ni le profil ni le calcul automatique.
- *
- * C'est exactement l'ensemble des lignes SANS pastille dans le panneau : la
- * pastille (`profil` / `auto`) signale une valeur par défaut, son absence
- * signale une valeur imposée. Ce compteur rend cet état — le seul des trois qui
- * n'était pas étiqueté — visible et actionnable.
- */
-function compterSurcharges(inputs: SimulationInputs, quotePartTerrain: number | null): number {
-  const defauts = defaultInputs();
-  let n = 0;
-  for (const cle of Object.keys(defauts) as (keyof SimulationInputs)[]) {
-    const valeur = inputs[cle];
-    if (valeur == null) continue;
-    // `regimeFiscal` stocké au régime par défaut n'est pas une surcharge : ça
-    // vaut la même chose que `null`, le compter ferait apparaître un « 1 »
-    // fantôme que rien à l'écran ne justifierait.
-    if (cle === "regimeFiscal" && valeur === REGIME_FISCAL_DEFAUT) continue;
-    n++;
-  }
-  if (quotePartTerrain != null) n++;
-  return n;
-}
-
-/**
- * Enveloppe du panneau d'HYPOTHÈSES : lecture (défaut) et édition de tous ses
- * champs d'un bloc.
- *
- * Fond `ink-50` — c'est la clé de lecture de l'onglet : **ce qu'on saisit est
- * gris, ce que la simulation produit est blanc**. Avant, entrées et résultats
- * partageaient la carte blanche et le même poids visuel ; rien ne disait où
- * s'arrêtaient les hypothèses et où commençait la réponse.
- *
- * L'édition remplace les « Modifier » par champ : trois boutons pour une seule
- * intention, aucun moyen d'ANNULER (on éditait en direct, le retour en arrière
- * était à retaper de mémoire), et un enregistrement piloté depuis une bannière
- * en haut de l'onglet, loin du champ modifié.
- */
-function EditableCard({
-  icon,
-  title,
-  editing,
-  canEdit,
-  onEdit,
-  onCancel,
-  onSave,
-  saving,
-  surcharges = 0,
-  onReset,
-  children,
-}: {
-  icon: typeof Landmark;
-  title: string;
-  editing: boolean;
-  /** Faux quand une AUTRE carte est déjà en édition : une seule à la fois. */
-  canEdit: boolean;
-  onEdit: () => void;
-  onCancel: () => void;
-  onSave: () => void;
-  saving: boolean;
-  /** Nombre de valeurs fixées à la main. 0 → pas de bouton de réinitialisation :
-   *  il n'aurait rien à faire, et un bouton inerte est pire qu'absent. */
-  surcharges?: number;
-  onReset?: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      className={`space-y-4 rounded-xl border bg-ink-50 p-4 transition-colors ${
-        editing ? "border-accent-300" : "border-ink-200"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <SectionHeader icon={icon} title={title} as="h3" />
-        {!editing && canEdit && (
-          <div className="flex shrink-0 items-center gap-3">
-            {surcharges > 0 && onReset && (
-              <button
-                type="button"
-                onClick={onReset}
-                // Survol NEUTRE : le rouge de la charte est réservé aux vraies
-                // suppressions. Ici on rend des valeurs à leur défaut, la
-                // modale de confirmation porte déjà le poids de l'action.
-                className="text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-ink-600"
-              >
-                Réinitialiser
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onEdit}
-              className="text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:text-accent-600"
-            >
-              Modifier
-            </button>
-          </div>
-        )}
-      </div>
-
-      {children}
-
-      {editing && (
-        <div className="flex items-center justify-end gap-2 border-t border-ink-100/50 pt-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
-          >
-            Annuler
-          </button>
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
 
 function OptionalRateField({
   label,
@@ -319,7 +209,7 @@ function OptionalRateField({
         onClick={() => onChange(null)}
         title="Désactiver cette hypothèse"
         aria-label={`Désactiver ${label}`}
-        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+        className="mb-[3px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -373,9 +263,12 @@ export default function SimulationFinanciere({
   // UNE carte en édition à la fois. `snapshot` est la copie d'avant-édition qui
   // rend « Annuler » possible — il n'existait pas : on éditait en direct et le
   // seul retour en arrière était de retaper les valeurs de mémoire.
-  const [editingId, setEditingId] = useState<null | "credit" | "fiscalite">(null);
+  const [editingId, setEditingId] = useState<null | "credit" | "hypotheses">(null);
   const [snapshot, setSnapshot] = useState<SimulationInputs | null>(null);
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmReset, setConfirmReset] = useState<null | "credit" | "hypotheses">(null);
+  const [finOpen, setFinOpen] = useState(false);
+  const [hypOpen, setHypOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(true);
 
   // La quote-part terrain vit sur le BIEN, pas dans `simulation_inputs` : elle
   // partait donc en PATCH immédiat, un deuxième modèle d'enregistrement dans le
@@ -397,16 +290,28 @@ export default function SimulationFinanciere({
     [apartment, quotePartDraft],
   );
   const result = useMemo(() => simulate(apartmentSim, resolus), [apartmentSim, resolus]);
-  const surcharges = compterSurcharges(inputs, apartment.quote_part_terrain_pct ?? null);
+  const surchargesCredit = (inputs.montantEmprunte != null ? 1 : 0)
+    + (inputs.tauxCreditPct != null ? 1 : 0)
+    + (inputs.dureeAnnees != null ? 1 : 0)
+    + (inputs.tauxAssurancePct != null ? 1 : 0);
+  const surchargesHyp = (inputs.regimeFiscal != null && inputs.regimeFiscal !== REGIME_FISCAL_DEFAUT ? 1 : 0)
+    + (inputs.tmiPct != null ? 1 : 0)
+    + (apartment.quote_part_terrain_pct != null ? 1 : 0)
+    + (inputs.revalorisationBienPct != null ? 1 : 0)
+    + (inputs.revalorisationLoyerPct != null ? 1 : 0)
+    + (inputs.indexationChargesPct != null ? 1 : 0)
+    + (inputs.vacanceLocativePct != null ? 1 : 0);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
   }
 
-  function startEdit(id: "credit" | "fiscalite") {
+  function startEdit(id: "credit" | "hypotheses") {
     setSnapshot(inputs);
-    if (id === "fiscalite") setQuotePartDraft({ value: apartment.quote_part_terrain_pct ?? null });
+    if (id === "hypotheses") setQuotePartDraft({ value: apartment.quote_part_terrain_pct ?? null });
     setEditingId(id);
+    if (id === "credit") setFinOpen(true);
+    if (id === "hypotheses") setHypOpen(true);
   }
 
   function cancelEdit() {
@@ -462,23 +367,37 @@ export default function SimulationFinanciere({
 
   const handleSaveInputs = () => persist(inputs);
 
-  /**
-   * Remet TOUTES les hypothèses à leur valeur par défaut : les champs hérités
-   * repassent au Profil investisseur, les champs dérivés repassent en auto, et
-   * les hypothèses de projection sont désactivées. C'est exactement
-   * `defaultInputs()` — toute la convention du modèle étant déjà « `null` =
-   * valeur par défaut », il n'y a aucune logique de remise à zéro à écrire.
-   *
-   * La quote-part terrain vit sur le bien et part dans le même PATCH.
-   */
+  async function resetCredit() {
+    const patched: SimulationInputs = {
+      ...inputs,
+      montantEmprunte: null,
+      tauxCreditPct: null,
+      dureeAnnees: null,
+      tauxAssurancePct: null,
+    };
+    setInputs(patched);
+    setSnapshot(null);
+    setEditingId(null);
+    setConfirmReset(null);
+    await persist(patched);
+  }
+
   async function resetHypotheses() {
-    const neutres = defaultInputs();
-    setInputs(neutres);
+    const patched: SimulationInputs = {
+      ...inputs,
+      regimeFiscal: null,
+      tmiPct: null,
+      revalorisationBienPct: null,
+      revalorisationLoyerPct: null,
+      indexationChargesPct: null,
+      vacanceLocativePct: null,
+    };
+    setInputs(patched);
     setQuotePartDraft(null);
     setSnapshot(null);
     setEditingId(null);
-    setConfirmReset(false);
-    await persist(neutres, { quote_part_terrain_pct: null });
+    setConfirmReset(null);
+    await persist(patched, { quote_part_terrain_pct: null });
   }
 
   if (!result) {
@@ -494,22 +413,97 @@ export default function SimulationFinanciere({
     );
   }
 
-  const cfMoyen = result.cashflowMensuelMoyen;
+  const cfLMNP = result.cashflowMensuelMoyenLMNP;
   const cfAn1 = result.cashflowMensuelAn1;
+
+  // Moyennes mensuelles sur les années exonérées LMNP (année 1 toujours incluse).
+  const exoAnnees = result.annees.filter((a) => a.impot < 1);
+  const lmnpAnnees = exoAnnees.length > 0
+    ? (exoAnnees[0].annee === 1 ? exoAnnees : [result.annees[0], ...exoAnnees])
+    : [result.annees[0]];
+  const nLmnp = lmnpAnnees.length;
+  const avgM = (f: (a: AnneeSimulation) => number) =>
+    lmnpAnnees.reduce((s, a) => s + f(a), 0) / nLmnp / 12;
+  const loyerMoyenM = avgM((a) => a.loyers);
+  const chargesMoyennesM = avgM((a) => a.chargesExploitation);
+  const impotMoyenM = avgM((a) => a.impot);
+  const cfTone = TONE_PANEL_STYLES[cashflowTone(cfLMNP, cashflowSeuils)];
 
   return (
     <div className="space-y-6">
       <ConfirmDialog
-        open={confirmReset}
-        title="Réinitialiser toutes les hypothèses ?"
-        description="Le crédit, la fiscalité et les hypothèses de projection repartiront de leurs valeurs par défaut : les champs hérités suivront de nouveau ton Profil investisseur, le montant emprunté et la quote-part terrain repasseront en calcul automatique, et les revalorisations, indexations et vacances seront désactivées. Les valeurs que tu as saisies seront perdues."
+        open={confirmReset === "credit"}
+        title="Réinitialiser le crédit ?"
+        description="Le montant emprunté repassera en calcul automatique, et le taux, la durée et l'assurance suivront de nouveau ton Profil investisseur."
+        confirmLabel="Réinitialiser"
+        loadingLabel="Réinitialisation…"
+        destructive
+        loading={saving}
+        onConfirm={resetCredit}
+        onCancel={() => setConfirmReset(null)}
+      />
+      <ConfirmDialog
+        open={confirmReset === "hypotheses"}
+        title="Réinitialiser les hypothèses ?"
+        description="La fiscalité suivra de nouveau ton Profil investisseur, la quote-part terrain repassera en calcul automatique, et les revalorisations, indexation et vacance seront désactivées."
         confirmLabel="Réinitialiser"
         loadingLabel="Réinitialisation…"
         destructive
         loading={saving}
         onConfirm={resetHypotheses}
-        onCancel={() => setConfirmReset(false)}
+        onCancel={() => setConfirmReset(null)}
       />
+
+      {/* Cash-flow mensuel détaillé (remonté en tête pour montrer le détail d'abord) */}
+      <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+        <SectionHeader icon={ArrowDown} title="Cash-flow mensuel" as="h3" />
+        <ul className="divide-y divide-ink-100 text-sm">
+          <WaterfallRow
+            label="Loyers encaissés"
+            value={loyerMoyenM}
+            plus
+            badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
+          />
+          <WaterfallRow label="Mensualité de crédit" value={-result.mensualiteTotale} />
+          <WaterfallRow label="Charges d'exploitation" value={-chargesMoyennesM} />
+          <WaterfallRow label="Impôt LMNP (moyen)" value={-impotMoyenM} />
+        </ul>
+        <div className={`rounded-xl p-4 ${cfTone.wrap}`}>
+          <div className="flex items-baseline justify-between gap-4">
+            <div>
+              <span className={`text-sm font-semibold ${cfTone.label}`}>Cash-flow mensuel</span>
+              <p className={`mt-0.5 text-xs ${cfTone.sub}`}>
+                {result.anneesExonerees > 1
+                  ? `Moyen sur ${result.anneesExonerees} ans sans impôt`
+                  : result.anneesExonerees === 1
+                    ? "Année 1, sans impôt"
+                    : "Année 1, après impôt"}
+              </p>
+            </div>
+            <span className={`font-mono text-2xl font-bold tabular-nums ${cfTone.value}`}>
+              {formatEurosSigned(cfLMNP)}
+            </span>
+          </div>
+          <div className="mt-3 rounded-lg bg-white/60 px-3 py-2.5 text-xs leading-relaxed text-ink-500">
+            {result.annees[0].impot === 0 ? (<>
+              <strong className="font-semibold text-ink-700">Pourquoi 0 € d'impôt ?</strong>{" "}
+              En LMNP au réel, tu déduis l'usure du bien (amortissements) de tes revenus locatifs.
+              Ici, <strong className="font-medium text-ink-700">
+                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
+              </strong> d'amortissements{" "}
+              (bâti {euros(result.amortissements.bati)} €
+              {result.amortissements.travaux > 0 ? ` + travaux ${euros(result.amortissements.travaux)} €` : ""}
+              {result.amortissements.notaire > 0 ? ` + notaire ${euros(result.amortissements.notaire)} €` : ""})
+              {" "}absorbent tes revenus nets → résultat imposable = 0 € pendant <strong className="font-medium text-ink-700">{result.anneesExonerees} {result.anneesExonerees > 1 ? "ans" : "an"}</strong>.
+            </>) : (<>
+              <strong className="font-semibold text-ink-700">Impôt année 1 : {euros(result.annees[0].impot)} €</strong>{" "}
+              Les amortissements LMNP (<strong className="font-medium text-ink-700">
+                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
+              </strong>) réduisent tes revenus imposables à {euros(result.annees[0].resultatImposable)} €/an.
+            </>)}
+          </div>
+        </div>
+      </section>
 
       {/* `editingId === null` : quand une carte est en édition, c'est SON pied
           qui porte Enregistrer. Laisser la bannière en plus afficherait deux
@@ -532,399 +526,396 @@ export default function SimulationFinanciere({
         </div>
       )}
 
-      {/* Résultat principal : le cash-flow mensuel concret */}
-      <div id="sim-cashflow" className="grid scroll-mt-24 grid-cols-1 gap-3 sm:grid-cols-3">
-        <ResultCard
-          label="Mensualité de crédit"
-          sub="assurance incluse"
-          value={`${euros(result.mensualiteTotale)} €/mois`}
-          tone="neutral"
-        />
-        <ResultCard
-          label="Cash-flow mensuel — année 1"
-          sub="après impôt LMNP"
-          value={`${formatEurosSigned(cfAn1)}/mois`}
-          tone={cashflowTone(cfAn1, cashflowSeuils)}
-          emphase
-        />
-        <ResultCard
-          label={`Cash-flow mensuel moyen — ${resolus.dureeAnnees} ans`}
-          sub="après impôt LMNP"
-          value={`${formatEurosSigned(cfMoyen)}/mois`}
-          tone={cashflowTone(cfMoyen, cashflowSeuils)}
-          emphase
-        />
-      </div>
+      {/* Section collapsible Financement — regroupe la mensualité hero (toujours
+          visible) et les hypothèses (dépliables). La mensualité montait du panneau
+          KPI, les hypothèses descendaient du panneau gris EditableCard. */}
+      <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "credit" ? "border-accent-300" : "border-ink-200"}`}>
+        {/* En-tête cliquable */}
+        <button
+          type="button"
+          onClick={() => !editingId && setFinOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-5 py-3"
+        >
+          <span className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center rounded-lg bg-accent-50 p-1.5 text-accent-600">
+              <Landmark className="h-3.5 w-3.5" />
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Financement
+            </span>
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-ink-400 transition-transform ${finOpen ? "rotate-180" : ""}`}
+          />
+        </button>
 
-      {/* TOUTES les entrées de l'onglet, en un seul endroit et en gris.
-          Elles étaient dispersées en trois points (carte Crédit, carte
-          Fiscalité, ligne au-dessus du tableau année par année), chacun traité
-          comme une section à part entière — d'où l'impossibilité de voir d'un
-          coup d'œil ce qui est saisi et ce qui est calculé. */}
-      <EditableCard
-        icon={Landmark}
-        title="Hypothèses"
-        editing={editingId === "credit"}
-        canEdit={editingId === null}
-        onEdit={() => startEdit("credit")}
-        onCancel={cancelEdit}
-        onSave={saveEdit}
-        saving={saving}
-        surcharges={surcharges}
-        onReset={() => setConfirmReset(true)}
-      >
-        {editingId === "credit" ? (
-          <div className="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-3">
-            <div className="space-y-3">
-              <HypGroupTitle>Crédit</HypGroupTitle>
-              {/* Même gouttière de 28 px que `ChampHerite` réserve à son bouton
-                  « revenir au profil », pour que les quatre champs de la colonne
-                  aient exactement la même largeur. */}
-              <div className="pr-8">
-              <NumberField
-                label="Montant emprunté"
-                value={result.montantEmprunte}
-                onChange={(v) => set("montantEmprunte", v)}
-                suffix="€"
-                hint={
-                  result.montantAutomatique ? (
-                    // Dit AUSSI d'où vient le calcul : sans le mode, « auto »
-                    // n'explique pas pourquoi le montant inclut ou non le notaire.
-                    <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
-                  ) : result.montantPlafonne ? (
-                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                      ramené au coût total
-                    </span>
-                  ) : undefined
-                }
-              />
-              </div>
-              <ChampHerite
-                label="Taux du crédit"
-                suffix="%/an"
-                override={inputs.tauxCreditPct}
-                resolu={resolus.tauxCreditPct}
-                onChange={(v) => set("tauxCreditPct", v)}
-              />
-              <ChampHerite
-                label="Durée"
-                suffix="ans"
-                override={inputs.dureeAnnees}
-                resolu={resolus.dureeAnnees}
-                onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
-              />
-              <ChampHerite
-                label="Assurance emprunteur"
-                suffix="%/an"
-                override={inputs.tauxAssurancePct}
-                resolu={resolus.tauxAssurancePct}
-                onChange={(v) => set("tauxAssurancePct", v)}
-              />
-              <p className="text-[11px] leading-relaxed text-ink-400">
-                En mode <strong className="font-medium text-ink-500">auto</strong>, l&apos;emprunt
-                suit le prix d&apos;achat + les travaux (hors frais de notaire, supposés couverts
-                par l&apos;apport). Saisis un montant pour le figer ; vide le champ pour repasser
-                en auto.
-              </p>
+        {/* Hero : mensualité + summary tags — toujours visible */}
+        <div className="px-5 pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-ink-700">Mensualité de crédit</p>
+              <p className="mt-0.5 text-[11px] text-ink-400">assurance emprunteur incluse</p>
             </div>
-
-            <div className="space-y-3">
-              <HypGroupTitle>Fiscalité</HypGroupTitle>
-              {/* Un seul régime géré : le select n'offre donc qu'une option. Il
-                  est quand même rendu comme un choix — c'en est un, et le jour
-                  où un second régime arrive, rien ne bouge côté UI. Le `hint`
-                  dit l'état réel plutôt que de laisser croire à un menu vide. */}
-              <SelectField
-                label="Régime fiscal"
-                value={resolus.regimeFiscal}
-                onChange={(v) => set("regimeFiscal", v)}
-                options={REGIMES_FISCAUX_OPTIONS}
-                optionLabel={(v) => REGIMES_FISCAUX[v]}
-                allowEmpty={false}
-                hint={
-                  <span className="text-xs font-normal text-ink-400">seul régime géré</span>
-                }
-              />
-              {/* La TMI est une tranche légale, pas une saisie libre : on garde
-                  le select et on signale seulement l'ORIGINE de la valeur. */}
-              <div className="flex items-end gap-1">
-                <div className="flex-1">
-                  <SelectField
-                    label="Tranche marginale d'imposition (TMI)"
-                    value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
-                    onChange={(v) => set("tmiPct", Number(v))}
-                    options={TMI_OPTIONS}
-                    allowEmpty={false}
-                    hint={
-                      inputs.tmiPct == null ? (
-                        <Pastille>profil</Pastille>
-                      ) : (
-                        <span className="text-xs font-normal text-ink-400">
-                          + {LMNP.prelevementsSociauxPct} % PS
-                        </span>
-                      )
-                    }
-                  />
-                </div>
-                {inputs.tmiPct != null && (
-                  <button
-                    type="button"
-                    onClick={() => set("tmiPct", null)}
-                    title="Revenir à la valeur du profil investisseur"
-                    aria-label="TMI : revenir au profil"
-                    className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-              <NumberField
-                label="Quote-part terrain"
-                value={result.quotePartTerrainPct}
-                onChange={(v) => setQuotePartDraft({ value: v })}
-                suffix="% du prix"
-                hint={quotePartDraft?.value == null ? <Pastille>auto</Pastille> : undefined}
-              />
-            </div>
-
-            <div className="space-y-3">
-              <HypGroupTitle>Projection</HypGroupTitle>
-              <div className="flex flex-wrap items-end gap-2">
-                <OptionalRateField
-                  label="Revalorisation du bien"
-                  value={inputs.revalorisationBienPct}
-                  defaut={REVALORISATION_BIEN_DEFAUT_PCT}
-                  onChange={(v) => set("revalorisationBienPct", v)}
-                />
-                <OptionalRateField
-                  label="Revalorisation du loyer"
-                  value={inputs.revalorisationLoyerPct}
-                  defaut={REVALORISATION_LOYER_DEFAUT_PCT}
-                  onChange={(v) => set("revalorisationLoyerPct", v)}
-                />
-                <OptionalRateField
-                  label="Indexation charges"
-                  value={inputs.indexationChargesPct}
-                  defaut={INDEXATION_CHARGES_DEFAUT_PCT}
-                  onChange={(v) => set("indexationChargesPct", v)}
-                />
-                <OptionalRateField
-                  label="Vacance locative"
-                  value={inputs.vacanceLocativePct}
-                  defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
-                  onChange={(v) => set("vacanceLocativePct", v)}
-                  suffix="% du loyer"
-                />
-              </div>
-              <p className="text-[11px] leading-relaxed text-ink-400">
-                Désactivées par défaut : aucune revalorisation, indexation ni vacance n&apos;est
-                supposée, c&apos;est l&apos;hypothèse la plus prudente.
-              </p>
-            </div>
+            <p className="shrink-0 font-mono text-2xl font-bold tabular-nums text-ink-900">
+              {euros(result.mensualiteTotale)} €
+              <span className="text-[13px] font-normal text-ink-400">/mois</span>
+            </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <HypGroupTitle>Crédit</HypGroupTitle>
-              <HypRow
-                label="Montant emprunté"
-                value={`${euros(result.montantEmprunte)} €`}
-                badge={
-                  result.montantAutomatique ? (
-                    <Pastille>auto</Pastille>
-                  ) : result.montantPlafonne ? (
-                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                      plafonné
-                    </span>
-                  ) : undefined
-                }
-              />
-              <HypRow
-                label="Taux"
-                value={`${formatNombre(resolus.tauxCreditPct)} %`}
-                badge={inputs.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
-              />
-              <HypRow
-                label="Durée"
-                value={`${formatNombre(resolus.dureeAnnees)} ans`}
-                badge={inputs.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
-              />
-              <HypRow
-                label="Assurance"
-                value={`${formatNombre(resolus.tauxAssurancePct)} %`}
-                badge={inputs.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
-              />
-            </div>
-            <div>
-              <HypGroupTitle>Fiscalité</HypGroupTitle>
-              <HypRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
-              <HypRow
-                label="TMI"
-                value={`${formatNombre(resolus.tmiPct)} % + ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
-                badge={inputs.tmiPct == null ? <Pastille>profil</Pastille> : undefined}
-              />
-              <HypRow
-                label="Quote-part terrain"
-                value={`${formatNombre(result.quotePartTerrainPct)} %`}
-                badge={apartment.quote_part_terrain_pct == null ? <Pastille>auto</Pastille> : undefined}
-              />
-            </div>
-            <div>
-              <HypGroupTitle>Projection</HypGroupTitle>
-              {/* « — » plutôt que masquer la ligne : une hypothèse désactivée est
-                  une information (aucune revalorisation supposée), pas une absence. */}
-              <HypRow label="Revalorisation du bien" value={hypPct(inputs.revalorisationBienPct)} />
-              <HypRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
-              <HypRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
-              <HypRow label="Vacance locative" value={hypPct(inputs.vacanceLocativePct)} />
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Crédit {formatNombre(resolus.tauxCreditPct)} %
+            </span>
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              {formatNombre(resolus.dureeAnnees)} ans
+            </span>
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Apport {euros(result.apport)} €
+            </span>
+          </div>
+        </div>
+
+        {/* Corps dépliable */}
+        {finOpen && (
+          <div className="px-5 pb-4">
+            <div className="pt-1">
+              {editingId === "credit" ? (
+                <>
+                  <div className="space-y-3 py-4">
+                    <div className="pr-8">
+                      <NumberField
+                        label="Montant emprunté"
+                        value={result.montantEmprunte}
+                        onChange={(v) => set("montantEmprunte", v)}
+                        suffix="€"
+                        hint={
+                          result.montantAutomatique ? (
+                            <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
+                          ) : result.montantPlafonne ? (
+                            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                              ramené au coût total
+                            </span>
+                          ) : undefined
+                        }
+                      />
+                    </div>
+                    <ChampHerite
+                      label="Taux du crédit"
+                      suffix="%/an"
+                      override={inputs.tauxCreditPct}
+                      resolu={resolus.tauxCreditPct}
+                      onChange={(v) => set("tauxCreditPct", v)}
+                    />
+                    <ChampHerite
+                      label="Durée"
+                      suffix="ans"
+                      override={inputs.dureeAnnees}
+                      resolu={resolus.dureeAnnees}
+                      onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
+                    />
+                    <ChampHerite
+                      label="Assurance emprunteur"
+                      suffix="%/an"
+                      override={inputs.tauxAssurancePct}
+                      resolu={resolus.tauxAssurancePct}
+                      onChange={(v) => set("tauxAssurancePct", v)}
+                    />
+                    <p className="text-[11px] leading-relaxed text-ink-400">
+                      En mode <strong className="font-medium text-ink-500">auto</strong>, l&apos;emprunt
+                      suit le prix d&apos;achat + les travaux (hors frais de notaire, supposés couverts
+                      par l&apos;apport). Saisis un montant pour le figer ; vide le champ pour repasser
+                      en auto.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveEdit}
+                      disabled={saving}
+                      className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {saving ? "Enregistrement…" : "Enregistrer"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="py-3.5">
+                    <FinSectionTitle icon={Banknote}>Crédit immobilier</FinSectionTitle>
+                    <FinRow
+                      label="Montant emprunté"
+                      value={`${euros(result.montantEmprunte)} €`}
+                      badge={
+                        result.montantAutomatique ? (
+                          <Pastille>auto</Pastille>
+                        ) : result.montantPlafonne ? (
+                          <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            plafonné
+                          </span>
+                        ) : undefined
+                      }
+                    />
+                    <FinRow
+                      label="Taux nominal"
+                      value={`${formatNombre(resolus.tauxCreditPct)} %`}
+                      badge={inputs.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
+                    />
+                    <FinRow
+                      label="Durée"
+                      value={`${formatNombre(resolus.dureeAnnees)} ans`}
+                      badge={inputs.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
+                    />
+                    <FinRow
+                      label="Assurance"
+                      value={`${formatNombre(resolus.tauxAssurancePct)} %`}
+                      badge={inputs.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
+                    />
+                  </div>
+
+                  <div className="py-3.5">
+                    <FinSectionTitle icon={PieChart}>Apport personnel</FinSectionTitle>
+                    <FinRow label="Frais de notaire + complément" value={`${euros(result.apport)} €`} />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 py-3.5">
+                    {surchargesCredit > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmReset("credit")}
+                        className="min-h-[44px] rounded-lg px-3 py-2 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
+                      >
+                        Réinitialiser
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => startEdit("credit")}
+                      disabled={editingId !== null}
+                      className="rounded-lg border border-accent-300 bg-white px-5 py-2 text-[13px] font-medium text-accent-600 transition-colors hover:border-accent-600 hover:bg-accent-50 disabled:opacity-50"
+                    >
+                      Modifier
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
-      </EditableCard>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Coût du crédit — RÉSULTAT, plus aucune saisie ici. */}
-        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-          <SectionHeader icon={Landmark} title="Coût du crédit" as="h3" />
-          {/* Chaque montant porte son HORIZON, parce que le bloc en mélange
-           * trois : deux mensuels, un cumul sur toute la durée du prêt
-           * (`coutCredit`), et un versement unique au départ (`apport`).
-           * Sans ces qualificatifs, le cumul sur 25 ans juste à côté contamine
-           * la lecture de l'apport, qu'on croit alors étalé lui aussi. */}
-          <ul className="divide-y divide-ink-100/50 text-sm">
-            <ResultLine label="Mensualité hors assurance" value={`${euros(result.mensualiteHorsAssurance)} €`} />
-            <ResultLine label="Assurance emprunteur" value={`${euros(result.assuranceMensuelle)} €/mois`} />
-            <ResultLine label={`Coût total du crédit · ${resolus.dureeAnnees} ans`} value={`${euros(result.coutCredit)} €`} />
-            <ResultLine label="Apport personnel à l'achat" value={`${euros(result.apport)} €`} />
-          </ul>
-        </section>
-
-
-        {/* Détail mensuel année 1 — la "participation mensuelle" */}
-        <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-          <SectionHeader icon={Banknote} title="Détail mensuel — année 1" as="h3" />
-          <ul className="divide-y divide-ink-100 text-sm">
-            <WaterfallRow
-              label="Loyer (CC)"
-              value={apartment.loyer_retenu ?? 0}
-              plus
-              badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
-            />
-            <WaterfallRow label="Mensualité de crédit (assurance incl.)" value={-result.mensualiteTotale} />
-            <WaterfallRow
-              label="Charges (copro, taxe foncière, assurance, gestion)"
-              value={-result.chargesMensuelles}
-            />
-            <WaterfallRow label="Impôt LMNP (IR + prélèvements sociaux)" value={-result.impotMensuelAn1} />
-            <li className="flex items-center justify-between py-3">
-              <span className="font-semibold text-ink-900">Cash-flow mensuel</span>
-              <span className={`text-lg font-bold ${cashflowTextClass(cfAn1, cashflowSeuils)}`}>
-                {formatEurosSigned(cfAn1)}
-              </span>
-            </li>
-          </ul>
-          <p className="text-xs text-ink-400">
-            Avant impôt : {formatEurosSigned(result.cashflowMensuelAvantImpotAn1)}/mois.
-          </p>
-        </section>
-      </div>
-
-      {/* Fiscalité — RÉSULTAT pur : la TMI et la quote-part sont remontées
-          dans le panneau Hypothèses, il ne reste ici que ce qui en découle. */}
-      <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-        <SectionHeader icon={ReceiptText} title="Fiscalité — LMNP au réel" as="h3" />
-
-        <div className="rounded-lg bg-ink-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Amortissements annuels déductibles</p>
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <AmortRow label="Bâti" amount={result.amortissements.bati} detail={`${100 - result.quotePartTerrainPct} % du prix · 40 ans`} />
-            {result.amortissements.travaux > 0 && (
-              <AmortRow label="Travaux" amount={result.amortissements.travaux} detail="15 ans" />
-            )}
-            {result.amortissements.notaire > 0 && (
-              <AmortRow label="Frais de notaire" amount={result.amortissements.notaire} detail="5 ans" />
-            )}
-          </div>
-          <p className="mt-3 text-xs font-medium text-ink-600">
-            Total : {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
-          </p>
-        </div>
-
-        <div className="flex items-start gap-3 rounded-lg border border-ink-100 bg-white px-4 py-3">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-300" />
-          <div className="text-xs leading-relaxed text-ink-500">
-            <p>
-              Les amortissements ne peuvent pas créer de déficit — ils sont plafonnés au résultat
-              de l&apos;année, l&apos;excédent est reporté sans limite <span className="text-ink-400">(art. 39 C)</span>.
-            </p>
-            <p className="mt-1.5 font-medium text-ink-600">
-              Année 1 : résultat imposable {euros(result.annees[0].resultatImposable)} € → impôt {euros(result.annees[0].impot)} €/an
-            </p>
-          </div>
-        </div>
       </section>
 
-      {/* Tableau année par année */}
-      <section className="rounded-xl border border-ink-200 bg-white">
-        <div className="p-5 pb-3">
-          <SectionHeader icon={Calculator} title="Cash-flow année par année" as="h3" />
+      {/* Hypothèses — Fiscalité + Projection, séparées du financement */}
+      <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "hypotheses" ? "border-accent-300" : "border-ink-200"}`}>
+        <button
+          type="button"
+          onClick={() => !editingId && setHypOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-5 py-3"
+        >
+          <span className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center rounded-lg bg-ink-100 p-1.5 text-ink-500">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Hypothèses
+            </span>
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-ink-400 transition-transform ${hypOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {/* Summary pills — toujours visibles */}
+        <div className="flex flex-wrap gap-1.5 px-5 pb-3">
+          <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+            {REGIMES_FISCAUX[resolus.regimeFiscal]}
+          </span>
+          <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+            TMI {formatNombre(resolus.tmiPct)} %
+          </span>
+          {inputs.revalorisationLoyerPct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Revalo loyer {formatNombre(inputs.revalorisationLoyerPct)} %/an
+            </span>
+          )}
+          {inputs.vacanceLocativePct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Vacance {formatNombre(inputs.vacanceLocativePct)} %
+            </span>
+          )}
         </div>
-        {/* Les quatre hypothèses de projection qui vivaient ici sont remontées
-            dans le panneau Hypothèses : elles pilotent ce tableau, mais ce sont
-            des ENTRÉES, et les laisser ici était le troisième endroit où l'on
-            saisissait quelque chose dans cet onglet. */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-y border-ink-100 bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-400">
-                <th className="px-2 py-2 font-medium sm:px-5">Année</th>
-                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Loyers</th>
-                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Crédit</th>
-                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Charges</th>
-                <th className="px-1.5 py-2 text-right font-medium sm:px-3">Impôt</th>
-                <th className="px-1.5 py-2 text-right font-medium sm:px-3">CF /an</th>
-                <th className="px-2 py-2 text-right font-medium sm:px-5">/mois</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-50 font-mono tabular-nums">
-              {result.annees.map((a) => (
-                <tr key={a.annee} className="hover:bg-ink-50/60">
-                  <td className="px-2 py-1.5 text-ink-500 sm:px-5">{a.annee}</td>
-                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(a.loyers)}</td>
-                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">
-                    {euros(-(result.mensualiteTotale * 12))}
-                  </td>
-                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.chargesExploitation)}</td>
-                  <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.impot)}</td>
-                  <td className={`px-1.5 py-1.5 text-right font-medium sm:px-3 ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
-                    {signe(a.cashflowAnnuel)}
-                  </td>
-                  <td className={`px-2 py-1.5 text-right font-semibold sm:px-5 ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
-                    {signe(a.cashflowMensuel)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="px-5 py-3 text-xs text-ink-400">
-          Total impôts sur {resolus.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer{" "}
-          {inputs.revalorisationLoyerPct != null
-            ? `revalorisé à ${inputs.revalorisationLoyerPct} %/an`
-            : "supposé constant (pas de revalorisation)"}{" "}
-          ; charges de copropriété et taxe foncière{" "}
-          {inputs.indexationChargesPct != null
-            ? `indexées à ${inputs.indexationChargesPct} %/an`
-            : "supposées constantes (pas d'indexation)"}
-          {inputs.vacanceLocativePct != null
-            ? ` ; vacance locative ${inputs.vacanceLocativePct} %`
-            : ""}
-          .
-        </p>
+
+        {hypOpen && (
+          <div className="px-5 pb-4">
+            <div className="border-t border-ink-100 pt-1">
+              {editingId === "hypotheses" ? (
+                <>
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-5 py-4 sm:grid-cols-2">
+                    <div className="space-y-3">
+                      <HypGroupTitle>Fiscalité</HypGroupTitle>
+                      <SelectField
+                        label="Régime fiscal"
+                        value={resolus.regimeFiscal}
+                        onChange={(v) => set("regimeFiscal", v)}
+                        options={REGIMES_FISCAUX_OPTIONS}
+                        optionLabel={(v) => REGIMES_FISCAUX[v]}
+                        allowEmpty={false}
+                        hint={
+                          <span className="text-xs font-normal text-ink-400">seul régime géré</span>
+                        }
+                      />
+                      <div className="flex items-end gap-1">
+                        <div className="flex-1">
+                          <SelectField
+                            label="Tranche marginale d'imposition (TMI)"
+                            value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
+                            onChange={(v) => set("tmiPct", Number(v))}
+                            options={TMI_OPTIONS}
+                            allowEmpty={false}
+                            hint={
+                              inputs.tmiPct == null ? (
+                                <Pastille>profil</Pastille>
+                              ) : (
+                                <span className="text-xs font-normal text-ink-400">
+                                  + {LMNP.prelevementsSociauxPct} % PS
+                                </span>
+                              )
+                            }
+                          />
+                        </div>
+                        {inputs.tmiPct != null && (
+                          <button
+                            type="button"
+                            onClick={() => set("tmiPct", null)}
+                            title="Revenir à la valeur du profil investisseur"
+                            aria-label="TMI : revenir au profil"
+                            className="mb-[3px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <NumberField
+                        label="Quote-part terrain"
+                        value={result.quotePartTerrainPct}
+                        onChange={(v) => setQuotePartDraft({ value: v })}
+                        suffix="% du prix"
+                        hint={quotePartDraft?.value == null ? <Pastille>auto</Pastille> : undefined}
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      <HypGroupTitle>Projection</HypGroupTitle>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <OptionalRateField
+                          label="Revalorisation du bien"
+                          value={inputs.revalorisationBienPct}
+                          defaut={REVALORISATION_BIEN_DEFAUT_PCT}
+                          onChange={(v) => set("revalorisationBienPct", v)}
+                        />
+                        <OptionalRateField
+                          label="Revalorisation du loyer"
+                          value={inputs.revalorisationLoyerPct}
+                          defaut={REVALORISATION_LOYER_DEFAUT_PCT}
+                          onChange={(v) => set("revalorisationLoyerPct", v)}
+                        />
+                        <OptionalRateField
+                          label="Indexation charges"
+                          value={inputs.indexationChargesPct}
+                          defaut={INDEXATION_CHARGES_DEFAUT_PCT}
+                          onChange={(v) => set("indexationChargesPct", v)}
+                        />
+                        <OptionalRateField
+                          label="Vacance locative"
+                          value={inputs.vacanceLocativePct}
+                          defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
+                          onChange={(v) => set("vacanceLocativePct", v)}
+                          suffix="% du loyer"
+                        />
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-ink-400">
+                        Désactivées par défaut : aucune revalorisation, indexation ni vacance n&apos;est
+                        supposée, c&apos;est l&apos;hypothèse la plus prudente.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 border-t border-ink-100/50 pt-3">
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveEdit}
+                      disabled={saving}
+                      className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {saving ? "Enregistrement…" : "Enregistrer"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-x-10 py-3.5 sm:grid-cols-2">
+                    <div>
+                      <FinSectionTitle icon={Landmark}>Fiscalité</FinSectionTitle>
+                      <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
+                      <FinRow
+                        label="TMI"
+                        value={`${formatNombre(resolus.tmiPct)} %`}
+                        badge={inputs.tmiPct == null ? <Pastille>profil</Pastille> : undefined}
+                        suffix={`+ ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
+                      />
+                      <FinRow
+                        label="Quote-part terrain"
+                        value={`${formatNombre(result.quotePartTerrainPct)} %`}
+                        badge={apartment.quote_part_terrain_pct == null ? <Pastille>auto</Pastille> : undefined}
+                      />
+                    </div>
+                    <div>
+                      <FinSectionTitle icon={TrendingUp}>Projection</FinSectionTitle>
+                      <FinRow label="Revalorisation du bien" value={hypPct(inputs.revalorisationBienPct)} />
+                      <FinRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
+                      <FinRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
+                      <FinRow label="Vacance locative" value={hypPct(inputs.vacanceLocativePct)} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 border-t border-ink-100 py-3.5">
+                    {surchargesHyp > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmReset("hypotheses")}
+                        className="min-h-[44px] rounded-lg px-3 py-2 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
+                      >
+                        Réinitialiser
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => startEdit("hypotheses")}
+                      disabled={editingId !== null}
+                      className="rounded-lg border border-accent-300 bg-white px-5 py-2 text-[13px] font-medium text-accent-600 transition-colors hover:border-accent-600 hover:bg-accent-50 disabled:opacity-50"
+                    >
+                      Modifier
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
+      {/* Graphiques (remontés avant le tableau) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
-        {/* Financement du projet */}
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-5">
           <SectionHeader icon={PieChart} title="Financement du projet" as="h3" />
           <p className="text-xs text-ink-400">
@@ -933,7 +924,6 @@ export default function SimulationFinanciere({
           <FinancementDonut financement={result.financementProjet} />
         </section>
 
-        {/* Évolution du patrimoine */}
         <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
           <SectionHeader icon={TrendingUp} title="Évolution du patrimoine" as="h3" />
           <p className="text-xs text-ink-400">
@@ -948,6 +938,91 @@ export default function SimulationFinanciere({
           <PatrimoineChart annees={result.annees} />
         </section>
       </div>
+
+      {/* Tableau année par année — collapsible */}
+      <section className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+        <button
+          type="button"
+          onClick={() => setTableOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-5 py-3"
+        >
+          <span className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center rounded-lg bg-ink-100 p-1.5 text-ink-500">
+              <Calculator className="h-3.5 w-3.5" />
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+              Cash-flow année par année
+            </span>
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-ink-400 transition-transform ${tableOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        {tableOpen && (
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-ink-100 bg-ink-50 text-left text-xs uppercase tracking-wide text-ink-400">
+                    <th className="px-2 py-2 font-medium sm:px-5">Année</th>
+                    <th className="px-1.5 py-2 text-right font-medium sm:px-3">Loyers</th>
+                    <th className="px-1.5 py-2 text-right font-medium sm:px-3">Crédit</th>
+                    <th className="px-1.5 py-2 text-right font-medium sm:px-3">Charges</th>
+                    <th className="px-1.5 py-2 text-right font-medium sm:px-3">Impôt</th>
+                    <th className="px-1.5 py-2 text-right font-medium sm:px-3">CF /an</th>
+                    <th className="px-2 py-2 text-right font-medium sm:px-5">/mois</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-50 font-mono tabular-nums">
+                  {result.annees.map((a) => (
+                    <tr key={a.annee} className="hover:bg-ink-50/60">
+                      <td className="px-2 py-1.5 text-ink-500 sm:px-5">{a.annee}</td>
+                      <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(a.loyers)}</td>
+                      <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">
+                        {euros(-(result.mensualiteTotale * 12))}
+                      </td>
+                      <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.chargesExploitation)}</td>
+                      <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.impot)}</td>
+                      <td className={`px-1.5 py-1.5 text-right font-medium sm:px-3 ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
+                        {signe(a.cashflowAnnuel)}
+                      </td>
+                      <td className={`px-2 py-1.5 text-right font-semibold sm:px-5 ${cashflowTextClass(a.cashflowMensuel, cashflowSeuils)}`}>
+                        {signe(a.cashflowMensuel)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="px-5 py-3 text-xs text-ink-400">
+              Total impôts sur {resolus.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer{" "}
+              {inputs.revalorisationLoyerPct != null
+                ? `revalorisé à ${inputs.revalorisationLoyerPct} %/an`
+                : "supposé constant (pas de revalorisation)"}{" "}
+              ; charges de copropriété et taxe foncière{" "}
+              {inputs.indexationChargesPct != null
+                ? `indexées à ${inputs.indexationChargesPct} %/an`
+                : "supposées constantes (pas d'indexation)"}
+              {inputs.vacanceLocativePct != null
+                ? ` ; vacance locative ${inputs.vacanceLocativePct} %`
+                : ""}
+              .
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* Sticky bar pendant l'édition — feedback temps réel du cash-flow */}
+      {editingId !== null && (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-200 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+            <span className="text-xs text-ink-500">Cash-flow mensuel</span>
+            <span className={`font-mono text-lg font-bold tabular-nums ${cashflowTextClass(cfLMNP, cashflowSeuils)}`}>
+              {formatEurosSigned(cfLMNP)}<span className="ml-0.5 text-xs font-normal text-ink-400">/mois</span>
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1298,16 +1373,6 @@ function WaterfallRow({
   );
 }
 
-function AmortRow({ label, amount, detail }: { label: string; amount: number; detail: string }) {
-  return (
-    <div className="flex items-baseline justify-between rounded-md bg-white/60 px-3 py-2">
-      <span className="text-sm font-medium text-ink-700">{label}</span>
-      <span className="text-right text-sm tabular-nums text-ink-800">
-        {euros(amount)} € <span className="text-xs text-ink-400">({detail})</span>
-      </span>
-    </div>
-  );
-}
 
 /** Montant compact sans « € », NON signé pour les positifs. Rend les négatifs
  * avec le vrai signe moins (U+2212) : `toLocaleString` seul poserait un trait

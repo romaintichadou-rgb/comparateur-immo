@@ -246,7 +246,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
   // doit afficher exactement le chiffre déjà lu sur l'écran précédent.
   const cashflowOf = (mod: ApartmentWithComputed): number | null => {
     const s = simulate(mod, resolveInputs(mod.simulation_inputs, ctx.settings));
-    return s ? s.cashflowMensuelAn1 : null;
+    return s ? s.cashflowMensuelMoyenLMNP : null;
   };
 
   // Verdict d'un scénario : mêmes fonctions que l'analyse réelle.
@@ -743,7 +743,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     const capitalActuel = loanAvant;
     const cf = (montant: number): number => {
       const s = simulate(aptBase, { ...inputs, montantEmprunte: Math.round(montant) });
-      return s ? s.cashflowMensuelAn1 : -Infinity;
+      return s ? s.cashflowMensuelMoyenLMNP : -Infinity;
     };
     if (cf(0) < 0) return null; // même au comptant le cash-flow reste négatif
 

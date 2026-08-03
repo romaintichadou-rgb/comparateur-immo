@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatEurosSigned } from "@/lib/format";
-import { TONE_PANEL_STYLES, cashflowTone, type CashflowSeuils, type RendementTone } from "@/lib/analyse/scoring";
+import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils, type RendementTone } from "@/lib/analyse/scoring";
 import { resolveInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
 import type { AppSettings } from "@/lib/settings";
 
@@ -70,20 +70,22 @@ export default function CashflowDetailPanel({
   const apt = displayed.apartment;
   const result = simulate(apt, resolveInputs(apt.simulation_inputs, displayed.settings));
 
-  // Moyennes mensuelles sur toute la durée du crédit (indicateur du cash-flow
-  // moyen) : loyers − charges d'exploitation − crédit − impôt = cash-flow.
-  const n = result ? result.annees.length : 0;
+  // Moyennes mensuelles sur les années exonérées (LMNP), année 1 incluse.
+  const exoAnnees = result ? result.annees.filter((a) => a.impot < 1) : [];
+  const lmnpAnnees = exoAnnees.length > 0
+    ? (exoAnnees[0].annee === 1 ? exoAnnees : [result!.annees[0], ...exoAnnees])
+    : result ? [result.annees[0]] : [];
+  const n = lmnpAnnees.length;
   const avg = (f: (a: AnneeSimulation) => number) =>
-    result && n > 0 ? result.annees.reduce((s, a) => s + f(a), 0) / n : 0;
+    n > 0 ? lmnpAnnees.reduce((s, a) => s + f(a), 0) / n : 0;
   const loyersM = avg((a) => a.loyers) / 12;
   const chargesM = avg((a) => a.chargesExploitation) / 12;
   const creditM = result?.mensualiteTotale ?? 0;
   const impotM = avg((a) => a.impot) / 12;
-  const cashflowMoyen = result?.cashflowMensuelMoyen ?? 0;
-  const cashflowAn1 = result?.cashflowMensuelAn1 ?? 0;
+  const cashflowLMNP = result?.cashflowMensuelMoyenLMNP ?? 0;
+  const anneesExo = result?.anneesExonerees ?? 0;
 
-  const toneMoyen = cashflowTone(result ? cashflowMoyen : null, displayed.seuils);
-  const toneAn1 = cashflowTone(result ? cashflowAn1 : null, displayed.seuils);
+  const toneLMNP = cashflowTone(result ? cashflowLMNP : null, displayed.seuils);
 
   return (
     <div className="fixed inset-0 z-[2000]">
@@ -120,26 +122,13 @@ export default function CashflowDetailPanel({
             </p>
           ) : (
             <div className="space-y-5">
-              {/* Année 1 EN PREMIER : c'est la définition du « cash-flow
-                  mensuel » non qualifié dans toute l'app (MetricCards,
-                  Optimiser, moteur de recommandations). La moyenne reste
-                  affichée à côté, mais en second — elle ne fait pas foi. */}
-              <div className="grid grid-cols-2 gap-3">
-                <ResultTile
-                  label="Cash-flow année 1"
-                  sub="première année"
-                  value={fmtSigned(cashflowAn1)}
-                  unit="/mois"
-                  tone={toneAn1}
-                />
-                <ResultTile
-                  label="Cash-flow moyen"
-                  sub="moyenne sur la durée du crédit"
-                  value={fmtSigned(cashflowMoyen)}
-                  unit="/mois"
-                  tone={toneMoyen}
-                />
-              </div>
+              <ResultTile
+                label="Cash-flow mensuel"
+                sub={anneesExo > 1 ? `moyen sur ${anneesExo} ans sans impôt` : "année 1, après impôt"}
+                value={fmtSigned(cashflowLMNP)}
+                unit="/mois"
+                tone={toneLMNP}
+              />
 
               <section className="rounded-xl border border-ink-200 p-4 sm:p-5">
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
@@ -158,15 +147,17 @@ export default function CashflowDetailPanel({
                 </h3>
                 <ul className="divide-y divide-ink-100 text-sm">
                   <Row label="Loyers encaissés" value={loyersM} />
-                  <Row label="Charges d'exploitation" value={-chargesM} />
                   <Row label="Mensualité de crédit" value={-creditM} />
+                  <Row label="Charges d'exploitation" value={-chargesM} />
                   <Row label="Impôt LMNP (moyen)" value={-impotM} />
-                  <TotalRow label="Cash-flow moyen" value={cashflowMoyen} tone={toneMoyen} />
+                  <TotalRow label="Cash-flow mensuel" value={cashflowLMNP} tone={toneLMNP} />
                 </ul>
               </section>
 
               <p className="text-xs text-ink-400">
-                Cash-flow moyen après impôt (régime LMNP réel), lissé sur toute la durée du crédit.
+                {anneesExo > 1
+                  ? `Moyennes sur les ${anneesExo} premières années sans impôt (amortissements LMNP).`
+                  : "Année 1 après impôt (régime LMNP au réel)."}
               </p>
             </div>
           )}
@@ -222,7 +213,7 @@ function Row({ label, value, sign = true }: { label: string; value: number; sign
 }
 
 function TotalRow({ label, value, tone }: { label: string; value: number; tone: RendementTone }) {
-  const cls = TONE_PANEL_STYLES[tone].value;
+  const cls = TONE_TEXT_CLASS[tone];
   return (
     <li className="flex items-baseline justify-between gap-3 py-2">
       <span className="font-semibold text-ink-900">{label}</span>

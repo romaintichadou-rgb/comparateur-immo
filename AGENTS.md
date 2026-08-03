@@ -1244,17 +1244,24 @@ Surtout, les entrées étaient dispersées en **trois endroits** — carte « Cr
 immobilier », carte « Fiscalité », et une rangée de boutons au-dessus du tableau
 année par année — chacun présenté comme une section à part entière.
 
-## Un panneau `Hypothèses` unique
+## Deux sections collapsibles : Financement + Hypothèses
 
-Toutes les entrées sont réunies dans un seul panneau gris, placé **entre les
-KPI et les résultats** (la réponse d'abord, ce sur quoi elle repose ensuite),
-en trois colonnes : **Crédit** (montant emprunté, taux, durée, assurance),
-**Fiscalité** (TMI, quote-part terrain), **Projection** (les quatre hypothèses
-optionnelles). Un unique bouton « Modifier » bascule tout le panneau en saisie.
+Les entrées sont séparées en deux sections collapsibles distinctes :
 
-- **`EditableCard`** porte le motif : en-tête `SectionHeader` + « Modifier »,
-  pied « Annuler / Enregistrer » **sous les champs**. Bordure `accent-300` en
-  édition (`ink-200` sinon).
+1. **Financement** — icône `Landmark`, accent. Hero mensualité toujours visible
+   + pills (Crédit %, durée, Apport). Corps dépliable : **Crédit immobilier**
+   (montant emprunté, taux, durée, assurance) + **Apport personnel**. Bouton
+   « Modifier » ouvre le mode édition crédit (`editingId === "credit"`).
+2. **Hypothèses** — icône `SlidersHorizontal`, neutre. Pills toujours visibles
+   (LMNP au réel, TMI, projections actives). Corps dépliable : **Fiscalité**
+   (régime, TMI, quote-part terrain) + **Projection** (les quatre hypothèses
+   optionnelles) en 2 colonnes. Bouton « Modifier » ouvre le mode édition
+   hypothèses (`editingId === "hypotheses"`).
+
+Chaque section porte sa propre bordure `accent-300` en édition (`ink-200`
+sinon), son propre « Annuler / Enregistrer » et un « Réinitialiser » si des
+surcharges existent. Les deux partagent le même `persist()` et le même
+`snapshot` d'annulation.
 - **`HypRow`** rend une ligne en lecture. La pastille d'origine (`profil`,
   `auto`) est collée à la VALEUR, à droite, jamais après le libellé : quand elle
   suivait le libellé, elle poussait le montant hors de la ligne, qui passait à
@@ -1275,7 +1282,7 @@ optionnelles). Un unique bouton « Modifier » bascule tout le panneau en saisie
 ## Régime fiscal — champ DÉCLARATIF, pas encore un levier de calcul
 
 `SimulationInputs.regimeFiscal` (`RegimeFiscal | null`, `null` = défaut) est
-proposé dans la colonne Fiscalité du panneau. Les libellés viennent de
+proposé dans la section Hypothèses (colonne Fiscalité). Les libellés viennent de
 **`REGIMES_FISCAUX`** (`simulation.ts`), seule source : la liste d'options de
 l'UI en est dérivée (`Object.keys`), ajouter une entrée suffit à la proposer.
 
