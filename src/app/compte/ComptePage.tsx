@@ -133,8 +133,8 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
         <section className="rounded-xl border border-ink-200 bg-white p-6">
           <SectionHeader icon={Zap} title="Passer à Pro" />
           <p className="mt-4 text-sm leading-relaxed text-ink-600">
-            Suis autant de biens que tu veux et lance jusqu&rsquo;à 50 analyses par mois,
-            pour 5,99&nbsp;€ par mois sans engagement.
+            Biens illimités et 50 analyses par mois, pour 5,99&nbsp;€ par mois sans
+            engagement.
           </p>
           <div className="mt-5">
             <Link

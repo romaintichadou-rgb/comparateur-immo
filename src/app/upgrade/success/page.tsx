@@ -23,8 +23,8 @@ export default async function UpgradeSuccessPage() {
       title={actif ? "Ton compte Pro est actif" : "Paiement bien reçu"}
       message={
         actif
-          ? "Merci. Tu peux suivre autant de biens que tu veux, et lancer jusqu'à 50 analyses par mois."
-          : "Merci. L'activation de ton compte se termine dans quelques instants — recharge cette page si l'accès n'est pas encore ouvert."
+          ? "Biens illimités et 50 analyses par mois. Merci !"
+          : "Activation en cours, encore quelques instants — recharge cette page si l'accès n'est pas ouvert."
       }
       action={
         <a

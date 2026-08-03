@@ -1,10 +1,54 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Download, MousePointerClick } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Download, MousePointerClick } from "lucide-react";
 import { buildBookmarkletHref } from "@/lib/bookmarklet";
 import { APP_NAME } from "@/lib/constants";
 import { SectionHeader } from "@/components/SectionHeader";
+
+/** Classes du lien de retour — reprises telles quelles d'`AddApartmentFlow`. */
+const LIEN_RETOUR =
+  "inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 transition-colors hover:text-accent-600";
+
+/**
+ * Retour vers la page d'où l'on vient.
+ *
+ * Un `href` fixe serait faux une fois sur deux : cette page est atteinte
+ * depuis l'accueil (`EmptyHomeState`, quand aucun bien n'est suivi) ET depuis
+ * le formulaire d'ajout. On suit donc l'historique.
+ *
+ * Repli sur l'accueil quand il n'y a pas d'historique à remonter — page
+ * ouverte dans un onglet neuf, ou mise en favori. Sans ce garde-fou, le
+ * bouton ne ferait rien du tout, ce qui est pire qu'une destination
+ * approximative.
+ */
+function RetourPagePrecedente() {
+  const router = useRouter();
+  // Lecture directe, sans effet : la page est montée en `ssr: false` (voir
+  // `app/bookmarklet/page.tsx`), ce composant ne s'exécute donc jamais côté
+  // serveur — il n'y a pas d'hydratation à faire diverger. Passer par un
+  // `useEffect` ne ferait que rendre d'abord le mauvais libellé, puis le
+  // corriger : un clignotement visible pour rien.
+  const aUnHistorique = window.history.length > 1;
+
+  if (!aUnHistorique) {
+    return (
+      <Link href="/" className={LIEN_RETOUR}>
+        <ArrowLeft className="h-4 w-4" />
+        Retour à la liste
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={() => router.back()} className={LIEN_RETOUR}>
+      <ArrowLeft className="h-4 w-4" />
+      Retour
+    </button>
+  );
+}
 
 export default function BookmarkletView() {
   const origin = window.location.origin;
@@ -20,6 +64,8 @@ export default function BookmarkletView() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-10 sm:px-6">
+      <RetourPagePrecedente />
+
       <div>
         <h1 className="font-display text-xl font-semibold text-ink-900">
           Importer une annonce depuis ton navigateur

@@ -30,13 +30,13 @@ export default async function AnalyseLimitePage() {
   return (
     <UpgradeScreen
       icon={Sparkles}
-      title="Limite d'analyses atteinte ce mois"
+      title={dejaPro ? "Tes 50 analyses du mois sont utilisées" : "Passe à Pro pour plus d'analyses"}
       message={
         dejaPro
-          ? "Tu as utilisé les 50 analyses incluses dans ton abonnement. Le compteur repart au début du mois prochain."
-          : "Tu as atteint le nombre d'analyses possible ce mois-ci. Le compteur repart au début du mois prochain."
+          ? "Le compteur repart au début du mois prochain."
+          : "Pro inclut 50 analyses par mois et des biens illimités."
       }
-      note={`Prochain renouvellement : ${prochainRenouvellement()}.`}
+      note={dejaPro ? `Prochain renouvellement : ${prochainRenouvellement()}.` : undefined}
       action={
         dejaPro ? null : (
           <div className="space-y-6">
@@ -45,7 +45,7 @@ export default async function AnalyseLimitePage() {
           </div>
         )
       }
-      retour={{ href: "/", label: "Revenir à mes biens" }}
+      retour={{ href: "/", label: "Retour à la liste" }}
     />
   );
 }

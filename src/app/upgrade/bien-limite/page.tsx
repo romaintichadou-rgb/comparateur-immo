@@ -15,15 +15,15 @@ export default async function BienLimitePage() {
   return (
     <UpgradeScreen
       icon={Building2}
-      title="Un seul bien avec le plan gratuit"
-      message="Ton compte gratuit suit un bien à la fois. Pour comparer plusieurs annonces côte à côte, il faut passer à Pro."
+      title="Passe à Pro pour ajouter un bien"
+      message="Le plan gratuit en suit un seul. Pro les rend illimités."
       action={
         <div className="space-y-6">
           <OffrePro />
           <BoutonPasserPro userId={session.userId} />
         </div>
       }
-      retour={{ href: "/", label: "Revenir à mon bien" }}
+      retour={{ href: "/", label: "Retour à la liste" }}
     />
   );
 }
