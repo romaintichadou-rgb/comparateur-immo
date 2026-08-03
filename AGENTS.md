@@ -448,25 +448,26 @@ Les trois écrans d'auth (login, signup, mot-de-passe-oublié) partagent
 avec le même shell. Inputs à 44px touch targets (`py-3`), focus ring
 `ring-2 ring-accent-500/20`.
 
-## Lot 4 — Les écrans de compte (partiellement implémenté)
-
-**Structure complète, finitions en cours.**
+## Lot 4 — Les écrans de compte ✅ COMPLET
 
 | Fichier | Contenu | État |
 |---|---|---|
 | `src/app/(auth)/login/page.tsx` | Écran connexion | ✅ Complet |
 | `src/app/(auth)/signup/page.tsx` | Écran inscription | ✅ Complet |
 | `src/app/(auth)/mot-de-passe-oublie/page.tsx` + `MotDePasseOublieForm.tsx` | Demande réinitialisation | ✅ Complet |
-| `src/app/auth/callback/route.ts` | Callback Supabase (PKCE + ancien format) | ✅ Complet |
-| `src/app/compte/page.tsx` + `ComptePage.tsx` | Page compte protégée (`requireSession`) | ⏳ Structure (manque : plan, biens/limite, analyses) |
+| `src/app/auth/callback/route.ts` | Callback Supabase (PKCE + ancien format, redirection intelligente) | ✅ Complet |
+| **`src/app/auth/reset-password/page.tsx`** | **Réinitialisation MDP après email** | ✅ Complet |
+| `src/app/compte/page.tsx` + `ComptePage.tsx` | Page compte protégée avec profil utilisateur | ✅ Complet |
+| `src/lib/db.ts` : `getUserProfile()` | Récupère plan, biens, analyses | ✅ Complet |
+| **`src/app/api/auth-status/route.ts`** | **Vérification session (pour bookmarklet)** | ✅ Complet |
 | `src/components/Navbar.tsx` | `UserMenu` dropdown avec avatar, menu, déconnexion | ✅ Complet |
 | `src/components/EmptyHomeState.tsx` | État vide « premier bien », invite URL | ✅ Complet |
+| `src/lib/bookmarklet.ts` | Vérification session avant redirection | ✅ Complet |
 
-**Finitions restantes :**
-- [ ] Écran réinitialisation mot de passe (`/auth/callback?next=/compte` après lien email) — le callback existe, reste la page
-- [ ] Page `/compte` enrichie : afficher plan (Gratuit/Pro/Testeur), nombre de biens et limite, analyses ce mois
-- [ ] Bookmarklet : redirection vers `/login?suivant=…` si déconnecté (via proxy), retour automatique à l'annonce après connexion
-- [ ] Test croisé deux comptes : vérifier que chacun ne voit que ses biens
+**Implémentation :**
+- Reset password : formulaire avec toggle eye/eye-off, validation 8 char, réutilise `changerMotDePasse()`
+- Profil utilisateur : 3 cartes (Plan / Biens / Analyses), affichage adapté au plan (free/pro/tester)
+- Bookmarklet : appel `/api/auth-status` avant redirection, gestion login automatique si déconnecté, fallback réseau
 
 ## Les deux migrations, et pourquoi elles sont séparées
 

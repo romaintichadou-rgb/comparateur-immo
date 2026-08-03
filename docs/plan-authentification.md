@@ -193,9 +193,10 @@ Six lots livrables. Chacun laisse l'app dans un état qui fonctionne — pas de
 big bang où l'app est cassée pendant une semaine.
 
 **État au 3 août 2026 :**
-- ✅ **Lot 2 (Lot 1 aussi selon git log)** : complet
-- ✅ **Lot 3** : complet (selon git log)
-- ⏳ **Lot 4** : structure complète, finitions (bookmarklet, enrichissement `/compte`)
+- ✅ **Lot 1** : complet (commit `1bd9809`)
+- ✅ **Lot 2** : complet (commit `4e7a0f3`)
+- ✅ **Lot 3** : complet (commit `e0cfc4c`)
+- ✅ **Lot 4** : complet (commit `5b7ec3d`) — reset-password, profil utilisateur, bookmarklet
 - ⏳ **Lot 5-6** : non commencé
 
 ### Lot 1 — Le socle DB *(le plus risqué, à faire en premier et à froid)*
@@ -246,24 +247,40 @@ big bang où l'app est cassée pendant une semaine.
 **Test de sortie** : deux comptes, deux navigateurs. A ne voit rien de B, y
 compris en appelant `/api/apartments/<id-de-B>` à la main.
 
-### Lot 4 — Les écrans de compte ✅ PARTIELLEMENT TERMINÉ (structure complète, finitions en cours)
+### Lot 4 — Les écrans de compte ✅ COMPLET
 
 **Fichiers créés/modifiés :**
 - ✅ `/login`, `/signup`, `/mot-de-passe-oublie` — pages complètes
-- ✅ `/compte` — page protégée (`requireSession`), affiche email
-- ✅ `ComptePage.tsx` — formulaire changement mot de passe, suppression de compte
+- ✅ **`/auth/reset-password`** — écran réinitialisation MDP après lien email
+  - Formulaire : nouveau MDP + confirmation, validation 8 char min
+  - Utilise action `changerMotDePasse()` existante
+  - Redirect automatique du callback quand `type=recovery`
+- ✅ `/compte` — page protégée (`requireSession`), affiche email + profil
+- ✅ **`ComptePage.tsx`** — enrichi avec 3 cartes profil
+  - Plan : Gratuit / Pro / Testeur
+  - Biens : X/1 (free) ou X/Illimités (pro)
+  - Analyses IA : X/mois (pro) ou sans limite (free)
+  - Formulaire changement mot de passe, suppression de compte
+- ✅ **Fonction DB : `getUserProfile()`**
+  - Récupère plan, nombre de biens (COUNT), analyses ce mois
+  - Type `UserProfile` exporte pour typage client
 - ✅ Navbar — `UserMenu` dropdown avec menu, avatar, déconnexion
 - ✅ `EmptyHomeState` — état vide « premier bien », invite à coller une URL
+- ✅ **Bookmarklet amélioré**
+  - Route `/api/auth-status` (publique) vérifie la session
+  - Bookmarklet appelle auth-status AVANT redirection
+  - Connecté → `/appartements/nouveau?prefill=...`
+  - Non connecté → `/login?suivant=/appartements/nouveau?prefill=...`
+  - Fallback si appel échoue : essayer direct (proxy redirige si besoin)
 - ✅ Charte respectée : boutons sans icône, tailles standard (`py-3` pour CTA plein, `py-2.5` pour bouton inline)
 - ✅ Focus rings `ring-2 ring-accent-500/20` sur inputs
 - ✅ Messages d'erreur/succès en banneau
 - ✅ Navbar masque les NAV_LINKS sur les routes d'auth
 
-**À finir :**
-- [ ] Bookmarklet : redirection vers `/login` si déconnecté (`?suivant=` posé par proxy)
-- [ ] Test croisé deux comptes (localStorage du bookmarklet vs session Supabase)
-- [ ] Page `/compte` enrichie : afficher plan (Lot 5), nombre de biens/limite, analyses ce mois
-- [ ] Écran de réinitialisation mot de passe (`/auth/callback?next=/compte` après lien email)
+**Sécurité :**
+- `requireSession()` sur `/compte` et `/auth/reset-password` — page non accessible si déconnecté
+- `/api/auth-status` publique mais retourne 401 si pas de session → bookmarklet peut vérifier
+- Pas de révélation d'existence d'email (cas de suppression : message générique)
 
 ### Lot 5 — Fondations monétisation
 

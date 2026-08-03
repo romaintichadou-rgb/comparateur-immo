@@ -1,0 +1,396 @@
+<title>Simulation financière — Proposition de refonte</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --ink-50: #efecf6;
+    --ink-100: #e0dced;
+    --ink-200: #ccc7dc;
+    --ink-300: #b0a9c4;
+    --ink-400: #908aa8;
+    --ink-500: #706a88;
+    --ink-600: #5a5470;
+    --ink-700: #48435a;
+    --ink-800: #363245;
+    --ink-900: #1e1b2e;
+    --accent-50: #efedf8;
+    --accent-600: #3d3580;
+    --accent-700: #2e2866;
+    --red-50: #fef2f2;
+    --red-100: #fee2e2;
+    --red-500: #ef4444;
+    --red-600: #dc2626;
+    --red-700: #b91c1c;
+    --amber-50: #fffbeb;
+    --amber-100: #fef3c7;
+    --amber-600: #d97706;
+    --amber-700: #b45309;
+    --emerald-50: #ecfdf5;
+    --emerald-100: #d1fae5;
+    --emerald-700: #047857;
+    --bg: var(--ink-50);
+    --card: #ffffff;
+    --border: var(--ink-200);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1a1825; --card: #242233; --border: #3a3650; --ink-50: #1a1825; --ink-100: #242233; --ink-200: #3a3650; --ink-400: #8882a0; --ink-500: #a09ab8; --ink-600: #b8b2cc; --ink-700: #d0ccde; --ink-800: #e8e5f0; --ink-900: #f5f3fa; }
+  }
+  :root[data-theme="dark"] { --bg: #1a1825; --card: #242233; --border: #3a3650; --ink-50: #1a1825; --ink-100: #242233; --ink-200: #3a3650; --ink-400: #8882a0; --ink-500: #a09ab8; --ink-600: #b8b2cc; --ink-700: #d0ccde; --ink-800: #e8e5f0; --ink-900: #f5f3fa; }
+  :root[data-theme="light"] { --bg: #efecf6; --card: #ffffff; --border: #ccc7dc; --ink-50: #efecf6; --ink-100: #e0dced; --ink-200: #ccc7dc; --ink-400: #908aa8; --ink-500: #706a88; --ink-600: #5a5470; --ink-700: #48435a; --ink-800: #363245; --ink-900: #1e1b2e; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink-900); line-height: 1.5; }
+  .mono { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+  .header { margin-bottom: 32px; }
+  .header h1 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-500); margin-bottom: 4px; }
+  .header p { font-size: 13px; color: var(--ink-400); }
+
+  .section-label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .section-label .badge { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; background: var(--ink-100); color: var(--ink-500); padding: 2px 8px; border-radius: 4px; }
+  .section-label .current { background: var(--accent-50); color: var(--accent-600); }
+  .section-label .proposed { background: var(--emerald-100); color: var(--emerald-700); }
+
+  /* KPI cards */
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .kpi { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 16px 20px; }
+  .kpi.red { background: var(--red-50); border-color: #fecaca; }
+  .kpi-label { font-size: 12px; color: var(--ink-500); margin-bottom: 4px; }
+  .kpi-value { font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 700; }
+  .kpi-value.neg { color: var(--red-600); }
+  .kpi-sub { font-size: 11px; color: var(--ink-400); margin-top: 2px; }
+
+  /* Financement — reuses .collapsible pattern for consistency */
+  .fin-visible { padding: 0 20px 16px; }
+  .fin-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .fin-hero-label { font-size: 14px; font-weight: 600; color: var(--ink-700); }
+  .fin-hero-sub { font-size: 11px; color: var(--ink-400); margin-top: 2px; }
+  .fin-hero-value { font-family: 'IBM Plex Mono', monospace; font-size: 26px; font-weight: 700; color: var(--ink-900); white-space: nowrap; line-height: 1.2; }
+  .fin-hero-unit { font-size: 13px; font-weight: 400; color: var(--ink-400); margin-left: 2px; }
+  .fin-summary { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ink-100); display: flex; flex-wrap: wrap; gap: 6px; }
+  .fin-tag { font-size: 11px; font-weight: 500; color: var(--ink-600); background: var(--ink-50); border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+
+  /* Detail sections (inside .collapsible-body) */
+  .fin-sections { border-top: 1px solid var(--ink-100); padding-top: 4px; }
+  .fin-group { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; padding: 14px 0; }
+  .fin-group + .fin-group { border-top: 1px solid var(--ink-100); }
+  .fin-group-full { grid-column: 1 / -1; padding: 14px 0; border-top: 1px solid var(--ink-100); }
+  .fin-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-500); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .fin-section-title svg { width: 14px; height: 14px; color: var(--ink-400); }
+  .fin-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; font-size: 13px; }
+  .fin-row .label { color: var(--ink-500); }
+  .fin-row .val { font-family: 'IBM Plex Mono', monospace; font-weight: 500; color: var(--ink-800); display: flex; align-items: center; gap: 5px; }
+  .pill { font-size: 8px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: var(--accent-50); color: var(--accent-600); text-transform: uppercase; letter-spacing: 0.03em; }
+  .pill.auto { background: var(--ink-100); color: var(--ink-500); }
+  .fin-footer { display: flex; justify-content: flex-end; padding: 14px 0 2px; border-top: 1px solid var(--ink-100); }
+  .fin-btn { font-size: 13px; font-weight: 500; color: var(--accent-600); border: 1px solid var(--accent-300); border-radius: 8px; padding: 7px 20px; background: var(--card); cursor: pointer; transition: all 0.15s; }
+  .fin-btn:hover { border-color: var(--accent-600); background: var(--accent-50); }
+
+  /* Cascade card */
+  .card { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-500); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card-icon { width: 28px; height: 28px; border-radius: 8px; background: var(--ink-100); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--ink-500); }
+
+  .cascade { list-style: none; }
+  .cascade li { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--ink-100); font-size: 14px; }
+  .cascade li:last-child { border-bottom: none; }
+  .cascade .sign { width: 16px; text-align: center; font-weight: 600; color: var(--ink-400); flex-shrink: 0; }
+  .cascade .row-label { color: var(--ink-600); display: flex; align-items: center; gap: 8px; }
+  .cascade .row-val { font-family: 'IBM Plex Mono', monospace; font-weight: 500; color: var(--ink-800); white-space: nowrap; }
+  .cascade .total { font-weight: 700; color: var(--ink-900); font-size: 15px; }
+  .cascade .total .row-val { font-weight: 700; font-size: 16px; }
+  .cascade .total .row-val.neg { color: var(--red-600); }
+  .cascade .sub-label { font-size: 11px; color: var(--ink-400); margin-left: 24px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1px solid var(--ink-100); }
+
+  .ia-badge { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; background: var(--amber-100); color: var(--amber-700); padding: 2px 7px; border-radius: 10px; }
+
+  /* Indent for sub-items */
+  .cascade .indent { padding-left: 24px; font-size: 13px; color: var(--ink-500); }
+  .cascade .indent .row-val { font-size: 13px; color: var(--ink-600); }
+
+  /* Amortissement info box */
+  .info-box { background: var(--ink-50); border-radius: 8px; padding: 12px 14px; margin-top: 8px; font-size: 12px; color: var(--ink-500); line-height: 1.5; }
+  .info-box strong { color: var(--ink-700); font-weight: 600; }
+
+  /* Charts side by side */
+  .charts-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 24px; }
+  .chart-card { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 20px; }
+  .chart-placeholder { background: var(--ink-50); border-radius: 8px; height: 160px; display: flex; align-items: center; justify-content: center; color: var(--ink-400); font-size: 12px; margin-top: 12px; }
+
+  /* Collapsible table */
+  .collapsible { border: 1px solid var(--border); background: var(--card); border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+  .collapsible-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; }
+  .collapsible-header h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-500); display: flex; align-items: center; gap: 8px; }
+  .chevron { color: var(--ink-400); font-size: 14px; transition: transform 0.2s; }
+  .collapsible.open .chevron { transform: rotate(180deg); }
+  .collapsible-body { padding: 0 20px 20px; display: none; }
+  .collapsible.open .collapsible-body { display: block; }
+  .table-hint { font-size: 12px; color: var(--ink-400); margin-bottom: 12px; }
+
+  /* Mini table */
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mini-table th { text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-400); padding: 6px 8px; border-bottom: 1px solid var(--ink-200); }
+  .mini-table th:not(:first-child) { text-align: right; }
+  .mini-table td { padding: 8px; border-bottom: 1px solid var(--ink-100); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+  .mini-table td:not(:first-child) { text-align: right; }
+  .mini-table td:first-child { font-family: 'IBM Plex Sans', sans-serif; color: var(--ink-600); }
+  .mini-table .changed { background: var(--amber-50); }
+  .mini-table .neg { color: var(--red-600); }
+  .mini-table .ellipsis { text-align: center !important; color: var(--ink-300); font-family: 'IBM Plex Sans', sans-serif; letter-spacing: 2px; border-bottom: none; }
+  .mini-table tfoot td { font-weight: 600; border-top: 2px solid var(--ink-200); border-bottom: none; color: var(--ink-900); }
+
+  /* Synthesis row under table */
+  .table-synth { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 14px 16px; background: var(--red-50); border: 1px solid var(--red-100); border-radius: 10px; }
+  .table-synth-label { font-size: 13px; font-weight: 600; color: var(--ink-700); }
+  .table-synth-value { font-size: 20px; font-weight: 700; white-space: nowrap; }
+  .table-synth-unit { font-size: 12px; font-weight: 400; color: var(--ink-400); margin-left: 2px; }
+
+  /* Comparison layout */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 48px; padding-top: 40px; border-top: 2px solid var(--ink-200); }
+  .compare-col h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+
+  .annotation { position: relative; margin: 16px 0; padding: 12px 16px; background: var(--emerald-50); border: 1px solid #a7f3d0; border-radius: 8px; font-size: 13px; color: var(--emerald-700); }
+  .annotation::before { content: "→"; font-weight: 700; margin-right: 6px; }
+
+  .removed { position: relative; opacity: 0.4; }
+  .removed::after { content: ""; position: absolute; inset: 0; border: 2px dashed var(--red-500); border-radius: 12px; pointer-events: none; }
+  .removed-label { position: absolute; top: -10px; right: 12px; background: var(--red-100); color: var(--red-700); font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; z-index: 1; }
+</style>
+
+<div class="container">
+  <div class="header">
+    <h1>Simulation financière — Proposition de refonte</h1>
+    <p>Appartement 71.87 m² · Préfecture, Marseille · 290 000 €</p>
+  </div>
+
+  <!-- ═══ PROPOSED LAYOUT ═══ -->
+
+  <div class="section-label"><span class="badge proposed">Proposition</span></div>
+
+  <!-- 1. Financement — v9 uses .collapsible pattern like the table -->
+  <div class="collapsible" id="fin">
+    <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+      <h3>
+        <div class="card-icon">
+          <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        Financement
+      </h3>
+      <span class="chevron">&#x25BC;</span>
+    </div>
+
+    <div class="fin-visible">
+      <div class="fin-hero">
+        <div>
+          <div class="fin-hero-label">Mensualité de crédit</div>
+          <div class="fin-hero-sub">assurance emprunteur incluse</div>
+        </div>
+        <div class="fin-hero-value mono">1 524 €<span class="fin-hero-unit">/mois</span></div>
+      </div>
+      <div class="fin-summary">
+        <span class="fin-tag">Crédit 3,5 %</span>
+        <span class="fin-tag">25 ans</span>
+        <span class="fin-tag">LMNP réel</span>
+        <span class="fin-tag">Apport 21 750 €</span>
+      </div>
+    </div>
+
+    <div class="collapsible-body">
+      <div class="fin-sections">
+
+        <!-- Crédit + Fiscalité (2 colonnes) -->
+        <div class="fin-group">
+          <div>
+            <div class="fin-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+              Crédit immobilier
+            </div>
+            <div class="fin-row"><span class="label">Montant emprunté</span><span class="val"><span class="pill auto">auto</span> <span class="mono">290 000 €</span></span></div>
+            <div class="fin-row"><span class="label">Taux nominal</span><span class="val"><span class="pill">profil</span> <span class="mono">3,5 %</span></span></div>
+            <div class="fin-row"><span class="label">Durée</span><span class="val"><span class="pill">profil</span> <span class="mono">25 ans</span></span></div>
+            <div class="fin-row"><span class="label">Assurance</span><span class="val"><span class="pill">profil</span> <span class="mono">0,3 %</span></span></div>
+          </div>
+          <div>
+            <div class="fin-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+              Fiscalité
+            </div>
+            <div class="fin-row"><span class="label">Régime fiscal</span><span class="val"><span class="mono">LMNP réel</span></span></div>
+            <div class="fin-row"><span class="label">TMI</span><span class="val"><span class="pill">profil</span> <span class="mono">30 %</span><span style="font-size:10px;color:var(--ink-400);margin-left:3px">+ PS</span></span></div>
+            <div class="fin-row"><span class="label">Quote-part terrain</span><span class="val"><span class="pill auto">auto</span> <span class="mono">10 %</span></span></div>
+          </div>
+        </div>
+
+        <!-- Projection (full width, 2-col interne) -->
+        <div class="fin-group-full">
+          <div class="fin-section-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+            Projection
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0 40px;">
+            <div class="fin-row"><span class="label">Revalorisation du bien</span><span class="val"><span class="mono">—</span></span></div>
+            <div class="fin-row"><span class="label">Revalorisation du loyer</span><span class="val"><span class="mono">—</span></span></div>
+            <div class="fin-row"><span class="label">Indexation charges</span><span class="val"><span class="mono">—</span></span></div>
+            <div class="fin-row"><span class="label">Vacance locative</span><span class="val"><span class="mono">—</span></span></div>
+          </div>
+        </div>
+
+        <!-- Apport (full width) -->
+        <div class="fin-group-full">
+          <div class="fin-section-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2"/><path d="M2 9.1C1.4 11.3 3 15 3 15"/></svg>
+            Apport personnel
+          </div>
+          <div class="fin-row"><span class="label">Frais de notaire + complément</span><span class="val"><span class="mono">21 750 €</span></span></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="fin-footer">
+          <button class="fin-btn">Modifier les hypothèses</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Du loyer au cash-flow (fusion Détail mensuel + Fiscalité) -->
+  <div class="card">
+    <div class="card-title">
+      <div class="card-icon">↓</div>
+      Du loyer au cash-flow — année 1
+    </div>
+    <ul class="cascade">
+      <li>
+        <span class="row-label"><span class="sign">+</span> Loyer (CC) <span class="ia-badge">Estimation IA</span></span>
+        <span class="row-val mono">1 614 €</span>
+      </li>
+      <li>
+        <span class="row-label"><span class="sign">−</span> Mensualité de crédit (assurance incl.)</span>
+        <span class="row-val mono">1 524 €</span>
+      </li>
+      <li>
+        <span class="row-label"><span class="sign">−</span> Charges (copro, TF, assurance, gestion)</span>
+        <span class="row-val mono">363 €</span>
+      </li>
+      <li>
+        <span class="row-label"><span class="sign">−</span> Impôt LMNP (IR + prélèvements sociaux)</span>
+        <span class="row-val mono">0 €</span>
+      </li>
+      <li class="total">
+        <span class="row-label">Cash-flow mensuel</span>
+        <span class="row-val neg mono">− 273 €</span>
+      </li>
+    </ul>
+    <div class="info-box">
+      <strong>Pourquoi 0 € d'impôt ?</strong> Les amortissements LMNP (bâti 6 525 €/an + frais de notaire 4 350 €/an = <strong>10 875 €/an</strong>) couvrent entièrement le résultat imposable les 21 premières années. L'excédent est reporté sans limite (art. 39 C).
+    </div>
+  </div>
+
+  <!-- 4. Graphiques (remontés) -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="card-title">Financement du projet</div>
+      <div class="chart-placeholder">Donut chart<br>Loyers 81% · Participation 19%</div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">Évolution du patrimoine</div>
+      <div class="chart-placeholder">Stacked bar chart<br>Dette · Enrichissement · Effort d'épargne</div>
+    </div>
+  </div>
+
+  <!-- 5. Tableau replié -->
+  <div class="collapsible open">
+    <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+      <h3>
+        <div class="card-icon">📊</div>
+        Cash-flow année par année
+      </h3>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="collapsible-body">
+      <div style="overflow-x:auto">
+      <table class="mini-table">
+        <thead>
+          <tr><th>Année</th><th>Loyers</th><th>Crédit</th><th>Charges</th><th>Impôt</th><th>CF /an</th><th>/mois</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>2</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>3</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>4</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>5</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>6</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>7</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>8</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>9</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>10</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>11</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>12</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>13</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>14</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>15</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>16</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>17</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>18</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>19</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>20</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr><td>21</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td>0</td><td class="neg">−3 274</td><td class="neg">−273</td></tr>
+          <tr class="changed"><td>22</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td class="neg">−1 474</td><td class="neg">−4 748</td><td class="neg">−396</td></tr>
+          <tr class="changed"><td>23</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td class="neg">−2 899</td><td class="neg">−6 173</td><td class="neg">−514</td></tr>
+          <tr class="changed"><td>24</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td class="neg">−3 167</td><td class="neg">−6 441</td><td class="neg">−537</td></tr>
+          <tr class="changed"><td>25</td><td>19 368</td><td class="neg">−18 292</td><td class="neg">−4 350</td><td class="neg">−3 444</td><td class="neg">−6 718</td><td class="neg">−560</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td>Total impôts</td><td></td><td></td><td></td><td class="neg">10 985 €</td><td></td><td></td></tr>
+        </tfoot>
+      </table>
+      </div>
+      <div class="table-synth">
+        <span class="table-synth-label">Cash-flow mensuel moyen sur 25 ans</span>
+        <span class="table-synth-value mono neg">− 309 €<span class="table-synth-unit">/mois</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CHANGES SUMMARY ═══ -->
+  <div style="margin-top:48px; padding-top:32px; border-top: 2px solid var(--ink-200);">
+    <h2 style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-500); margin-bottom:20px;">Résumé des changements</h2>
+
+    <div style="display:grid; gap:12px;">
+      <div class="annotation">
+        <strong>KPI :</strong> cartes supprimées (redondance). Le cash-flow an 1 est en résultat de la cascade, le cash-flow moyen 25 ans est en synthèse sous le tableau.
+      </div>
+      <div class="annotation">
+        <strong>Financement :</strong> carte unique (plus de sous-cartes imbriquées). Mensualité en header, résumé des paramètres en toggle strip, sections plates à l'intérieur. 3 → 2 niveaux de profondeur visuelle.
+      </div>
+      <div class="annotation">
+        <strong>Détail mensuel + Fiscalité LMNP :</strong> fusionnés en un seul bloc "Du loyer au cash-flow". L'explication des amortissements est inline.
+      </div>
+      <div class="annotation">
+        <strong>Graphiques :</strong> remontés avant le tableau (le visuel avant le détail chiffré).
+      </div>
+      <div class="annotation">
+        <strong>Tableau :</strong> repliable, affichage complet des 25 années. Les années où l'impôt change sont surlignées.
+      </div>
+    </div>
+
+    <div style="margin-top:24px; padding:16px 20px; background:var(--card); border:1px solid var(--border); border-radius:12px;">
+      <div style="font-size:13px; font-weight:600; color:var(--ink-800); margin-bottom:8px;">Avant → Après</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:13px; color:var(--ink-600);">
+        <div>
+          <div><strong style="color:var(--ink-900)">8</strong> sections distinctes</div>
+          <div><strong style="color:var(--ink-900)">~60</strong> lignes de données</div>
+          <div><strong style="color:var(--ink-900)">3×</strong> la mensualité de crédit</div>
+          <div><strong style="color:var(--ink-900)">3×</strong> le cash-flow an1</div>
+        </div>
+        <div>
+          <div><strong style="color:var(--emerald-700)">4</strong> sections (dont 1 repliée)</div>
+          <div><strong style="color:var(--emerald-700)">~40</strong> lignes de données</div>
+          <div><strong style="color:var(--emerald-700)">1×</strong> chaque chiffre</div>
+          <div><strong style="color:var(--emerald-700)">0</strong> redondance</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
