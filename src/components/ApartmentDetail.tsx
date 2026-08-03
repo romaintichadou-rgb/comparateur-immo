@@ -1259,85 +1259,85 @@ export default function ApartmentDetail({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         {/* Colonne principale */}
         <div className="min-w-0 space-y-6">
-          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+          <section className="space-y-4">
             <div className="flex items-center justify-between">
-                  <SectionHeader icon={Home} title="Description du bien" />
-                  {editingDesc ? (
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        onClick={handleCancelDesc}
-                        className="rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
-                      >
-                        Annuler
-                      </button>
-                      <button
-                        onClick={handleSaveDesc}
-                        className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
-                      >
-                        Enregistrer
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setEditingDesc(true)}
-                      className="shrink-0 rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50"
-                    >
-                      Modifier
-                    </button>
-                  )}
+              <h2 className="text-lg font-semibold text-ink-900">Description du bien</h2>
+              {editingDesc ? (
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    onClick={handleCancelDesc}
+                    className="rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleSaveDesc}
+                    className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
+                  >
+                    Enregistrer
+                  </button>
                 </div>
+              ) : (
+                <button
+                  onClick={() => setEditingDesc(true)}
+                  className="shrink-0 rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50"
+                >
+                  Modifier
+                </button>
+              )}
+            </div>
 
-                {editingDesc ? (
-                  <>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <TextField label="Ville" value={value(descPatch, "ville")} onChange={(v) => setDescPatch((p) => ({ ...p, ville: v }))} />
-                      <TextField label="Quartier" value={value(descPatch, "quartier")} onChange={(v) => setDescPatch((p) => ({ ...p, quartier: v }))} />
-                      <TextField label="Adresse" value={value(descPatch, "adresse")} onChange={(v) => setDescPatch((p) => ({ ...p, adresse: v }))} />
-                      <SelectField label="Type de bien" value={value(descPatch, "type_bien") as (typeof TYPES_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, type_bien: v }))} options={TYPES_BIEN} />
-                      {immeuble && (
-                        <NumberField label="Nombre de lots" value={value(descPatch, "nb_lots")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_lots: v }))} hint={<span className="text-xs font-normal text-ink-400">logements de l&apos;immeuble</span>} />
-                      )}
-                      <NumberField label={immeuble ? "Surface totale" : "Surface"} value={value(descPatch, "surface_m2")} onChange={(v) => setDescPatch((p) => ({ ...p, surface_m2: v }))} suffix="m²" />
-                      <NumberField label="Nb pièces" value={value(descPatch, "nb_pieces")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_pieces: v }))} />
-                      <NumberField label="Nb chambres" value={value(descPatch, "nb_chambres")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_chambres: v }))} />
-                      <TextField label="Étage" value={value(descPatch, "etage")} onChange={(v) => setDescPatch((p) => ({ ...p, etage: v }))} />
-                      <BooleanField label="Ascenseur" value={value(descPatch, "ascenseur")} onChange={(v) => setDescPatch((p) => ({ ...p, ascenseur: v }))} />
-                      <NumberField label="Année de construction" value={value(descPatch, "annee_construction")} onChange={(v) => setDescPatch((p) => ({ ...p, annee_construction: v }))} />
-                      <SelectField label="État du bien" value={value(descPatch, "etat_bien") as (typeof ETATS_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, etat_bien: v }))} options={ETATS_BIEN} />
-                      <SelectField label="DPE" value={value(descPatch, "dpe") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, dpe: v }))} options={DPE_GES_VALEURS} />
-                      <SelectField label="GES" value={value(descPatch, "ges") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, ges: v }))} options={DPE_GES_VALEURS} />
-                      <TextField label="Photo (URL)" value={value(descPatch, "photo_url")} onChange={(v) => setDescPatch((p) => ({ ...p, photo_url: v }))} />
-                    </div>
-                    <TextAreaField
-                      label="Description"
-                      value={value(descPatch, "description")}
-                      onChange={(v) => setDescPatch((p) => ({ ...p, description: v }))}
-                      rows={16}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <ReadOnlyField label="Ville" value={apt.ville || "—"} />
-                      <ReadOnlyField label="Quartier" value={apt.quartier || "—"} />
-                      <ReadOnlyField label="Adresse" value={apt.adresse || "—"} />
-                      <ReadOnlyField label="Type de bien" value={apt.type_bien || "—"} />
-                      {immeuble && (
-                        <ReadOnlyField label="Nombre de lots" value={apt.nb_lots != null ? `${apt.nb_lots} logements` : "—"} />
-                      )}
-                      <ReadOnlyField label={immeuble ? "Surface totale" : "Surface"} value={apt.surface_m2 != null ? `${apt.surface_m2} m²` : "—"} />
-                      <ReadOnlyField label="Nb pièces" value={apt.nb_pieces != null ? String(apt.nb_pieces) : "—"} />
-                      <ReadOnlyField label="Nb chambres" value={apt.nb_chambres != null ? String(apt.nb_chambres) : "—"} />
-                      <ReadOnlyField label="Étage" value={apt.etage || "—"} />
-                      <ReadOnlyField label="Ascenseur" value={apt.ascenseur == null ? "—" : apt.ascenseur ? "Oui" : "Non"} />
-                      <ReadOnlyField label="Année de construction" value={apt.annee_construction != null ? String(apt.annee_construction) : "—"} />
-                      <ReadOnlyField label="État du bien" value={apt.etat_bien || "—"} />
-                      <ReadOnlyField label="DPE" value={apt.dpe || "—"} />
-                      <ReadOnlyField label="GES" value={apt.ges || "—"} />
-                    </div>
-                    <ReadOnlyField label="Description" value={apt.description || "—"} multiline />
-                  </>
-                )}
+            {editingDesc ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <TextField label="Ville" value={value(descPatch, "ville")} onChange={(v) => setDescPatch((p) => ({ ...p, ville: v }))} />
+                  <TextField label="Quartier" value={value(descPatch, "quartier")} onChange={(v) => setDescPatch((p) => ({ ...p, quartier: v }))} />
+                  <TextField label="Adresse" value={value(descPatch, "adresse")} onChange={(v) => setDescPatch((p) => ({ ...p, adresse: v }))} />
+                  <SelectField label="Type de bien" value={value(descPatch, "type_bien") as (typeof TYPES_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, type_bien: v }))} options={TYPES_BIEN} />
+                  {immeuble && (
+                    <NumberField label="Nombre de lots" value={value(descPatch, "nb_lots")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_lots: v }))} hint={<span className="text-xs font-normal text-ink-400">logements de l&apos;immeuble</span>} />
+                  )}
+                  <NumberField label={immeuble ? "Surface totale" : "Surface"} value={value(descPatch, "surface_m2")} onChange={(v) => setDescPatch((p) => ({ ...p, surface_m2: v }))} suffix="m²" />
+                  <NumberField label="Nb pièces" value={value(descPatch, "nb_pieces")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_pieces: v }))} />
+                  <NumberField label="Nb chambres" value={value(descPatch, "nb_chambres")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_chambres: v }))} />
+                  <TextField label="Étage" value={value(descPatch, "etage")} onChange={(v) => setDescPatch((p) => ({ ...p, etage: v }))} />
+                  <BooleanField label="Ascenseur" value={value(descPatch, "ascenseur")} onChange={(v) => setDescPatch((p) => ({ ...p, ascenseur: v }))} />
+                  <NumberField label="Année de construction" value={value(descPatch, "annee_construction")} onChange={(v) => setDescPatch((p) => ({ ...p, annee_construction: v }))} />
+                  <SelectField label="État du bien" value={value(descPatch, "etat_bien") as (typeof ETATS_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, etat_bien: v }))} options={ETATS_BIEN} />
+                  <SelectField label="DPE" value={value(descPatch, "dpe") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, dpe: v }))} options={DPE_GES_VALEURS} />
+                  <SelectField label="GES" value={value(descPatch, "ges") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, ges: v }))} options={DPE_GES_VALEURS} />
+                  <TextField label="Photo (URL)" value={value(descPatch, "photo_url")} onChange={(v) => setDescPatch((p) => ({ ...p, photo_url: v }))} />
+                </div>
+                <TextAreaField
+                  label="Description"
+                  value={value(descPatch, "description")}
+                  onChange={(v) => setDescPatch((p) => ({ ...p, description: v }))}
+                  rows={16}
+                />
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <ReadOnlyField label="Ville" value={apt.ville || "—"} />
+                  <ReadOnlyField label="Quartier" value={apt.quartier || "—"} />
+                  <ReadOnlyField label="Adresse" value={apt.adresse || "—"} />
+                  <ReadOnlyField label="Type de bien" value={apt.type_bien || "—"} />
+                  {immeuble && (
+                    <ReadOnlyField label="Nombre de lots" value={apt.nb_lots != null ? `${apt.nb_lots} logements` : "—"} />
+                  )}
+                  <ReadOnlyField label={immeuble ? "Surface totale" : "Surface"} value={apt.surface_m2 != null ? `${apt.surface_m2} m²` : "—"} />
+                  <ReadOnlyField label="Nb pièces" value={apt.nb_pieces != null ? String(apt.nb_pieces) : "—"} />
+                  <ReadOnlyField label="Nb chambres" value={apt.nb_chambres != null ? String(apt.nb_chambres) : "—"} />
+                  <ReadOnlyField label="Étage" value={apt.etage || "—"} />
+                  <ReadOnlyField label="Ascenseur" value={apt.ascenseur == null ? "—" : apt.ascenseur ? "Oui" : "Non"} />
+                  <ReadOnlyField label="Année de construction" value={apt.annee_construction != null ? String(apt.annee_construction) : "—"} />
+                  <ReadOnlyField label="État du bien" value={apt.etat_bien || "—"} />
+                  <ReadOnlyField label="DPE" value={apt.dpe || "—"} />
+                  <ReadOnlyField label="GES" value={apt.ges || "—"} />
+                </div>
+                <ReadOnlyField label="Description" value={apt.description || "—"} multiline />
+              </>
+            )}
           </section>
         </div>
 
