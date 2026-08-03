@@ -363,6 +363,50 @@ sans avoir à y penser.
 `//…`) — même filtre que `destination()` dans `actions.ts`. Le corps d'une
 réponse ne doit jamais pouvoir décider d'une navigation vers un domaine tiers.
 
+## `lib/plans.ts` — les limites, lisibles des DEUX côtés
+
+`LIMITE_BIENS_FREE`, `LIMITE_ANALYSES_PRO` et `PLAN_LABEL` vivent dans
+`lib/plans.ts`, un module **sans `server-only`**. `db.ts` les ré-exporte pour
+les gates.
+
+Elles étaient définies dans `db.ts`, donc inaccessibles à un composant client —
+`/compte` recopiait « 1 » et « 50 » en dur. Deux sources pour la même règle
+commerciale, dont une invisible depuis l'écran qui l'affiche : le genre d'écart
+qui survit à un changement de tarif. Tout nouveau plafond va dans ce module,
+pas dans `db.ts`.
+
+## Écran « Mon compte » (`/compte`)
+
+Structure : en-tête (titre + **badge de plan** + email) → deux `StatCard`
+(biens, analyses) → offre Pro *(plan gratuit seulement)* → mot de passe →
+suppression du compte.
+
+Trois décisions à ne pas défaire :
+
+- **Le plan est un BADGE, pas une carte métrique.** Il occupait une troisième
+  carte identique aux deux autres, donc un `font-mono text-2xl` pour un mot
+  (« Gratuit »). Et trois cartes de même poids aplatissaient la hiérarchie : le
+  plan conditionne les deux métriques, il ne se lit pas à côté d'elles.
+- **Les métriques passent par `StatCard`**, pas par une carte locale. La copie
+  maison avait dérivé sur trois points : chiffres hors `font-mono` (contraire à
+  la charte), labels en `ink-400` (3,6:1 sur blanc, sous le seuil AA), et aucune
+  tonalité — « limite atteinte » ne se voyait pas.
+- **La suppression est une carte, pas un lien de pied de page.** C'était un
+  `text-xs text-ink-400` centré : **3,1:1** sur le fond `ink-50`, sous le
+  minimum AA de 4,5:1, et rouge **au survol seulement** — donc muet au doigt.
+  Posé sur une carte blanche, `text-red-600` atteint 4,8:1 et annonce sa nature
+  sans attendre un survol. La carte reste la dernière de la page : séparée des
+  actions courantes, mais lisible.
+
+⚠️ **Le `sub` de `StatCard` est en `ink-400`** — 3,6:1 sur blanc, sous AA. Non
+corrigé ici : le composant sert une dizaine d'écrans, le changer déborde d'une
+tâche sur `/compte`. À traiter globalement.
+
+⚠️ **Le CTA standard de la charte fait 40 px de haut** (`px-5 py-2.5`), sous
+les 44 px recommandés pour une cible tactile. C'est le gabarit de TOUS les CTA
+de l'app : ne pas le corriger bouton par bouton, ce serait troquer une
+incohérence contre une autre.
+
 ## Les trois écrans d'upgrade
 
 Gabarit partagé : **`UpgradeScreen.tsx`** (badge à halo, filigrane `AppMark`,
