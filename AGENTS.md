@@ -301,11 +301,69 @@ dans les section headers, `h-4 w-4` / `size-4` dans les onglets et les
 
 # Multi-utilisateurs — état d'avancement
 
-Plan complet : `docs/plan-authentification.md` (6 lots). **Seul le lot 1 est
-fait** — le socle DB. L'app tourne encore en mono-utilisateur : elle utilise la
-`service_role` key, qui **contourne RLS par design**. Les policies existent mais
-ne protègent rien tant que les requêtes ne passent pas par la session de
-l'utilisateur (lot 3).
+Plan complet : `docs/plan-authentification.md` (6 lots). **Lots 1 et 2 faits**
+— socle DB, puis authentification. Le lot 3 (cloisonnement) reste à faire.
+
+🚨 **L'app N'EST PAS encore multi-utilisateurs. Ne pas la déployer publiquement
+en l'état.** `db.ts` utilise toujours la `service_role` key, qui contourne RLS
+par design, et ne filtre par aucun `user_id`. Vérifié concrètement : un second
+compte créé pour le test voyait les 7 biens du compte principal. Se connecter
+fonctionne ; être cloisonné, non. C'est l'objet du lot 3.
+
+## Auth (lot 2)
+
+| Fichier | Rôle |
+|---|---|
+| `lib/supabase/client.ts` | Client navigateur (anon key). **Sert uniquement à l'authentification** — toute donnée passe par le serveur. |
+| `lib/supabase/server.ts` | Client serveur porteur de la session, créé **par requête** (pas de singleton) : c'est lui qui fera appliquer RLS au lot 3. |
+| `lib/auth.ts` | **La barrière** : `getSession()`, `requireSession()`, `getApiSession()`. |
+| `proxy.ts` | Rafraîchit le jeton + redirections optimistes. **Ne protège rien.** |
+| `app/(auth)/` | `actions.ts` (Server Actions), `AuthForm.tsx`, `login/`, `signup/`. |
+
+### Quatre règles à ne pas contourner
+
+1. **`getUser()`, jamais `getSession()` de Supabase, côté serveur.**
+   `getSession()` se contente de décoder le cookie : un cookie fabriqué à la
+   main passerait. `getUser()` valide le jeton auprès du serveur Auth.
+   (Attention à l'homonymie : `getSession()` de `lib/auth.ts` est notre
+   fonction à nous, et elle appelle bien `getUser()`.)
+
+2. **`cookies()` est ASYNCHRONE en Next.js 16**, et `.set()` n'est autorisé que
+   dans un Server Action ou un Route Handler — **jamais dans un Server
+   Component**. D'où le `try/catch` silencieux de `setAll` dans
+   `lib/supabase/server.ts` : l'échec y est normal, `proxy.ts` ayant déjà
+   rafraîchi la session en amont. Ne pas « corriger » ce catch en y ajoutant
+   un log d'erreur, il se déclencherait à chaque rendu de page.
+
+3. **`proxy.ts` n'est PAS une barrière de sécurité** — la doc de Next.js 16 le
+   dit explicitement (il tourne aussi sur les routes préchargées et ne lit que
+   le cookie). Il sert à rafraîchir le jeton, ce qui est sa vraie raison
+   d'être : sans lui, la session expire au bout d'une heure en pleine
+   navigation. La protection réelle est `requireSession()`, appelée dans le
+   DAL. Le nom du fichier n'est pas négociable : `middleware.ts` est déprécié
+   en Next.js 16.
+
+4. **Les routes `/api/*` ne sont jamais redirigées** vers `/login` par le
+   proxy : un `fetch()` qui reçoit du HTML de connexion à la place de son JSON
+   échoue de façon obscure. Elles répondront 401 elles-mêmes (lot 3).
+
+### `?suivant=` — retour à la destination après connexion
+
+Le proxy pose `?suivant=<chemin>` avant de rediriger, et `destination()`
+(`actions.ts`) n'accepte **que** les chemins internes (`/…`, jamais `//…` ni
+une URL absolue) : sans ce filtre, `?suivant=https://…` transformerait le lien
+de connexion en redirection ouverte. C'est aussi ce qui fait que le
+bookmarklet survit à une session expirée — l'annonce n'est pas perdue en route.
+
+### Navbar sur les écrans d'auth
+
+`ROUTES_AUTH` (`Navbar.tsx`) masque les liens de navigation sur `/login`,
+`/signup` et `/mot-de-passe-oublie` : ils pointent tous vers des pages qui
+exigent une session, et y cliquer depuis l'écran de connexion ne ferait que
+ramener à l'écran de connexion. Le wordmark, lui, reste cliquable.
+
+L'état connecté (email, déconnexion) n'est **pas** encore dans la navbar :
+c'est le lot 4. `deconnexion()` existe déjà dans `actions.ts`.
 
 ## Les deux migrations, et pourquoi elles sont séparées
 

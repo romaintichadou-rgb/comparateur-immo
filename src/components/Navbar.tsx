@@ -61,8 +61,16 @@ function Wordmark() {
   );
 }
 
+/** Écrans d'authentification : la navbar y garde le wordmark, mais pas ses
+ *  liens — ils pointent tous vers des pages qui exigent une session, et un
+ *  clic depuis l'écran de connexion ne ferait que ramener à l'écran de
+ *  connexion. Le wordmark reste cliquable : il ramène à l'accueil, donc au
+ *  bon endroit une fois connecté. */
+const ROUTES_AUTH = ["/login", "/signup", "/mot-de-passe-oublie"];
+
 export default function Navbar() {
   const pathname = usePathname();
+  const surEcranAuth = ROUTES_AUTH.some((r) => pathname.startsWith(r));
 
   return (
     <header className="sticky top-0 z-40 border-b border-ink-200/70 bg-white/80 backdrop-blur-md">
@@ -71,7 +79,7 @@ export default function Navbar() {
         <Link href="/" className="transition-opacity hover:opacity-80" aria-label={`${APP_NAME} — accueil`}>
           <Wordmark />
         </Link>
-        <nav className="flex items-center gap-1 text-sm sm:gap-2">
+        <nav className={`items-center gap-1 text-sm sm:gap-2 ${surEcranAuth ? "hidden" : "flex"}`}>
           {NAV_LINKS.map(({ href, label }) => {
             const active = pathname === href;
             return (
