@@ -1335,7 +1335,7 @@ export default function ApartmentDetail({
                       <ReadOnlyField label="DPE" value={apt.dpe || "—"} />
                       <ReadOnlyField label="GES" value={apt.ges || "—"} />
                     </div>
-                    <ReadOnlyField label="Description" value={apt.description || "—"} />
+                    <ReadOnlyField label="Description" value={apt.description || "—"} multiline />
                   </>
                 )}
           </section>
@@ -1552,6 +1552,7 @@ function ReadOnlyField({
   value,
   badge,
   mono = false,
+  multiline = false,
 }: {
   label: string;
   value: string;
@@ -1563,6 +1564,7 @@ function ReadOnlyField({
    * donc de `font-sans`. Deux polices pour un même champ selon qu'on le lit
    * ou qu'on l'édite ne veut rien dire. */
   mono?: boolean;
+  multiline?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1 text-sm">
@@ -1571,9 +1573,9 @@ function ReadOnlyField({
         {badge}
       </span>
       <div
-        className={`rounded-md border border-dashed border-ink-200 bg-ink-50 px-3 py-2 text-ink-500${
+        className={`rounded-md border border-dashed border-ink-300 bg-white px-3 py-2 text-ink-900${
           mono ? " font-mono tabular-nums" : ""
-        }`}
+        }${multiline ? " whitespace-pre-wrap" : ""}`}
       >
         {value}
       </div>
