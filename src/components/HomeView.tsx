@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { RendementSeuils } from "@/lib/analyse/scoring";
+import { PLAN_LABEL } from "@/lib/plans";
 import ApartmentsTable, { SortKey } from "./ApartmentsTable";
 import ApartmentsCardList from "./ApartmentsCardList";
 import EmptyHomeState from "./EmptyHomeState";
@@ -52,9 +53,13 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 export default function HomeView({
   apartments,
   seuilsRendement,
+  isPro,
+  isTester,
 }: {
   apartments: ApartmentWithComputed[];
   seuilsRendement: RendementSeuils;
+  isPro: boolean;
+  isTester: boolean;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("rendement_net");
 
@@ -66,10 +71,22 @@ export default function HomeView({
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900">
-            {apartments.length} bien{apartments.length > 1 ? "s" : ""} suivi
-            {apartments.length > 1 ? "s" : ""}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900">
+              {apartments.length} bien{apartments.length > 1 ? "s" : ""} suivi
+              {apartments.length > 1 ? "s" : ""}
+            </h1>
+            {isPro && (
+              <span className="rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-medium text-accent-700">
+                {PLAN_LABEL.pro}
+              </span>
+            )}
+            {isTester && (
+              <span className="rounded-full border border-ink-200 px-2.5 py-0.5 text-xs font-medium text-ink-500">
+                Testeur
+              </span>
+            )}
+          </div>
           <p className="mt-0.5 text-sm text-ink-500">
             Trié par {SORT_OPTIONS.find((o) => o.key === sortKey)?.label.toLowerCase()},
             décroissant

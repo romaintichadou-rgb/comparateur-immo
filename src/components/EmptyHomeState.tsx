@@ -14,12 +14,12 @@ const STEPS = [
     desc: "Une URL Leboncoin, SeLoger, PAP ou Orpi — ou saisis les infos à la main.",
   },
   {
-    title: "L'app calcule tout",
-    desc: "Rendement, cash-flow, quartier, risques : chaque bien reçoit un score sur 10.",
+    title: "Chaque bien est noté sur 10",
+    desc: "Rendement, cash-flow, quartier, risques : tout est calculé automatiquement.",
   },
   {
-    title: "Achète le bon bien",
-    desc: "Compare tes pistes côte à côte et identifie l'investissement le plus rentable.",
+    title: "Repère le bon investissement",
+    desc: "Compare tes pistes côte à côte en un coup d'œil.",
   },
 ];
 

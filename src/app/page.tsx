@@ -1,4 +1,4 @@
-import { listApartments, getSettings } from "@/lib/db";
+import { listApartments, getSettings, getUserProfile } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { requireSession } from "@/lib/auth";
@@ -18,10 +18,13 @@ export default async function HomePage() {
 
   let apartments;
   let seuils;
+  let isPro = false;
+  let isTester = false;
   try {
-    [apartments, seuils] = await Promise.all([
+    [apartments, seuils, { isPro, isTester }] = await Promise.all([
       listApartments().then((rows) => rows.map(computeDerived)),
       getSettings().then(seuilsRendementFromSettings),
+      getUserProfile().then((p) => ({ isPro: p.plan === "pro", isTester: p.isTester })),
     ]);
   } catch (err) {
     return (
@@ -29,5 +32,5 @@ export default async function HomePage() {
     );
   }
 
-  return <HomeView apartments={apartments} seuilsRendement={seuils} />;
+  return <HomeView apartments={apartments} seuilsRendement={seuils} isPro={isPro} isTester={isTester} />;
 }

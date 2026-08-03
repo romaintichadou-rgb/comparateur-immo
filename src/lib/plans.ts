@@ -11,10 +11,10 @@
  * des deux côtés sans risque.
  */
 
-export type Plan = "free" | "pro" | "tester";
+export type Plan = "free" | "pro";
 
 /** Nombre de biens suivis par un compte gratuit. */
-export const LIMITE_BIENS_FREE = 1;
+export const LIMITE_BIENS_FREE = 6;
 
 /** Analyses IA mensuelles incluses dans l'abonnement Pro. */
 export const LIMITE_ANALYSES_PRO = 50;
@@ -23,5 +23,4 @@ export const LIMITE_ANALYSES_PRO = 50;
 export const PLAN_LABEL: Record<Plan, string> = {
   free: "Plan gratuit",
   pro: "Plan Pro",
-  tester: "Testeur",
 };

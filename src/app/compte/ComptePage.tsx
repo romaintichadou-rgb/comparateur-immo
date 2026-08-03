@@ -85,16 +85,18 @@ function ChampMotDePasse({
  * aplatissaient aussi la hiérarchie : le plan conditionne les deux autres, il
  * ne se lit pas à côté d'elles.
  */
-function BadgePlan({ plan }: { plan: UserProfile["plan"] }) {
-  const style =
-    plan === "free"
-      ? "bg-ink-100 text-ink-600"
-      : "bg-accent-50 text-accent-700";
-
+function BadgePlan({ plan, isTester }: { plan: UserProfile["plan"]; isTester: boolean }) {
   return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${style}`}>
-      {PLAN_LABEL[plan]}
-    </span>
+    <>
+      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${plan === "pro" ? "bg-accent-50 text-accent-700" : "bg-ink-100 text-ink-600"}`}>
+        {PLAN_LABEL[plan]}
+      </span>
+      {isTester && (
+        <span className="rounded-full border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-500">
+          Testeur
+        </span>
+      )}
+    </>
   );
 }
 
@@ -114,7 +116,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
     }
   }
 
-  const gratuit = profil.plan === "free";
+  const gratuit = profil.plan === "free" && !profil.isTester;
   const pro = profil.plan === "pro";
 
   const limiteAtteinte = gratuit && profil.nombreBiens >= LIMITE_BIENS_FREE;
@@ -138,7 +140,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
       <div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="font-display text-xl font-semibold text-ink-900">Mon compte</h1>
-          <BadgePlan plan={profil.plan} />
+          <BadgePlan plan={profil.plan} isTester={profil.isTester} />
         </div>
         <p className="mt-1 text-sm text-ink-500">{email}</p>
       </div>

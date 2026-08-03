@@ -5,6 +5,11 @@ import { Apartment, ApartmentInput, emptyApartment } from "./types";
 import { AppSettings, DEFAULT_SETTINGS, type FinancementMode } from "./settings";
 import { createClient } from "./supabase/server";
 import { requireUserId } from "./auth";
+// Limites et plans : dans un module SANS `server-only`, pour que les écrans
+// qui les affichent lisent la même source que les gates qui les appliquent.
+import { LIMITE_ANALYSES_PRO, LIMITE_BIENS_FREE, type Plan } from "./plans";
+
+export { LIMITE_ANALYSES_PRO, LIMITE_BIENS_FREE };
 
 /**
  * Data Access Layer — couche d'accès isolée à Supabase/Postgres, ET point de
@@ -54,11 +59,6 @@ export class QuotaDepasseError extends Error {
   }
 }
 
-/** Nombre de biens suivis par un compte gratuit. */
-export const LIMITE_BIENS_FREE = 1;
-/** Analyses IA mensuelles incluses dans l'abonnement Pro. */
-export const LIMITE_ANALYSES_PRO = 50;
-
 /** Client Supabase porteur de la session + identifiant de l'appelant. */
 async function contexte() {
   // `requireUserId()` lève `NonAuthentifieError` s'il n'y a pas de session :
@@ -104,23 +104,16 @@ export async function createApartment(input: Partial<Apartment>): Promise<Apartm
   // de la limite sans avoir à y penser.
   const { data: profileRow, error: profileError } = await supabase
     .from("profiles")
-    .select("plan")
+    .select("plan, is_tester, nb_biens")
     .eq("id", userId)
     .single();
 
   if (profileError) throw new Error(profileError.message);
 
-  if ((profileRow?.plan ?? "free") === "free") {
-    const { count, error: countError } = await supabase
-      .from("apartments")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId);
-
-    if (countError) throw new Error(countError.message);
-
-    if ((count ?? 0) >= LIMITE_BIENS_FREE) {
+  if (!profileRow?.is_tester && (profileRow?.plan ?? "free") === "free") {
+    if ((profileRow?.nb_biens ?? 0) >= LIMITE_BIENS_FREE) {
       throw new QuotaDepasseError(
-        "Le plan gratuit suit un seul bien.",
+        `Le plan gratuit est limité à ${LIMITE_BIENS_FREE} biens.`,
         "/upgrade/bien-limite"
       );
     }
@@ -139,6 +132,12 @@ export async function createApartment(input: Partial<Apartment>): Promise<Apartm
 
   const { data, error } = await supabase.from("apartments").insert(apt).select().single();
   if (error) throw new Error(error.message);
+
+  await supabase
+    .from("profiles")
+    .update({ nb_biens: (profileRow?.nb_biens ?? 0) + 1 })
+    .eq("id", userId);
+
   return data as Apartment;
 }
 
@@ -180,7 +179,21 @@ export async function deleteApartment(id: string): Promise<boolean> {
     .eq("user_id", userId)
     .select("id");
   if (error) throw new Error(error.message);
-  return (data ?? []).length > 0;
+  const deleted = (data ?? []).length > 0;
+
+  if (deleted) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("nb_biens")
+      .eq("id", userId)
+      .single();
+    await supabase
+      .from("profiles")
+      .update({ nb_biens: Math.max(0, (profile?.nb_biens ?? 1) - 1) })
+      .eq("id", userId);
+  }
+
+  return deleted;
 }
 
 // --- Réglages (seuils + profil emprunteur) : une seule ligne, id fixe. ---
@@ -278,7 +291,8 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
 // --- Profil utilisateur ---
 
 export interface UserProfile {
-  plan: "free" | "pro" | "tester";
+  plan: Plan;
+  isTester: boolean;
   nombreBiens: number;
   analysesAuMoisCourant: number;
   periodeCmpteur: string; // ISO date YYYY-MM-01
@@ -291,26 +305,20 @@ export interface UserProfile {
 export async function getUserProfile(): Promise<UserProfile> {
   const { supabase, userId } = await contexte();
 
-  // Récupérer le plan et le compteur d'analyses
   const { data: profileRow, error: profileError } = await supabase
     .from("profiles")
-    .select("plan, analyses_ce_mois, periode_compteur")
+    .select("plan, is_tester, nb_biens, analyses_ce_mois, periode_compteur")
     .eq("id", userId)
     .single();
 
   if (profileError) throw new Error(profileError.message);
 
-  // Compter les biens
-  const { count: nombreBiens, error: countError } = await supabase
-    .from("apartments")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  if (countError) throw new Error(countError.message);
+  const plan: Plan = (profileRow.plan ?? "free") === "pro" ? "pro" : "free";
 
   return {
-    plan: profileRow.plan ?? "free",
-    nombreBiens: nombreBiens ?? 0,
+    plan,
+    isTester: !!profileRow.is_tester,
+    nombreBiens: profileRow.nb_biens ?? 0,
     analysesAuMoisCourant: profileRow.analyses_ce_mois ?? 0,
     periodeCmpteur: profileRow.periode_compteur ?? new Date().toISOString().slice(0, 7) + "-01",
   };
@@ -329,11 +337,13 @@ export async function checkAndIncrementAnalyseQuota(): Promise<void> {
 
   const { data: profileRow, error: profileError } = await supabase
     .from("profiles")
-    .select("plan, analyses_ce_mois, periode_compteur")
+    .select("plan, is_tester, analyses_ce_mois, periode_compteur")
     .eq("id", userId)
     .single();
 
   if (profileError) throw new Error(profileError.message);
+
+  if (profileRow.is_tester) return;
 
   const plan = profileRow.plan ?? "free";
   const currentMonth = new Date().toISOString().slice(0, 7) + "-01";
