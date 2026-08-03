@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { NonAuthentifieError } from "@/lib/auth";
+import { QuotaDepasseError } from "@/lib/db";
 
 /**
  * Traduction unique erreur → réponse HTTP, pour toutes les routes d'API.
@@ -18,25 +19,18 @@ export function reponseErreur(err: unknown): NextResponse {
     return NextResponse.json({ error: "Authentification requise" }, { status: 401 });
   }
 
-  if (err instanceof Error) {
-    // Gate quota dépassé (plan gratuit limité à 1 bien)
-    if ((err as any).code === "QUOTA_EXCEEDED") {
-      return NextResponse.json(
-        { error: "Vous avez atteint la limite de biens avec le plan gratuit. Passez à Pro pour en ajouter plus." },
-        { status: 403 }
-      );
-    }
-
-    // Quota d'analyses IA dépassé (pro limité à 50/mois)
-    if ((err as any).code === "ANALYSE_QUOTA_EXCEEDED") {
-      return NextResponse.json(
-        { error: "Vous avez atteint votre limite de 50 analyses ce mois. Réessayez le mois prochain." },
-        { status: 403 }
-      );
-    }
-
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  // Limite de plan atteinte. `redirection` accompagne le message : le client
+  // envoie l'utilisateur sur l'écran qui explique CETTE limite-là, plutôt que
+  // d'afficher un message d'erreur rouge sur un geste qui n'a rien de fautif.
+  if (err instanceof QuotaDepasseError) {
+    return NextResponse.json(
+      { error: err.message, redirection: err.redirection },
+      { status: 403 }
+    );
   }
 
-  return NextResponse.json({ error: "Erreur inconnue" }, { status: 500 });
+  return NextResponse.json(
+    { error: err instanceof Error ? err.message : "Erreur inconnue" },
+    { status: 500 }
+  );
 }

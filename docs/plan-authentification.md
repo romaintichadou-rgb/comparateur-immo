@@ -197,7 +197,14 @@ big bang où l'app est cassée pendant une semaine.
 - ✅ **Lot 2** : complet (commit `4e7a0f3`)
 - ✅ **Lot 3** : complet (commit `e0cfc4c`)
 - ✅ **Lot 4** : complet (commit `5b7ec3d`) — reset-password, profil utilisateur, bookmarklet
-- ⏳ **Lot 5-6** : non commencé
+- ⏳ **Lot 5** : code complet, **branchement Stripe à finir** — voir
+  `docs/setup-stripe.md` (migration 0010 + webhook secret + test de bout en bout)
+- ⏳ **Lot 6** : non commencé
+
+⚠️ Le lot 5 a **dévié du plan initial sur un point** : il ne s'arrête pas au
+« gate + message de contact », il intègre Stripe directement (décision prise
+en cours de route, voir `docs/UX-monetisation.md`). Le reste du plan ci-dessous
+tient toujours.
 
 ### Lot 1 — Le socle DB *(le plus risqué, à faire en premier et à froid)*
 

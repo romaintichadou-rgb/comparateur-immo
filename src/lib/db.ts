@@ -32,6 +32,33 @@ import { requireUserId } from "./auth";
  * par design et supprimerait la première des deux barrières.
  */
 
+/**
+ * Levée quand une limite de plan est atteinte.
+ *
+ * Une classe plutôt qu'un code posé sur `Error` : c'est l'idiome déjà retenu
+ * pour `NonAuthentifieError`, et `instanceof` se vérifie au typage — un
+ * `err.code === "..."` ne se relit qu'à l'exécution, et une faute de frappe y
+ * passe inaperçue en rendant le quota inopérant (donc payant pour nous).
+ *
+ * `redirection` désigne l'écran qui EXPLIQUE la limite. Il voyage jusqu'au
+ * client dans le corps de la réponse 403 : c'est le serveur qui sait quelle
+ * limite a sauté, pas l'appelant.
+ */
+export class QuotaDepasseError extends Error {
+  readonly redirection: string;
+
+  constructor(message: string, redirection: string) {
+    super(message);
+    this.name = "QuotaDepasseError";
+    this.redirection = redirection;
+  }
+}
+
+/** Nombre de biens suivis par un compte gratuit. */
+export const LIMITE_BIENS_FREE = 1;
+/** Analyses IA mensuelles incluses dans l'abonnement Pro. */
+export const LIMITE_ANALYSES_PRO = 50;
+
 /** Client Supabase porteur de la session + identifiant de l'appelant. */
 async function contexte() {
   // `requireUserId()` lève `NonAuthentifieError` s'il n'y a pas de session :
@@ -72,7 +99,9 @@ export async function getApartment(id: string): Promise<Apartment | null> {
 export async function createApartment(input: Partial<Apartment>): Promise<Apartment> {
   const { supabase, userId } = await contexte();
 
-  // Gate : vérifier le plan et la limite de biens
+  // Gate du plan : posé DANS le DAL et pas seulement dans la route, pour
+  // qu'un futur chemin de création (import en masse, action serveur) hérite
+  // de la limite sans avoir à y penser.
   const { data: profileRow, error: profileError } = await supabase
     .from("profiles")
     .select("plan")
@@ -81,10 +110,7 @@ export async function createApartment(input: Partial<Apartment>): Promise<Apartm
 
   if (profileError) throw new Error(profileError.message);
 
-  const plan = profileRow?.plan ?? "free";
-
-  // Si plan free : limiter à 1 bien
-  if (plan === "free") {
+  if ((profileRow?.plan ?? "free") === "free") {
     const { count, error: countError } = await supabase
       .from("apartments")
       .select("id", { count: "exact", head: true })
@@ -92,10 +118,11 @@ export async function createApartment(input: Partial<Apartment>): Promise<Apartm
 
     if (countError) throw new Error(countError.message);
 
-    if ((count ?? 0) >= 1) {
-      const err = new Error("QUOTA_EXCEEDED");
-      (err as any).code = "QUOTA_EXCEEDED";
-      throw err;
+    if ((count ?? 0) >= LIMITE_BIENS_FREE) {
+      throw new QuotaDepasseError(
+        "Le plan gratuit suit un seul bien.",
+        "/upgrade/bien-limite"
+      );
     }
   }
 
@@ -318,11 +345,15 @@ export async function checkAndIncrementAnalyseQuota(): Promise<void> {
     compteur = 0;
   }
 
-  // Vérifier le quota selon le plan
-  if (plan === "pro" && compteur >= 50) {
-    const err = new Error("ANALYSE_QUOTA_EXCEEDED");
-    (err as any).code = "ANALYSE_QUOTA_EXCEEDED";
-    throw err;
+  // Seul `pro` est plafonné. `free` ne l'est pas : son bien unique borne déjà
+  // naturellement le volume, et facturer une limite d'analyses à quelqu'un
+  // qui n'a qu'un bien reviendrait à cacher le produit derrière le paywall.
+  // `tester` n'a aucune limite.
+  if (plan === "pro" && compteur >= LIMITE_ANALYSES_PRO) {
+    throw new QuotaDepasseError(
+      `Les ${LIMITE_ANALYSES_PRO} analyses mensuelles de l'abonnement Pro sont utilisées.`,
+      "/upgrade/analyse-limite"
+    );
   }
 
   // Incrémenter le compteur

@@ -27,6 +27,7 @@ import {
   type Plateforme,
 } from "@/lib/types";
 import type { ParsedListing } from "@/lib/parsers";
+import { redirectionQuota } from "@/lib/quota";
 import {
   BooleanField,
   ExtractedBadge,
@@ -330,6 +331,13 @@ export default function AddApartmentFlow() {
       });
       if (!res.ok) {
         const err = await res.json();
+        // Limite du plan atteinte : l'écran d'upgrade explique la situation,
+        // là où un bandeau d'erreur laisserait croire à une saisie fautive.
+        const versUpgrade = redirectionQuota(res, err);
+        if (versUpgrade) {
+          router.push(versUpgrade);
+          return;
+        }
         const detail = Array.isArray(err.issues) ? err.issues[0]?.message : undefined;
         setBanner({ tone: "warning", text: detail ?? err.error ?? "Échec de l'enregistrement." });
         setStep("review");

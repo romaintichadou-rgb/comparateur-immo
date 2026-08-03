@@ -50,6 +50,7 @@ import {
   TF_JUSTIF_COMMUNE_PREFIX,
 } from "@/lib/estimates";
 import { formatApartmentTitle, formatDate, formatEuros, formatPercent, sanitizeJustification } from "@/lib/format";
+import { redirectionQuota } from "@/lib/quota";
 import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
 import {
   AiEstimatedBadge,
@@ -646,8 +647,21 @@ export default function ApartmentDetail({
       showBanner("Relance de l'analyse IA — scores et narration…");
       try {
         const res = await fetch(`/api/analyse/${apt.id}`, { method: "POST" });
-        if (res.ok) setApt((await res.json()).apartment);
-        else ok = false;
+        const data = await res.json();
+        if (res.ok) {
+          setApt(data.apartment);
+        } else {
+          // Quota atteint : l'édition qui précède est bien enregistrée, seule
+          // la relance d'analyse ne passe pas. On quitte vers l'écran qui
+          // l'explique plutôt que d'annoncer un échec sans raison lisible.
+          const versUpgrade = redirectionQuota(res, data);
+          if (versUpgrade) {
+            setAnalysisPending(false);
+            router.push(versUpgrade);
+            return;
+          }
+          ok = false;
+        }
       } catch { ok = false; }
     }
     setAnalysisPending(false);
@@ -737,11 +751,18 @@ export default function ApartmentDetail({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ apartmentId: apt.id }),
         });
+        const data = await res.json();
         if (res.ok) {
-          const data = await res.json();
           setApt(data.apartment);
           onSuccess?.(data);
           ok = true;
+        } else {
+          const versUpgrade = redirectionQuota(res, data);
+          if (versUpgrade) {
+            setPending(false);
+            router.push(versUpgrade);
+            return;
+          }
         }
       } catch {}
       setPending(false);

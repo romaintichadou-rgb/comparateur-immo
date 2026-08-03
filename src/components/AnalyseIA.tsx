@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Clock, Info, Loader2, Sparkles } from "lucide-react";
 import { StatCard, type StatCardTone } from "@/components/StatCard";
 import type { ApartmentWithComputed } from "@/lib/types";
@@ -28,6 +29,7 @@ import { useCashflowDetail } from "@/components/CashflowDetailProvider";
 import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderMarkdownBold } from "@/components/richText";
+import { redirectionQuota } from "@/lib/quota";
 
 /** Repli si le profil investisseur n'a pas pu être chargé — les seuils réels
  * viennent toujours des réglages (prop `cashflowSeuils`). */
@@ -197,6 +199,7 @@ export default function AnalyseIA({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const { open: openCashflowDetail } = useCashflowDetail();
   const { open: openRendementDetail } = useRendementDetail();
   const analyse = apartment.analyse_ia;
@@ -211,6 +214,11 @@ export default function AnalyseIA({
       if (res.ok) {
         onAnalysed(data.apartment);
       } else {
+        const versUpgrade = redirectionQuota(res, data);
+        if (versUpgrade) {
+          router.push(versUpgrade);
+          return;
+        }
         setError(data.error ?? "Échec de l'analyse.");
       }
     } catch {

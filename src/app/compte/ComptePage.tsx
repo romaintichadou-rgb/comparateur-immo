@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useActionState } from "react";
+import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { Eye, EyeOff, KeyRound, Zap, Home, BarChart3 } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -88,13 +89,14 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
     }
   }
 
+  const gratuit = profil.plan === "free";
   const planLabel = {
     free: "Gratuit",
     pro: "Pro",
     tester: "Testeur",
   }[profil.plan];
 
-  const limiteBiens = profil.plan === "free" ? 1 : "Illimités";
+  const limiteBiens = gratuit ? "1" : "illimités";
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
@@ -108,13 +110,13 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
           icon={Zap}
           label="Plan"
           valeur={planLabel}
-          detail={profil.plan === "free" ? "Upgrade pour plus de biens" : "Merci !"}
+          detail={gratuit ? "1 bien suivi" : "Merci !"}
         />
         <ProfessionCard
           icon={Home}
           label="Biens"
           valeur={`${profil.nombreBiens}/${limiteBiens}`}
-          detail={profil.plan === "free" && profil.nombreBiens >= 1 ? "Limite atteinte" : undefined}
+          detail={gratuit && profil.nombreBiens >= 1 ? "Limite atteinte" : undefined}
         />
         <ProfessionCard
           icon={BarChart3}
@@ -123,6 +125,27 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
           detail={profil.plan === "pro" ? "Ce mois" : "Sans limite"}
         />
       </div>
+
+      {/* L'offre n'est proposée qu'au plan gratuit : un abonné Pro n'a rien à
+          acheter, et un testeur a déjà tout. Rendre un bouton inerte « déjà
+          abonné » n'informerait de rien que les cartes ne disent. */}
+      {gratuit && (
+        <section className="rounded-xl border border-ink-200 bg-white p-6">
+          <SectionHeader icon={Zap} title="Passer à Pro" />
+          <p className="mt-4 text-sm leading-relaxed text-ink-600">
+            Suis autant de biens que tu veux et lance jusqu&rsquo;à 50 analyses par mois,
+            pour 5,99&nbsp;€ par mois sans engagement.
+          </p>
+          <div className="mt-5">
+            <Link
+              href="/upgrade/bien-limite"
+              className="inline-block rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 active:bg-accent-800"
+            >
+              Voir l&rsquo;offre
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-xl border border-ink-200 bg-white p-6">
         <SectionHeader icon={KeyRound} title="Mot de passe" />

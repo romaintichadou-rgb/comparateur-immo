@@ -311,12 +311,120 @@ dans les section headers, `h-4 w-4` / `size-4` dans les onglets et les
 
 # Multi-utilisateurs — état d'avancement
 
-Plan complet : `docs/plan-authentification.md` (6 lots). **Lots 1 à 3 faits** —
-socle DB, authentification, cloisonnement. L'app est multi-utilisateurs :
-chaque compte ne voit et ne modifie que ses biens.
+Plan complet : `docs/plan-authentification.md` (6 lots). **Lots 1 à 5 faits** —
+socle DB, authentification, cloisonnement, écrans de compte, monétisation.
 
-Restent les lots 4 (écrans de compte), 5 (quotas) et 6 (durcissement avant
-ouverture publique : rate limiting, emails, monitoring).
+Reste le lot 6 (durcissement avant ouverture publique : rate limiting, emails,
+monitoring).
+
+# Monétisation (lot 5) — plans, quotas, Stripe
+
+UX de référence : `docs/UX-monetisation.md`. Branchement Stripe :
+`docs/setup-stripe.md`.
+
+## Trois plans, deux limites
+
+| Plan | Biens | Analyses IA/mois |
+|---|---|---|
+| `free` | **1** (`LIMITE_BIENS_FREE`) | illimitées |
+| `pro` | illimités | **50** (`LIMITE_ANALYSES_PRO`) |
+| `tester` | illimités | illimitées |
+
+⚠️ **`free` n'est PAS plafonné en analyses**, et ce n'est pas un oubli : son
+bien unique borne déjà le volume, et brider l'analyse du premier bien
+reviendrait à cacher le produit derrière le paywall. Conséquence directe :
+`/upgrade/analyse-limite` n'est atteignable que par un abonné **Pro**, qui n'a
+donc rien à acheter — la page lit le plan et **n'affiche l'offre que si elle a
+un sens**. Ne pas y remettre un « Passer à Pro » inconditionnel.
+
+Les deux constantes vivent dans `db.ts`, à côté des gates qui les lisent.
+
+## `QuotaDepasseError` — une classe, pas un code d'erreur
+
+Levée par `createApartment()` et `checkAndIncrementAnalyseQuota()`, elle porte
+un champ **`redirection`** : l'écran qui EXPLIQUE la limite atteinte.
+`reponseErreur()` le renvoie dans le corps du 403, et `redirectionQuota()`
+(`lib/quota.ts`) le suit côté client.
+
+Une classe plutôt qu'un `err.code === "…"` : c'est l'idiome déjà retenu pour
+`NonAuthentifieError`, et `instanceof` se vérifie au typage — une faute de
+frappe dans une chaîne rendrait le quota inopérant **sans rien casser de
+visible**, donc à nos frais.
+
+**Atteindre une limite n'est pas une erreur de l'utilisateur.** D'où une
+redirection vers une page dédiée plutôt qu'un bandeau rouge : un message
+d'échec sur un geste légitime le culpabilise pour une contrainte commerciale.
+
+Les gates sont posés **dans `db.ts`**, pas seulement dans les routes : un
+futur chemin de création (import en masse, Server Action) hérite de la limite
+sans avoir à y penser.
+
+⚠️ `redirectionQuota()` n'accepte **que** des chemins internes (`/…`, jamais
+`//…`) — même filtre que `destination()` dans `actions.ts`. Le corps d'une
+réponse ne doit jamais pouvoir décider d'une navigation vers un domaine tiers.
+
+## Les trois écrans d'upgrade
+
+Gabarit partagé : **`UpgradeScreen.tsx`** (badge à halo, filigrane `AppMark`,
+`bg-tech-grid`, titre Fraunces) — même vocabulaire visuel qu'`ErrorScreen`,
+parce que ce sont deux interruptions de parcours. Exports associés :
+`OffrePro` (la carte prix + bénéfices) et `BoutonPasserPro`.
+
+| Route | Déclencheur |
+|---|---|
+| `/upgrade/bien-limite` | 403 sur `POST /api/apartments` (2e bien, plan gratuit) |
+| `/upgrade/analyse-limite` | 403 sur `POST /api/analyse/[id]` (50 analyses, plan Pro) |
+| `/upgrade/success` | Retour du Payment Link Stripe |
+
+**Une page, pas une modale** — décision produit. Le blocage arrive alors que
+l'utilisateur a une intention précise ; une modale recouvre ce contexte et se
+ferme d'un clic à côté. Le **ton est doux** : on constate, on montre, on laisse
+repartir sans payer (lien de retour toujours présent). Pas de compte à
+rebours, pas d'urgence fabriquée.
+
+## Webhook Stripe — la seule source de vérité du plan
+
+`/api/stripe/webhook` écoute `checkout.session.completed` (→ `pro`) et
+`customer.subscription.deleted` (→ `free`).
+
+⚠️ **`/upgrade/success` ne bascule RIEN.** La redirection de retour est
+déclenchée par le navigateur : elle peut être ouverte à la main, rejouée, ou
+ne jamais arriver si l'onglet est fermé après paiement. Seul l'appel signé de
+Stripe atteste d'un paiement. La page `success` **lit** le plan et affiche
+« activation en cours » si le webhook n'est pas encore passé — les deux
+chemins courent en parallèle, elle ne doit jamais affirmer un succès qu'elle
+n'a pas constaté.
+
+**C'est le seul fichier du projet qui utilise légitimement la `service_role`
+key** en dehors des migrations. L'interdiction posée pour `db.ts` tient au
+fait que celui-ci sert des requêtes AU NOM d'un utilisateur connecté ; ce
+handler n'a aucune session (l'appelant est Stripe) et doit écrire sur la ligne
+d'un compte identifié par la signature du paiement. Le client admin est
+délibérément **défini dans ce fichier** et non factorisé dans
+`lib/supabase/` : sa portée doit rester visible à l'œil nu.
+
+Trois détails à ne pas « simplifier » :
+
+- **Le corps est lu en `req.text()`**, jamais `req.json()` : re-sérialiser
+  l'objet invaliderait la signature au moindre écart d'espacement.
+- **L'utilisateur est identifié par `client_reference_id`**, posé sur le
+  Payment Link par `BoutonPasserPro` — jamais par l'email : celui saisi dans
+  Stripe peut différer de celui du compte, et ferait basculer le mauvais
+  profil, ou aucun.
+- **Un échec répond 500**, ce qui déclenche le rejeu par Stripe. Le traitement
+  est idempotent (valeur fixe écrite, rien d'incrémenté) : le rejeu est sans
+  risque, alors qu'un 200 optimiste perdrait l'événement.
+
+## Migration 0010 — pourquoi `stripe_customer_id` est indispensable
+
+`checkout.session.completed` porte notre `client_reference_id`, mais
+`customer.subscription.deleted` — celui qui doit REDESCENDRE le compte en
+`free` — ne porte que l'identifiant client Stripe. Sans la correspondance
+stockée par la 0010, une résiliation ne se rattache à aucun compte et
+l'abonnement annulé resterait `pro` indéfiniment. Index unique : un client
+Stripe ne peut appartenir qu'à un compte.
+
+Comme toutes les migrations : **manuelle, sur CHAQUE projet** (dev, puis prod).
 
 ## Cloisonnement (lot 3) — deux barrières, volontairement redondantes
 
@@ -440,13 +548,20 @@ ferait que ramener à l'écran de connexion. Le wordmark, lui, reste cliquable.
 ### Écrans d'auth — split layout
 
 Les trois écrans d'auth (login, signup, mot-de-passe-oublié) partagent
-`AuthShell.tsx` : split 45/55 desktop (brand panel gauche avec `bg-tech-grid`,
-`AppMark`, wordmark, tagline + form panel blanc à droite), form seul sur mobile
-(brand panel `hidden` sous `lg:`). `AuthForm.tsx` gère login et signup
-(formulaire générique avec `ChampMotDePasse` — toggle eye/eyeOff, lien
-« Oublié ? » inline). `MotDePasseOublieForm.tsx` gère le mot de passe oublié
-avec le même shell. Inputs à 44px touch targets (`py-3`), focus ring
-`ring-2 ring-accent-500/20`.
+`AuthShell.tsx` : split 45/55 desktop (brand panel gauche + form panel blanc à
+droite), form seul sur mobile (brand panel `hidden` sous `lg:`).
+
+**Brand panel gauche** : `bg-tech-grid` décoratif + `AppMark` avec halo lumineux
+(même traitement que `EmptyHomeState` : blur + bordure + ombre accent), wordmark,
+titre Fraunces « Trouve tes prochains investissements locatifs », description
+courte (score sur 10), séparateur fin, puis 3 étapes numérotées en `font-mono`
+(Colle une annonce / L'app calcule tout / Achète le bon bien). Le contenu est
+centré verticalement et horizontalement dans le panneau.
+
+`AuthForm.tsx` gère login et signup (formulaire générique avec `ChampMotDePasse`
+— toggle eye/eyeOff, lien « Oublié ? » inline). `MotDePasseOublieForm.tsx` gère
+le mot de passe oublié avec le même shell. Inputs à 44px touch targets (`py-3`),
+focus ring `ring-2 ring-accent-500/20`.
 
 ## Lot 4 — Les écrans de compte ✅ COMPLET
 
