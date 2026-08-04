@@ -30,12 +30,14 @@ function ChampHerite({
   override,
   resolu,
   onChange,
+  step,
 }: {
   label: string;
   suffix: string;
   override: number | null;
   resolu: number;
   onChange: (v: number | null) => void;
+  step?: string | number;
 }) {
   const herite = override == null;
   return (
@@ -48,6 +50,7 @@ function ChampHerite({
           onChange={onChange}
           suffix={suffix}
           hint={herite ? <Pastille>profil</Pastille> : undefined}
+          step={step}
         />
       </div>
       <div className="mb-[3px] w-11 shrink-0 flex justify-center">
@@ -206,16 +209,16 @@ export default function FinancementSection({
         <button
           type="button"
           onClick={() => !editing && setOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-5 py-3"
+          className="flex w-full flex-col gap-3 px-5 py-3 text-left"
         >
-          <span className={TITRE_SECTION}>Financement</span>
-          <ChevronDown
-            className={`h-4 w-4 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`}
-          />
-        </button>
+          <div className="flex items-center justify-between">
+            <span className={TITRE_SECTION}>Financement</span>
+            <ChevronDown
+              className={`h-4 w-4 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`}
+            />
+          </div>
 
-        {/* Hero : mensualité + summary pills — toujours visible */}
-        <div className="px-5 pb-4">
+          {/* Hero : mensualité + summary pills — toujours visible, cliquable */}
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-ink-700">Mensualité de crédit</p>
@@ -237,7 +240,7 @@ export default function FinancementSection({
               Apport {euros(result.apport)} €
             </span>
           </div>
-        </div>
+        </button>
 
         {/* Corps dépliable */}
         {open && (
@@ -275,6 +278,7 @@ export default function FinancementSection({
                         if (v != null && v <= 0) return;
                         set("tauxCreditPct", v);
                       }}
+                      step="0.01"
                     />
                     <ChampHerite
                       label="Durée"
@@ -292,6 +296,7 @@ export default function FinancementSection({
                         if (v != null && v <= 0) return;
                         set("tauxAssurancePct", v);
                       }}
+                      step="0.01"
                     />
                     <p className="text-[11px] leading-relaxed text-ink-400">
                       En mode <strong className="font-medium text-ink-500">auto</strong>, l&apos;emprunt

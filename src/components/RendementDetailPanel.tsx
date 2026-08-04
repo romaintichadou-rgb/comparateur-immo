@@ -120,7 +120,7 @@ export default function RendementDetailPanel({
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="shrink-0 rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-600"
+            className="shrink-0 rounded-md p-1.5 text-ink-400 hover:text-ink-500"
           >
             <X className="h-4 w-4" />
           </button>

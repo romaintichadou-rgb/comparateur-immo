@@ -152,7 +152,7 @@ function EditableValue({
         type="button"
         onClick={onCancel}
         title="Annuler"
-        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-600"
+        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-400 transition-colors hover:text-ink-500"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -1226,28 +1226,6 @@ export default function ApartmentDetail({
                     onChange={(v) => setFinPatch((p) => ({ ...p, assurance_annuelle: v }))}
                     onSave={() => saveField("assurance_annuelle")}
                     onCancel={() => cancelField("assurance_annuelle")}
-                  />
-                )}
-              </div>
-              <div>
-                {!editingFields.has("hypothese_gestion_pct") && !("hypothese_gestion_pct" in finPatch) ? (
-                  <DisplayValue
-                    label="Frais de gestion locative"
-                    value={apt.hypothese_gestion_pct}
-                    suffix="% du loyer"
-                    onEdit={() => {
-                      toggleEdit("hypothese_gestion_pct");
-                      setFinPatch((p) => ({ ...p, hypothese_gestion_pct: apt.hypothese_gestion_pct }));
-                    }}
-                  />
-                ) : (
-                  <EditableValue
-                    label="Frais de gestion locative"
-                    value={value(finPatch, "hypothese_gestion_pct")}
-                    suffix="% du loyer"
-                    onChange={(v) => setFinPatch((p) => ({ ...p, hypothese_gestion_pct: v ?? 0 }))}
-                    onSave={() => saveField("hypothese_gestion_pct")}
-                    onCancel={() => cancelField("hypothese_gestion_pct")}
                   />
                 )}
               </div>

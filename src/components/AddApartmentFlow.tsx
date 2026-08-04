@@ -768,7 +768,7 @@ function ChampOptionnel({
         }}
         title="Retirer ce champ"
         aria-label={`${label} : retirer`}
-        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+        className="mb-[3px] shrink-0 rounded-md p-2 text-ink-300 transition-colors hover:text-ink-500"
       >
         <X className="h-3.5 w-3.5" />
       </button>

@@ -490,16 +490,17 @@ export default function SimulationFinanciere({
         <button
           type="button"
           onClick={() => !editingId && setHypOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-5 py-3"
+          className="flex w-full flex-col gap-3 px-5 py-3 text-left"
         >
-          <span className={TITRE_SECTION}>Hypothèses</span>
-          <ChevronDown
-            className={`h-4 w-4 text-ink-400 transition-transform ${hypOpen ? "rotate-180" : ""}`}
-          />
-        </button>
+          <div className="flex items-center justify-between">
+            <span className={TITRE_SECTION}>Hypothèses</span>
+            <ChevronDown
+              className={`h-4 w-4 text-ink-400 transition-transform ${hypOpen ? "rotate-180" : ""}`}
+            />
+          </div>
 
-        {/* Summary pills — toujours visibles */}
-        <div className="flex flex-wrap gap-1.5 px-5 pb-4">
+          {/* Summary pills — toujours visibles, cliquable */}
+          <div className="flex flex-wrap gap-1.5">
           <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
             {REGIMES_FISCAUX[resolus.regimeFiscal]}
           </span>
@@ -516,7 +517,8 @@ export default function SimulationFinanciere({
               Vacance {formatNombre(inputs.vacanceLocativePct)} %
             </span>
           )}
-        </div>
+          </div>
+        </button>
 
         {hypOpen && (
           <div className="px-5 pb-4">

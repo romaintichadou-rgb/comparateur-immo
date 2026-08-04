@@ -4,6 +4,7 @@ import { fetchListingHtml } from "./http";
 import {
   champsExtraits,
   extractFromFreeText,
+  extractFromPageMeta,
   extractOpenGraphBase,
   fillMissing,
   toNumber,
@@ -35,13 +36,11 @@ export const papParser: DomainParser = {
     const $ = cheerio.load(fetched.html);
     let data = extractOpenGraphBase($);
 
-    // PAP affiche traditionnellement le prix et la surface dans des blocs
-    // avec des classes dédiées ; on tente ces sélecteurs en best-effort
-    // avant le fallback texte libre.
     const prixTexte = $("[class*='price']").first().text();
     const prix = toNumber(prixTexte);
     if (prix) data.prix = prix;
 
+    data = fillMissing(data, extractFromPageMeta($));
     data = fillMissing(data, extractFromFreeText($("body").text()));
 
     return { ok: true, blocked: false, data, champsExtraits: champsExtraits(data) };

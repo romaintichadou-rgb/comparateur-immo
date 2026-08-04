@@ -4,6 +4,7 @@ import { fetchListingHtml } from "./http";
 import {
   champsExtraits,
   extractFromFreeText,
+  extractFromPageMeta,
   extractOpenGraphBase,
   fillMissing,
   toNumber,
@@ -43,6 +44,7 @@ export const leboncoinParser: DomainParser = {
       // Structure __NEXT_DATA__ non reconnue : on garde le socle OpenGraph.
     }
 
+    data = fillMissing(data, extractFromPageMeta($));
     data = fillMissing(data, extractFromFreeText($("body").text()));
 
     return { ok: true, blocked: false, data, champsExtraits: champsExtraits(data) };
@@ -81,7 +83,7 @@ function enrichFromNextData($: cheerio.CheerioAPI, data: ParsedListing): void {
   if (bedrooms) data.nb_chambres = bedrooms;
 
   const floor = attr("floor")?.value;
-  if (floor) data.etage = floor;
+  if (floor) data.etage = floor.replace(/^0+(\d)/, "$1");
 
   const elevator = attr("elevator")?.value;
   if (elevator) data.ascenseur = elevator === "1" || elevator === "true";
@@ -94,6 +96,24 @@ function enrichFromNextData($: cheerio.CheerioAPI, data: ParsedListing): void {
 
   const chargesCopro = toNumber(attr("charges_included")?.value);
   if (chargesCopro) data.charges_copro_annuelles = chargesCopro;
+
+  const realEstateType = attr("real_estate_type")?.value_label;
+  if (realEstateType) {
+    const tbMap: Record<string, string> = {
+      maison: "Maison", appartement: "Appartement", terrain: "Terrain",
+      parking: "Parking", immeuble: "Immeuble", loft: "Loft",
+    };
+    data.type_bien = tbMap[realEstateType.toLowerCase()] ?? realEstateType;
+  } else if (typeof ad.subject === "string") {
+    const tbMatch = ad.subject.match(/\b(studio|appartement|duplex|loft|maison|immeuble)\b/i);
+    if (tbMatch) {
+      const tbMap: Record<string, string> = {
+        studio: "Studio", appartement: "Appartement", duplex: "Duplex",
+        loft: "Loft", maison: "Maison", immeuble: "Immeuble",
+      };
+      data.type_bien = tbMap[tbMatch[1].toLowerCase()];
+    }
+  }
 
   const images: string[] = ad.images?.urls ?? [];
   if (images[0]) data.photo_url = images[0];

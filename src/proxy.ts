@@ -72,7 +72,10 @@ export async function proxy(request: NextRequest) {
     // Mémorise la destination pour y revenir après connexion — c'est ce qui
     // fait que le bookmarklet fonctionne sur un compte déconnecté : l'annonce
     // n'est pas perdue en route.
-    url.searchParams.set("suivant", chemin + request.nextUrl.search);
+    const dest = chemin + request.nextUrl.search;
+    if (dest !== "/") {
+      url.searchParams.set("suivant", dest);
+    }
     return NextResponse.redirect(url);
   }
 

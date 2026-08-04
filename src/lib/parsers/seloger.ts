@@ -4,6 +4,7 @@ import { fetchListingHtml } from "./http";
 import {
   champsExtraits,
   extractFromFreeText,
+  extractFromPageMeta,
   extractOpenGraphBase,
   fillMissing,
 } from "./common";
@@ -34,6 +35,7 @@ export const selogerParser: DomainParser = {
 
     const $ = cheerio.load(fetched.html);
     let data = extractOpenGraphBase($);
+    data = fillMissing(data, extractFromPageMeta($));
     data = fillMissing(data, extractFromFreeText($("body").text()));
 
     return { ok: true, blocked: false, data, champsExtraits: champsExtraits(data) };
