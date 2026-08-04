@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Banknote, ChevronDown, Landmark, PieChart, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { FINANCEMENT_MODE_COURT, type AppSettings } from "@/lib/settings";
 import { TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/simulation";
 import { NumberField } from "@/components/form/Fields";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { GroupTitle, TITRE_SECTION } from "@/components/SectionHeader";
 import { formatEurosSigned, formatNombre } from "@/lib/format";
 
 function Pastille({ children }: { children: ReactNode }) {
@@ -66,13 +67,8 @@ function ChampHerite({
   );
 }
 
-function FinSectionTitle({ icon: Icon, children }: { icon: typeof Landmark; children: ReactNode }) {
-  return (
-    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-500">
-      <Icon className="h-3.5 w-3.5 text-ink-400" />
-      {children}
-    </p>
-  );
+function FinSectionTitle({ children }: { children: ReactNode }) {
+  return <GroupTitle className="mb-2">{children}</GroupTitle>;
 }
 
 function FinRow({ label, value, badge, suffix }: { label: string; value: string; badge?: ReactNode; suffix?: string }) {
@@ -212,14 +208,7 @@ export default function FinancementSection({
           onClick={() => !editing && setOpen((o) => !o)}
           className="flex w-full items-center justify-between px-5 py-3"
         >
-          <span className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center rounded-lg bg-accent-50 p-1.5 text-accent-600">
-              <Landmark className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-              Financement
-            </span>
-          </span>
+          <span className={TITRE_SECTION}>Financement</span>
           <ChevronDown
             className={`h-4 w-4 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`}
           />
@@ -323,7 +312,7 @@ export default function FinancementSection({
               ) : (
                 <>
                   <div className="py-3.5">
-                    <FinSectionTitle icon={Banknote}>Crédit immobilier</FinSectionTitle>
+                    <FinSectionTitle>Crédit immobilier</FinSectionTitle>
                     <FinRow
                       label="Montant emprunté"
                       value={`${euros(result.montantEmprunte)} €`}
@@ -355,7 +344,7 @@ export default function FinancementSection({
                   </div>
 
                   <div className="py-3.5">
-                    <FinSectionTitle icon={PieChart}>Apport personnel</FinSectionTitle>
+                    <FinSectionTitle>Apport personnel</FinSectionTitle>
                     <FinRow label="Frais de notaire + complément" value={`${euros(result.apport)} €`} />
                   </div>
 

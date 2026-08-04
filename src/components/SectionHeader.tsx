@@ -24,6 +24,18 @@ import type { ReactNode } from "react";
  */
 
 /**
+ * Classes du titre de carte, exportées pour les en-têtes qui ne peuvent pas
+ * être un heading : une carte dépliante dont l'en-tête est un `<button>`.
+ * Y recopier les classes à la main est précisément ce qui avait laissé les
+ * cartes Financement et Hypothèses sur l'ancien style alors que tout le reste
+ * avait bougé.
+ */
+export const TITRE_SECTION = "font-display text-lg font-semibold text-ink-900";
+
+/** Idem, pour un titre de groupe (`GroupTitle`) rendu hors heading. */
+export const TITRE_GROUPE = "font-display text-base font-semibold text-ink-900";
+
+/**
  * Titre d'une carte de section.
  *
  * ── Pourquoi plus d'icône ────────────────────────────────────────────────
@@ -50,11 +62,7 @@ export function SectionHeader({
   as?: "h2" | "h3";
   className?: string;
 }) {
-  return (
-    <Tag className={`font-display text-lg font-semibold text-ink-900 ${className}`}>
-      {title}
-    </Tag>
-  );
+  return <Tag className={`${TITRE_SECTION} ${className}`}>{title}</Tag>;
 }
 
 /**
@@ -73,11 +81,7 @@ export function SectionTitle({
   as?: "h2" | "h3";
   className?: string;
 }) {
-  return (
-    <Tag className={`font-display text-lg font-semibold text-ink-900 ${className}`}>
-      {children}
-    </Tag>
-  );
+  return <Tag className={`${TITRE_SECTION} ${className}`}>{children}</Tag>;
 }
 
 /**
@@ -93,9 +97,5 @@ export function GroupTitle({
   as?: "h3" | "h4" | "legend";
   className?: string;
 }) {
-  return (
-    <Tag className={`font-display text-base font-semibold text-ink-900 ${className}`}>
-      {children}
-    </Tag>
-  );
+  return <Tag className={`${TITRE_GROUPE} ${className}`}>{children}</Tag>;
 }

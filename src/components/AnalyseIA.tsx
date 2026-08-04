@@ -29,6 +29,7 @@ import { useCashflowDetail } from "@/components/CashflowDetailProvider";
 import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderMarkdownBold } from "@/components/richText";
+import { TITRE_SECTION } from "@/components/SectionHeader";
 import { redirectionQuota } from "@/lib/quota";
 
 /** Repli si le profil investisseur n'a pas pu être chargé — les seuils réels
@@ -39,7 +40,7 @@ const HIGHLIGHTS_RENDEMENT = new Set(["Rendement brut", "Rendement net"]);
 
 /** Libellés produits par `buildBlocSimulation` — les garder synchronisés avec
  * `blocs/simulation.ts`, c'est lui qui fabrique ces chaînes. */
-const HIGHLIGHTS_CASHFLOW = new Set(["Cash-flow mensuel — année 1", "Cash-flow mensuel moyen"]);
+const HIGHLIGHTS_CASHFLOW_RE = /^Cash-flow mensuel/;
 
 /** Les highlights ont un habillage identique quelle que soit la tonalité —
  * seule la couleur de la valeur varie, et elle vient de `TONE_TEXT_CLASS`
@@ -570,7 +571,7 @@ function FlatSection({
       {/* Header: title + tag | score */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
-          <h3 className="font-display text-xl font-semibold text-ink-900">{bloc.titre}</h3>
+          <h3 className={TITRE_SECTION}>{bloc.titre}</h3>
           {categ && (
             <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${CATEGORIE_TAG_STYLES[categ.tone]}`}>
               {categ.label}
@@ -619,13 +620,18 @@ function FlatSection({
           )}
 
           {/* Highlights as neutral metric-style cards */}
-          {bloc.highlights && bloc.highlights.length > 0 && (
-            <div className="grid grid-cols-2 gap-3">
-              {bloc.highlights.map((h, i) => (
-                <HighlightStatCard key={i} highlight={h} apartment={apartment} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
-              ))}
-            </div>
-          )}
+          {bloc.highlights && bloc.highlights.length > 0 && (() => {
+            const filtered = bloc.cle === "simulation"
+              ? bloc.highlights.filter((h) => !h.label.includes("année 1"))
+              : bloc.highlights;
+            return filtered.length > 0 && (
+              <div className={`grid gap-3 ${filtered.length === 1 ? "max-w-[50%]" : "grid-cols-2"}`}>
+                {filtered.map((h, i) => (
+                  <HighlightStatCard key={i} highlight={h} apartment={apartment} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Facts */}
           {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
@@ -694,7 +700,7 @@ function HighlightStatCard({
 
   const onClick = HIGHLIGHTS_RENDEMENT.has(highlight.label)
     ? () => openRendementDetail(apartment, seuilsRendement)
-    : HIGHLIGHTS_CASHFLOW.has(highlight.label)
+    : HIGHLIGHTS_CASHFLOW_RE.test(highlight.label)
       ? () => openCashflowDetail(apartment, cashflowSeuils, settings)
       : undefined;
 

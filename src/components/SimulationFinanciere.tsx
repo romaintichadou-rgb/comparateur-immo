@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { ArrowDown, Calculator, ChevronDown, Landmark, PieChart, Plus, SlidersHorizontal, TrendingUp, X } from "lucide-react";
+import { Calculator, ChevronDown, Plus, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
@@ -21,7 +21,7 @@ import {
   type SimulationInputs,
 } from "@/lib/simulation";
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
-import { SectionHeader } from "@/components/SectionHeader";
+import { GroupTitle, SectionHeader, TITRE_SECTION } from "@/components/SectionHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
@@ -118,9 +118,7 @@ function ChampHerite({
 
 /** Intitulé d'un groupe d'hypothèses (Crédit / Fiscalité / Projection). */
 function HypGroupTitle({ children }: { children: ReactNode }) {
-  return (
-    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-400">{children}</p>
-  );
+  return <GroupTitle className="mb-1">{children}</GroupTitle>;
 }
 
 /**
@@ -145,13 +143,8 @@ function HypRow({ label, value, badge }: { label: string; value: string; badge?:
   );
 }
 
-function FinSectionTitle({ icon: Icon, children }: { icon: typeof Landmark; children: ReactNode }) {
-  return (
-    <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-500">
-      <Icon className="h-3.5 w-3.5 text-ink-400" />
-      {children}
-    </p>
-  );
+function FinSectionTitle({ children }: { children: ReactNode }) {
+  return <GroupTitle className="mb-2">{children}</GroupTitle>;
 }
 
 function FinRow({ label, value, badge, suffix }: { label: string; value: string; badge?: ReactNode; suffix?: string }) {
@@ -381,7 +374,7 @@ export default function SimulationFinanciere({
     return (
       <div className="rounded-xl border border-ink-200 bg-white p-10 text-center">
         <Calculator className="mx-auto h-8 w-8 text-ink-300" />
-        <h2 className="mt-3 text-lg font-semibold text-ink-900">Simulation financière</h2>
+        <h2 className="mt-3 font-display text-lg font-semibold text-ink-900">Simulation financière</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
           Renseigne d&apos;abord un loyer et un prix dans l&apos;onglet « Description de
           l&apos;appartement » pour simuler le cash-flow.
@@ -422,7 +415,7 @@ export default function SimulationFinanciere({
 
       {/* Cash-flow mensuel détaillé (remonté en tête pour montrer le détail d'abord) */}
       <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-        <SectionHeader icon={ArrowDown} title="Cash-flow mensuel" as="h3" />
+        <SectionHeader title="Cash-flow mensuel" as="h3" />
         <ul className="divide-y divide-ink-100 text-sm">
           <WaterfallRow
             label="Loyers encaissés"
@@ -450,7 +443,7 @@ export default function SimulationFinanciere({
               {formatEurosSigned(cfLMNP)}
             </span>
           </div>
-          <div className="mt-3 rounded-lg bg-white/60 px-3 py-2.5 text-xs leading-relaxed text-ink-500">
+          <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-xs leading-relaxed text-ink-500">
             {result.annees[0].impot === 0 ? (<>
               <strong className="font-semibold text-ink-700">Pourquoi 0 € d'impôt ?</strong>{" "}
               En LMNP au réel, tu déduis l'usure du bien (amortissements) de tes revenus locatifs.
@@ -499,21 +492,14 @@ export default function SimulationFinanciere({
           onClick={() => !editingId && setHypOpen((o) => !o)}
           className="flex w-full items-center justify-between px-5 py-3"
         >
-          <span className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center rounded-lg bg-ink-100 p-1.5 text-ink-500">
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-              Hypothèses
-            </span>
-          </span>
+          <span className={TITRE_SECTION}>Hypothèses</span>
           <ChevronDown
             className={`h-4 w-4 text-ink-400 transition-transform ${hypOpen ? "rotate-180" : ""}`}
           />
         </button>
 
         {/* Summary pills — toujours visibles */}
-        <div className="flex flex-wrap gap-1.5 px-5 pb-3">
+        <div className="flex flex-wrap gap-1.5 px-5 pb-4">
           <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
             {REGIMES_FISCAUX[resolus.regimeFiscal]}
           </span>
@@ -648,7 +634,7 @@ export default function SimulationFinanciere({
                 <>
                   <div className="grid grid-cols-1 gap-x-10 py-3.5 sm:grid-cols-2">
                     <div>
-                      <FinSectionTitle icon={Landmark}>Fiscalité</FinSectionTitle>
+                      <FinSectionTitle>Fiscalité</FinSectionTitle>
                       <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
                       <FinRow
                         label="TMI"
@@ -663,7 +649,7 @@ export default function SimulationFinanciere({
                       />
                     </div>
                     <div>
-                      <FinSectionTitle icon={TrendingUp}>Projection</FinSectionTitle>
+                      <FinSectionTitle>Projection</FinSectionTitle>
                       <FinRow label="Revalorisation du bien" value={hypPct(inputs.revalorisationBienPct)} />
                       <FinRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
                       <FinRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
@@ -700,7 +686,7 @@ export default function SimulationFinanciere({
       {/* Graphiques (remontés avant le tableau) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-5">
-          <SectionHeader icon={PieChart} title="Financement du projet" as="h3" />
+          <SectionHeader title="Financement du projet" as="h3" />
           <p className="text-xs text-ink-400">
             {`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolus.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
           </p>
@@ -708,7 +694,7 @@ export default function SimulationFinanciere({
         </section>
 
         <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-          <SectionHeader icon={TrendingUp} title="Évolution du patrimoine" as="h3" />
+          <SectionHeader title="Évolution du patrimoine" as="h3" />
           <p className="text-xs text-ink-400">
             Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
             (valeur du bien au-delà de la dette et de l&apos;apport non récupéré), et l&apos;effort
@@ -730,10 +716,10 @@ export default function SimulationFinanciere({
           className="flex w-full items-center justify-between px-5 py-3"
         >
           <span className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center rounded-lg bg-ink-100 p-1.5 text-ink-500">
+            <span className="inline-flex items-center justify-center rounded-lg bg-ink-100 p-1.5 text-ink-400">
               <Calculator className="h-3.5 w-3.5" />
             </span>
-            <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            <span className="text-sm font-semibold uppercase tracking-wide text-ink-500">
               Cash-flow année par année
             </span>
           </span>
