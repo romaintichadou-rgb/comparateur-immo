@@ -136,7 +136,7 @@ dans les boutons CTA.
 | Composant | Fichier | Rôle |
 |---|---|---|
 | `StatCard` | `StatCard.tsx` | Carte métrique tonale (label/valeur/sub/tone). Mode simple ou avant→après. Affordance cliquable : pointillé sous la valeur + « Calcul → » en pied de carte, **dans le flux** (`mt-auto`), jamais en `absolute` — voir « les quatre pièges du mobile ». |
-| `SectionHeader` | `SectionHeader.tsx` | En-tête de section : icon-pill accent + titre uppercase. Props : `icon`, `title`, `as` (h2/h3), `className`. Toujours préférer ce composant plutôt que recréer le pattern manuellement. |
+| `SectionHeader` | `SectionHeader.tsx` | En-tête de carte/section : icon-pill + titre uppercase. Props : `icon`, `title`, `as` (h2/h3), `className`. **OBLIGATOIRE pour tout en-tête de carte bordée.** Voir « Hiérarchie des en-têtes de carte » ci-dessous. |
 | `SectionTitle` | `SectionHeader.tsx` | Titre de section **sans icône**. Utilise `font-display` (Fraunces) pour garantir la cohérence typographique de tous les H2/H3. Props : `as` (h2/h3), `className`. À préférer aux `<h2>`/`<h3>` bruts pour éviter les erreurs de font. |
 | `Skeleton` | `Skeleton.tsx` | Barre shimmer de chargement. |
 | `ConfirmDialog` | `ConfirmDialog.tsx` | Modale de confirmation destructive (titre, description, bouton rouge). |
@@ -179,6 +179,38 @@ Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 | Espacement onglet → contenu | 24px mobile / 32px desktop | `pb-6 sm:pb-8` |
 | Séparateur de section | — | `border-t border-ink-100/50` |
 | Séparateur de faits | — | `divide-y divide-ink-100/50` |
+
+## Hiérarchie des en-têtes de carte
+
+Trois niveaux, jamais recréés à la main — utiliser le composant ou copier les classes exactes.
+
+### Niveau 1 — En-tête de carte bordée (`SectionHeader`)
+
+Utiliser **obligatoirement** le composant `SectionHeader` pour tout en-tête de carte `rounded-xl border`.
+Classes internes (référence, ne pas recréer) :
+- Icon pill : `rounded-lg bg-accent-50 p-1.5 text-accent-400` (accent) ou `rounded-lg bg-ink-100 p-1.5 text-ink-400` (neutre, sections input)
+- Icon : `h-3.5 w-3.5`
+- Titre : `text-sm font-semibold uppercase tracking-wide text-ink-500`
+
+### Niveau 2 — En-tête collapsible (Financement, Hypothèses, Cash-flow…)
+
+Quand une carte bordée a un `<button>` toggle au lieu d'un heading, reproduire **exactement** le même rendu visuel que `SectionHeader` :
+```
+<span className="inline-flex items-center justify-center rounded-lg bg-accent-50 p-1.5 text-accent-400">
+  <Icon className="h-3.5 w-3.5" />
+</span>
+<span className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+  Titre
+</span>
+```
+Ne jamais utiliser `text-xs`, `font-bold`, ou `text-accent-600` pour ces en-têtes — ce sont les erreurs corrigées.
+
+### Niveau 3 — Sous-titre de groupe (`FinSectionTitle`, `HypGroupTitle`)
+
+Titres internes de sous-sections (ex. « Crédit immobilier », « Fiscalité LMNP ») :
+- Taille réduite : `text-[11px]` ou `text-[10px]`
+- Style : `font-semibold uppercase tracking-wide text-ink-400`
+- Icon nu (pas de pill) : `h-3.5 w-3.5` directement dans le texte
 
 ## Pattern « Sections sans card »
 
@@ -1677,6 +1709,32 @@ TMI.
 pour `simulation_inputs`, pas via `JSON.stringify` — même leçon que `memeProfil`,
 l'ordre des clés d'un objet reconstruit n'est pas garanti. Ajouter un champ à
 `CHAMPS_EMPREINTE` invalide automatiquement les analyses antérieures.
+
+### ⚠️ L'empreinte se calcule TOUJOURS sur un bien passé par `computeDerived`
+
+Quatre champs de `CHAMPS_EMPREINTE` — `frais_notaire_estimes`, `taxe_fonciere`,
+`charges_copro_annuelles`, `assurance_annuelle` — sont **recalculés à la volée**
+par `applyLiveEstimates` (appelé par `computeDerived`) tant qu'ils sont en mode
+auto. La valeur en base et la valeur affichée peuvent donc différer
+légitimement.
+
+`run.ts` estampillait la ligne BRUTE (`empreinteBien(apt)`) pendant que
+`ApartmentDetail` compare la version RECALCULÉE. Les deux côtés étaient
+structurellement incomparables : la bannière « les données du bien ont changé »
+**revenait immédiatement après chaque relance, indéfiniment**, sans qu'aucune
+donnée n'ait bougé. Constaté en base : `frais_notaire_estimes` stocké à
+18 750 € et recalculé à 20 250 € sur le même bien.
+
+Le paramètre d'`empreinteBien` exige désormais `budget_total`, champ que **seul
+`computeDerived` ajoute** : repasser une ligne brute ne compile plus. C'est
+délibérément une contrainte de type et non un commentaire — le mode d'échec est
+silencieux (aucune erreur, aucun log) et ne se manifeste qu'à l'usage.
+
+Corollaire : un bien analysé AVANT ce correctif garde son empreinte fautive
+jusqu'à sa prochaine relance. Une seule suffit.
+
+`computeDerived` est idempotent (vérifié sur l'ensemble des biens) — c'est ce
+qui garantit que serveur et client aboutissent à la même empreinte.
 
 `memeProfil` compare de même **champ par champ** à partir des clés de
 `DEFAULT_SETTINGS`. Corollaire volontaire : tout nouveau champ ajouté à

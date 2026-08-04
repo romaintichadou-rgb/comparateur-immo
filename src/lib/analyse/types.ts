@@ -300,11 +300,29 @@ const CHAMPS_EMPREINTE = [
  * Clés triées et sérialisation explicite : l'ordre des clés d'un objet
  * reconstruit n'est pas garanti, `JSON.stringify` produirait de faux positifs
  * permanents (même leçon que `memeProfil`).
+ *
+ * ⚠️ **Toujours sur un bien passé par `computeDerived`.** Quatre champs de
+ * l'empreinte — frais de notaire, taxe foncière, charges de copropriété,
+ * assurance — sont RECALCULÉS à la volée par `applyLiveEstimates` tant qu'ils
+ * sont en mode auto. Estampiller la ligne brute d'un côté et comparer la
+ * version recalculée de l'autre rend les deux structurellement incomparables :
+ * la bannière « les données du bien ont changé » revient alors indéfiniment,
+ * sans qu'aucune donnée n'ait bougé (constaté en base : frais de notaire
+ * stockés à 18 750 €, recalculés à 20 250 € sur le même bien).
+ *
+ * Le paramètre exige donc `budget_total`, champ que SEUL `computeDerived`
+ * ajoute : passer une ligne brute ne compile pas. C'est volontairement une
+ * contrainte de type et non un commentaire — le mode d'échec est silencieux
+ * et ne se voit qu'à l'usage, plusieurs jours plus tard.
  */
 type ChampEmpreinte = (typeof CHAMPS_EMPREINTE)[number];
 
 export function empreinteBien(
-  apt: { [K in ChampEmpreinte]?: unknown } & { simulation_inputs?: unknown }
+  apt: { [K in ChampEmpreinte]?: unknown } & {
+    simulation_inputs?: unknown;
+    /** Marqueur de `computeDerived` — voir l'avertissement ci-dessus. */
+    budget_total: number | null;
+  }
 ): string {
   const parts = CHAMPS_EMPREINTE.map((k) => `${k}=${apt[k] ?? ""}`);
   const si = apt.simulation_inputs as Record<string, unknown> | null | undefined;

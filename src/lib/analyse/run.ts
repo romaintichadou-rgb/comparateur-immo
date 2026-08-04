@@ -122,7 +122,20 @@ export async function runAnalyse(
     // Idem côté BIEN : loyer, charges et hypothèses de crédit se modifient par
     // des chemins qui ne relancent pas l'analyse (`saveField`,
     // `SimulationFinanciere`). L'empreinte est le seul moyen de le voir.
-    empreinteBien: empreinteBien(apt),
+    //
+    // ⚠️ Calculée sur `aptComputed`, PAS sur `apt`. La bannière d'obsolescence
+    // compare cette empreinte à `empreinteBien(apt)` côté client, où `apt` est
+    // toujours passé par `computeDerived` — donc par `applyLiveEstimates`, qui
+    // RECALCULE quatre champs présents dans l'empreinte : frais de notaire,
+    // taxe foncière, charges de copropriété, assurance.
+    //
+    // Estampiller la ligne brute rendait donc les deux côtés structurellement
+    // incomparables dès qu'un de ces champs était en mode auto : la bannière
+    // « les données du bien ont changé » revenait immédiatement après chaque
+    // relance, indéfiniment, sans qu'aucune donnée n'ait bougé. Constaté en
+    // base : `frais_notaire_estimes` stocké à 18 750 € et recalculé à 20 250 €
+    // sur le même bien.
+    empreinteBien: empreinteBien(aptComputed),
   };
 
   // Score global pondéré (avec plafonds) + verdicts, AVANT la narration (la
