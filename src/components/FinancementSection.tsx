@@ -250,7 +250,10 @@ export default function FinancementSection({
                       <NumberField
                         label="Montant emprunté"
                         value={result.montantEmprunte}
-                        onChange={(v) => set("montantEmprunte", v)}
+                        onChange={(v) => {
+                          if (v != null && v <= 0) return;
+                          set("montantEmprunte", v);
+                        }}
                         suffix="€"
                         hint={
                           result.montantAutomatique ? (
@@ -268,7 +271,10 @@ export default function FinancementSection({
                       suffix="%/an"
                       override={inputs.tauxCreditPct}
                       resolu={resolus.tauxCreditPct}
-                      onChange={(v) => set("tauxCreditPct", v)}
+                      onChange={(v) => {
+                        if (v != null && v <= 0) return;
+                        set("tauxCreditPct", v);
+                      }}
                     />
                     <ChampHerite
                       label="Durée"
@@ -282,7 +288,10 @@ export default function FinancementSection({
                       suffix="%/an"
                       override={inputs.tauxAssurancePct}
                       resolu={resolus.tauxAssurancePct}
-                      onChange={(v) => set("tauxAssurancePct", v)}
+                      onChange={(v) => {
+                        if (v != null && v <= 0) return;
+                        set("tauxAssurancePct", v);
+                      }}
                     />
                     <p className="text-[11px] leading-relaxed text-ink-400">
                       En mode <strong className="font-medium text-ink-500">auto</strong>, l&apos;emprunt
