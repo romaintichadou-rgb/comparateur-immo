@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Calculator, ChevronDown, Plus, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
+import { DEFAULT_HYPOTHESE_GESTION_PCT } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
@@ -21,7 +22,7 @@ import {
   type SimulationInputs,
 } from "@/lib/simulation";
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
-import { GroupTitle, SectionHeader, TITRE_SECTION } from "@/components/SectionHeader";
+import { GroupTitle, SectionHeader } from "@/components/SectionHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
@@ -38,14 +39,6 @@ import { formatEurosSigned, formatNombre } from "@/lib/format";
 
 /** Petit contrôle "+" discret pour activer une hypothèse optionnelle
  * (désactivée par défaut = la plus prudente), avec une valeur de repli au clic. */
-/** Pastille d'origine d'une valeur (accent, discrète), à côté du libellé. */
-function Pastille({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
-      {children}
-    </span>
-  );
-}
 
 /**
  * Champ HÉRITÉ du Profil investisseur, avec surcharge possible sur ce bien.
@@ -94,7 +87,6 @@ function ChampHerite({
           // durée, `Math.max(1, …)` le ramenait à 1 an sans que rien ne le dise.
           onChange={onChange}
           suffix={suffix}
-          hint={herite ? <Pastille>profil</Pastille> : undefined}
         />
       </div>
       {/* Emplacement réservé même sans bouton : sinon les champs surchargés
@@ -106,7 +98,7 @@ function ChampHerite({
             onClick={() => onChange(null)}
             title="Revenir à la valeur du profil investisseur"
             aria-label={`${label} : revenir au profil`}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:text-ink-500"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -161,9 +153,10 @@ function FinRow({ label, value, badge, suffix }: { label: string; value: string;
 }
 
 /** Hypothèse optionnelle en lecture : « — » quand elle est désactivée.
- *  (`pct` est déjà pris plus bas par le calcul de part d'un total.) */
+ *  (`pct` est déjà pris plus bas par le calcul de part d'un total.)
+ *  Traite 0 comme null/vide pour cohérence avec les autres champs. */
 function hypPct(v: number | null): string {
-  return v == null ? "—" : `${formatNombre(v)} %`;
+  return v == null || v === 0 ? "—" : `${formatNombre(v)} %`;
 }
 
 
@@ -194,13 +187,26 @@ function OptionalRateField({
   }
   return (
     <div className="flex items-end gap-1">
-      <NumberField label={label} value={value} onChange={(v) => onChange(v ?? 0)} suffix={suffix} />
+      <NumberField
+        label={label}
+        value={value}
+        onChange={(v) => {
+          const num = v ?? 0;
+          // Rejette les valeurs ≤ 0 : désactive le champ si zéro
+          if (num <= 0) {
+            onChange(null);
+          } else {
+            onChange(num);
+          }
+        }}
+        suffix={suffix}
+      />
       <button
         type="button"
         onClick={() => onChange(null)}
         title="Désactiver cette hypothèse"
         aria-label={`Désactiver ${label}`}
-        className="mb-[3px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+        className="mb-[3px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:text-ink-500"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -286,7 +292,8 @@ export default function SimulationFinanciere({
     + (inputs.revalorisationBienPct != null ? 1 : 0)
     + (inputs.revalorisationLoyerPct != null ? 1 : 0)
     + (inputs.indexationChargesPct != null ? 1 : 0)
-    + (inputs.vacanceLocativePct != null ? 1 : 0);
+    + (inputs.vacanceLocativePct != null ? 1 : 0)
+    + (inputs.gestionPct != null ? 1 : 0);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
@@ -307,24 +314,22 @@ export default function SimulationFinanciere({
   }
 
   async function saveEdit() {
-    // La quote-part part dans le MÊME PATCH que les hypothèses. Deux requêtes
-    // enchaînées laissaient une fenêtre incohérente : le second appel repartait
-    // de l'`apartment` capturé au rendu précédent et réécrasait localement les
-    // `simulation_inputs` qu'on venait d'enregistrer, jusqu'à ce que la réponse
+    // Quote-part partent dans le MÊME PATCH que les hypothèses.
+    // Deux requêtes enchaînées laissaient une fenêtre incohérente : le second appel
+    // repartait de l'`apartment` capturé au rendu précédent et réécrasait localement
+    // les `simulation_inputs` qu'on venait d'enregistrer, jusqu'à ce que la réponse
     // serveur remette tout d'aplomb.
-    await persist(
-      inputs,
-      quotePartDraft && quotePartDraft.value !== (apartment.quote_part_terrain_pct ?? null)
-        ? { quote_part_terrain_pct: quotePartDraft.value }
-        : undefined,
-    );
+    const extra: { quote_part_terrain_pct?: number | null } | undefined = quotePartDraft && quotePartDraft.value !== (apartment.quote_part_terrain_pct ?? null)
+      ? { quote_part_terrain_pct: quotePartDraft.value }
+      : undefined;
+    await persist(inputs, extra);
     setQuotePartDraft(null);
     setSnapshot(null);
     setEditingId(null);
   }
 
   /** Point d'enregistrement UNIQUE de l'onglet : un PATCH, une réponse, un
-   *  `onSaved`. La quote-part terrain passait auparavant par un chemin séparé
+   *  `onSaved`. Quote-part terrain passait auparavant par un chemin séparé
    *  (PATCH immédiat à chaque frappe, sans annulation possible).
    *
    *  `payload` est passé EXPLICITEMENT et non lu dans l'état : la réinitialisation
@@ -332,7 +337,7 @@ export default function SimulationFinanciere({
    *  encore à jour au moment de construire le corps de la requête. */
   async function persist(
     payload: SimulationInputs,
-    extra?: { quote_part_terrain_pct: number | null },
+    extra?: { quote_part_terrain_pct?: number | null },
   ) {
     setSaving(true);
     try {
@@ -361,6 +366,7 @@ export default function SimulationFinanciere({
       revalorisationLoyerPct: null,
       indexationChargesPct: null,
       vacanceLocativePct: null,
+      gestionPct: null,
     };
     setInputs(patched);
     setQuotePartDraft(null);
@@ -413,7 +419,275 @@ export default function SimulationFinanciere({
         onCancel={() => setConfirmReset(false)}
       />
 
-      {/* Cash-flow mensuel détaillé (remonté en tête pour montrer le détail d'abord) */}
+      {/* Hypothèses — tout en haut comme données d'entrée */}
+      <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "hypotheses" ? "border-accent-300" : "border-ink-200"}`}>
+        <button
+          type="button"
+          onClick={() => !editingId && setHypOpen((o) => !o)}
+          className="flex w-full flex-col gap-3 px-5 py-5 text-left"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg font-semibold text-ink-900">Hypothèses</h3>
+            <ChevronDown
+              className={`h-4 w-4 text-ink-400 transition-transform ${hypOpen ? "rotate-180" : ""}`}
+            />
+          </div>
+
+          {/* Summary pills — toujours visibles, cliquable */}
+          <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+            {REGIMES_FISCAUX[resolus.regimeFiscal]}
+          </span>
+          <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+            TMI {formatNombre(resolus.tmiPct)} %
+          </span>
+          {inputs.revalorisationLoyerPct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Revalo loyer {formatNombre(inputs.revalorisationLoyerPct)} %/an
+            </span>
+          )}
+          {inputs.vacanceLocativePct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Vacance {formatNombre(inputs.vacanceLocativePct)} %
+            </span>
+          )}
+          </div>
+        </button>
+
+        {hypOpen && (
+          <div className="px-5 pb-4">
+            <div className="border-t border-ink-100 pt-1">
+              {editingId === "hypotheses" ? (
+                <>
+                  <div className="grid grid-cols-1 gap-x-32 gap-y-16 py-4 sm:grid-cols-2">
+                    <div className="space-y-3">
+                      <HypGroupTitle>Fiscalité</HypGroupTitle>
+                      <SelectField
+                        label="Régime fiscal"
+                        value={resolus.regimeFiscal}
+                        onChange={(v) => set("regimeFiscal", v)}
+                        options={REGIMES_FISCAUX_OPTIONS}
+                        optionLabel={(v) => REGIMES_FISCAUX[v]}
+                        allowEmpty={false}
+                        hint={
+                          <span className="text-xs font-normal text-ink-400">seul régime géré</span>
+                        }
+                      />
+                      <SelectField
+                        label="Tranche marginale d'imposition (TMI)"
+                        value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
+                        onChange={(v) => set("tmiPct", Number(v))}
+                        options={TMI_OPTIONS}
+                        allowEmpty={false}
+                        hint={
+                          <span className="text-xs font-normal text-ink-400">
+                            + {LMNP.prelevementsSociauxPct} % PS
+                          </span>
+                        }
+                      />
+                      <NumberField
+                        label="Quote-part terrain"
+                        value={result.quotePartTerrainPct}
+                        onChange={(v) => setQuotePartDraft({ value: v })}
+                        suffix="% du prix"
+                      />
+                    </div>
+
+                    <div className="space-y-4">
+                      <HypGroupTitle>Projection</HypGroupTitle>
+
+                      {/* Champs activés (avec valeur) — en haut */}
+                      <div className="space-y-2">
+                        {inputs.revalorisationBienPct != null && (
+                          <div className="flex flex-wrap gap-2">
+                            <OptionalRateField
+                              label="Revalorisation du bien"
+                              value={inputs.revalorisationBienPct}
+                              defaut={REVALORISATION_BIEN_DEFAUT_PCT}
+                              onChange={(v) => set("revalorisationBienPct", v)}
+                            />
+                          </div>
+                        )}
+                        {inputs.revalorisationLoyerPct != null && (
+                          <div className="flex flex-wrap gap-2">
+                            <OptionalRateField
+                              label="Revalorisation du loyer"
+                              value={inputs.revalorisationLoyerPct}
+                              defaut={REVALORISATION_LOYER_DEFAUT_PCT}
+                              onChange={(v) => set("revalorisationLoyerPct", v)}
+                            />
+                          </div>
+                        )}
+                        {inputs.indexationChargesPct != null && (
+                          <div className="flex flex-wrap gap-2">
+                            <OptionalRateField
+                              label="Indexation charges"
+                              value={inputs.indexationChargesPct}
+                              defaut={INDEXATION_CHARGES_DEFAUT_PCT}
+                              onChange={(v) => set("indexationChargesPct", v)}
+                            />
+                          </div>
+                        )}
+                        {inputs.vacanceLocativePct != null && (
+                          <div className="flex flex-wrap gap-2">
+                            <OptionalRateField
+                              label="Vacance locative"
+                              value={inputs.vacanceLocativePct}
+                              defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
+                              onChange={(v) => set("vacanceLocativePct", v)}
+                              suffix="% du loyer"
+                            />
+                          </div>
+                        )}
+                        {inputs.gestionPct != null && (
+                          <div className="flex flex-wrap gap-2">
+                            <OptionalRateField
+                              label="Frais de gestion locative"
+                              value={inputs.gestionPct}
+                              defaut={DEFAULT_HYPOTHESE_GESTION_PCT}
+                              onChange={(v) => set("gestionPct", v)}
+                              suffix="% du loyer"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Boutons pour ajouter des projections — en bas */}
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {inputs.revalorisationBienPct == null && (
+                            <OptionalRateField
+                              label="Revalorisation du bien"
+                              value={null}
+                              defaut={REVALORISATION_BIEN_DEFAUT_PCT}
+                              onChange={(v) => set("revalorisationBienPct", v)}
+                            />
+                          )}
+                          {inputs.revalorisationLoyerPct == null && (
+                            <OptionalRateField
+                              label="Revalorisation du loyer"
+                              value={null}
+                              defaut={REVALORISATION_LOYER_DEFAUT_PCT}
+                              onChange={(v) => set("revalorisationLoyerPct", v)}
+                            />
+                          )}
+                          {inputs.indexationChargesPct == null && (
+                            <OptionalRateField
+                              label="Indexation charges"
+                              value={null}
+                              defaut={INDEXATION_CHARGES_DEFAUT_PCT}
+                              onChange={(v) => set("indexationChargesPct", v)}
+                            />
+                          )}
+                          {inputs.vacanceLocativePct == null && (
+                            <OptionalRateField
+                              label="Vacance locative"
+                              value={null}
+                              defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
+                              onChange={(v) => set("vacanceLocativePct", v)}
+                              suffix="% du loyer"
+                            />
+                          )}
+                          {inputs.gestionPct == null && (
+                            <OptionalRateField
+                              label="Frais de gestion locative"
+                              value={null}
+                              defaut={DEFAULT_HYPOTHESE_GESTION_PCT}
+                              onChange={(v) => set("gestionPct", v)}
+                              suffix="% du loyer"
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] leading-relaxed text-ink-400">
+                        Désactivées par défaut : aucune revalorisation, indexation ni vacance n&apos;est
+                        supposée, c&apos;est l&apos;hypothèse la plus prudente.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-ink-100/50 pt-3">
+                    {surchargesHyp > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmReset(true)}
+                        className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
+                      >
+                        Réinitialiser
+                      </button>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveEdit}
+                        disabled={saving}
+                        className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {saving ? "Enregistrement…" : "Enregistrer"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-x-32 gap-y-12 py-4 sm:grid-cols-2">
+                    <div>
+                      <FinSectionTitle>Fiscalité</FinSectionTitle>
+                      <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
+                      <FinRow
+                        label="TMI"
+                        value={`${formatNombre(resolus.tmiPct)} %`}
+                        suffix={`+ ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
+                      />
+                      <FinRow
+                        label="Quote-part terrain"
+                        value={`${formatNombre(result.quotePartTerrainPct)} %`}
+                      />
+                    </div>
+                    <div>
+                      <FinSectionTitle>Projection</FinSectionTitle>
+                      <FinRow label="Revalorisation du bien" value={hypPct(inputs.revalorisationBienPct)} />
+                      <FinRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
+                      <FinRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
+                      <FinRow label="Vacance locative" value={hypPct(inputs.vacanceLocativePct)} />
+                      <FinRow label="Frais de gestion locative" value={hypPct(inputs.gestionPct)} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-6">
+                    {surchargesHyp > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmReset(true)}
+                        className="min-h-[44px] rounded-lg px-3 py-2 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
+                      >
+                        Réinitialiser
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => startEdit()}
+                      disabled={editingId !== null}
+                      className="rounded-lg border border-accent-300 bg-white px-5 py-2 text-[13px] font-medium text-accent-600 transition-colors hover:border-accent-600 hover:bg-accent-50 disabled:opacity-50"
+                    >
+                      Modifier
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Cash-flow mensuel détaillé */}
       <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
         <SectionHeader title="Cash-flow mensuel" as="h3" />
         <ul className="divide-y divide-ink-100 text-sm">
@@ -485,204 +759,6 @@ export default function SimulationFinanciere({
         </div>
       )}
 
-      {/* Hypothèses — Fiscalité + Projection, séparées du financement */}
-      <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "hypotheses" ? "border-accent-300" : "border-ink-200"}`}>
-        <button
-          type="button"
-          onClick={() => !editingId && setHypOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-5 py-3"
-        >
-          <span className={TITRE_SECTION}>Hypothèses</span>
-          <ChevronDown
-            className={`h-4 w-4 text-ink-400 transition-transform ${hypOpen ? "rotate-180" : ""}`}
-          />
-        </button>
-
-        {/* Summary pills — toujours visibles */}
-        <div className="flex flex-wrap gap-1.5 px-5 pb-4">
-          <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-            {REGIMES_FISCAUX[resolus.regimeFiscal]}
-          </span>
-          <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-            TMI {formatNombre(resolus.tmiPct)} %
-          </span>
-          {inputs.revalorisationLoyerPct != null && (
-            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Revalo loyer {formatNombre(inputs.revalorisationLoyerPct)} %/an
-            </span>
-          )}
-          {inputs.vacanceLocativePct != null && (
-            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Vacance {formatNombre(inputs.vacanceLocativePct)} %
-            </span>
-          )}
-        </div>
-
-        {hypOpen && (
-          <div className="px-5 pb-4">
-            <div className="border-t border-ink-100 pt-1">
-              {editingId === "hypotheses" ? (
-                <>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-5 py-4 sm:grid-cols-2">
-                    <div className="space-y-3">
-                      <HypGroupTitle>Fiscalité</HypGroupTitle>
-                      <SelectField
-                        label="Régime fiscal"
-                        value={resolus.regimeFiscal}
-                        onChange={(v) => set("regimeFiscal", v)}
-                        options={REGIMES_FISCAUX_OPTIONS}
-                        optionLabel={(v) => REGIMES_FISCAUX[v]}
-                        allowEmpty={false}
-                        hint={
-                          <span className="text-xs font-normal text-ink-400">seul régime géré</span>
-                        }
-                      />
-                      <div className="flex items-end gap-1">
-                        <div className="flex-1">
-                          <SelectField
-                            label="Tranche marginale d'imposition (TMI)"
-                            value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
-                            onChange={(v) => set("tmiPct", Number(v))}
-                            options={TMI_OPTIONS}
-                            allowEmpty={false}
-                            hint={
-                              inputs.tmiPct == null ? (
-                                <Pastille>profil</Pastille>
-                              ) : (
-                                <span className="text-xs font-normal text-ink-400">
-                                  + {LMNP.prelevementsSociauxPct} % PS
-                                </span>
-                              )
-                            }
-                          />
-                        </div>
-                        {inputs.tmiPct != null && (
-                          <button
-                            type="button"
-                            onClick={() => set("tmiPct", null)}
-                            title="Revenir à la valeur du profil investisseur"
-                            aria-label="TMI : revenir au profil"
-                            className="mb-[3px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <NumberField
-                        label="Quote-part terrain"
-                        value={result.quotePartTerrainPct}
-                        onChange={(v) => setQuotePartDraft({ value: v })}
-                        suffix="% du prix"
-                        hint={quotePartDraft?.value == null ? <Pastille>auto</Pastille> : undefined}
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <HypGroupTitle>Projection</HypGroupTitle>
-                      <div className="flex flex-wrap items-end gap-2">
-                        <OptionalRateField
-                          label="Revalorisation du bien"
-                          value={inputs.revalorisationBienPct}
-                          defaut={REVALORISATION_BIEN_DEFAUT_PCT}
-                          onChange={(v) => set("revalorisationBienPct", v)}
-                        />
-                        <OptionalRateField
-                          label="Revalorisation du loyer"
-                          value={inputs.revalorisationLoyerPct}
-                          defaut={REVALORISATION_LOYER_DEFAUT_PCT}
-                          onChange={(v) => set("revalorisationLoyerPct", v)}
-                        />
-                        <OptionalRateField
-                          label="Indexation charges"
-                          value={inputs.indexationChargesPct}
-                          defaut={INDEXATION_CHARGES_DEFAUT_PCT}
-                          onChange={(v) => set("indexationChargesPct", v)}
-                        />
-                        <OptionalRateField
-                          label="Vacance locative"
-                          value={inputs.vacanceLocativePct}
-                          defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
-                          onChange={(v) => set("vacanceLocativePct", v)}
-                          suffix="% du loyer"
-                        />
-                      </div>
-                      <p className="text-[11px] leading-relaxed text-ink-400">
-                        Désactivées par défaut : aucune revalorisation, indexation ni vacance n&apos;est
-                        supposée, c&apos;est l&apos;hypothèse la plus prudente.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-2 border-t border-ink-100/50 pt-3">
-                    <button
-                      type="button"
-                      onClick={cancelEdit}
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveEdit}
-                      disabled={saving}
-                      className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {saving ? "Enregistrement…" : "Enregistrer"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 gap-x-10 py-3.5 sm:grid-cols-2">
-                    <div>
-                      <FinSectionTitle>Fiscalité</FinSectionTitle>
-                      <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
-                      <FinRow
-                        label="TMI"
-                        value={`${formatNombre(resolus.tmiPct)} %`}
-                        badge={inputs.tmiPct == null ? <Pastille>profil</Pastille> : undefined}
-                        suffix={`+ ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
-                      />
-                      <FinRow
-                        label="Quote-part terrain"
-                        value={`${formatNombre(result.quotePartTerrainPct)} %`}
-                        badge={apartment.quote_part_terrain_pct == null ? <Pastille>auto</Pastille> : undefined}
-                      />
-                    </div>
-                    <div>
-                      <FinSectionTitle>Projection</FinSectionTitle>
-                      <FinRow label="Revalorisation du bien" value={hypPct(inputs.revalorisationBienPct)} />
-                      <FinRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
-                      <FinRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
-                      <FinRow label="Vacance locative" value={hypPct(inputs.vacanceLocativePct)} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 border-t border-ink-100 py-3.5">
-                    {surchargesHyp > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmReset(true)}
-                        className="min-h-[44px] rounded-lg px-3 py-2 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
-                      >
-                        Réinitialiser
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => startEdit()}
-                      disabled={editingId !== null}
-                      className="rounded-lg border border-accent-300 bg-white px-5 py-2 text-[13px] font-medium text-accent-600 transition-colors hover:border-accent-600 hover:bg-accent-50 disabled:opacity-50"
-                    >
-                      Modifier
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
-
       {/* Graphiques (remontés avant le tableau) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-5">
@@ -713,9 +789,9 @@ export default function SimulationFinanciere({
         <button
           type="button"
           onClick={() => setTableOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-5 py-3"
+          className="flex w-full items-center justify-between px-5 py-5"
         >
-          <span className={TITRE_SECTION}>Cash-flow année par année</span>
+          <h3 className="font-display text-lg font-semibold text-ink-900">Cash-flow année par année</h3>
           <ChevronDown
             className={`h-4 w-4 text-ink-400 transition-transform ${tableOpen ? "rotate-180" : ""}`}
           />

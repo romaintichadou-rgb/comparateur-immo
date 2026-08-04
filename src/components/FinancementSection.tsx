@@ -30,14 +30,32 @@ function ChampHerite({
   override,
   resolu,
   onChange,
+  showCross = true,
+  step,
 }: {
   label: string;
   suffix: string;
   override: number | null;
   resolu: number;
   onChange: (v: number | null) => void;
+  showCross?: boolean;
+  step?: string | number;
 }) {
   const herite = override == null;
+
+  if (!showCross) {
+    return (
+      <NumberField
+        key={herite ? "herite" : "override"}
+        label={label}
+        value={herite ? resolu : override}
+        onChange={onChange}
+        suffix={suffix}
+        step={step}
+      />
+    );
+  }
+
   return (
     <div className="flex items-end gap-1">
       <div className="min-w-0 flex-1">
@@ -47,7 +65,7 @@ function ChampHerite({
           value={herite ? resolu : override}
           onChange={onChange}
           suffix={suffix}
-          hint={herite ? <Pastille>profil</Pastille> : undefined}
+          step={step}
         />
       </div>
       <div className="mb-[3px] w-11 shrink-0 flex justify-center">
@@ -57,7 +75,7 @@ function ChampHerite({
             onClick={() => onChange(null)}
             title="Revenir à la valeur du profil investisseur"
             aria-label={`${label} : revenir au profil`}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:text-ink-500"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -206,16 +224,16 @@ export default function FinancementSection({
         <button
           type="button"
           onClick={() => !editing && setOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-5 py-3"
+          className="flex w-full flex-col gap-3 px-5 py-3 text-left"
         >
-          <span className={TITRE_SECTION}>Financement</span>
-          <ChevronDown
-            className={`h-4 w-4 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`}
-          />
-        </button>
+          <div className="flex items-center justify-between">
+            <span className={TITRE_SECTION}>Financement</span>
+            <ChevronDown
+              className={`h-4 w-4 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`}
+            />
+          </div>
 
-        {/* Hero : mensualité + summary pills — toujours visible */}
-        <div className="px-5 pb-4">
+          {/* Hero : mensualité + summary pills — toujours visible, cliquable */}
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-ink-700">Mensualité de crédit</p>
@@ -237,38 +255,35 @@ export default function FinancementSection({
               Apport {euros(result.apport)} €
             </span>
           </div>
-        </div>
+        </button>
 
         {/* Corps dépliable */}
         {open && (
-          <div className="px-5 pb-4">
-            <div className="pt-1">
+          <div className="px-5 pb-6">
+            <div className="border-t border-ink-100 pt-6">
               {editing ? (
                 <>
                   <div className="space-y-3 py-4">
-                    <div className="pr-8">
-                      <NumberField
-                        label="Montant emprunté"
-                        value={result.montantEmprunte}
-                        onChange={(v) => set("montantEmprunte", v)}
-                        suffix="€"
-                        hint={
-                          result.montantAutomatique ? (
-                            <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
-                          ) : result.montantPlafonne ? (
-                            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                              ramené au coût total
-                            </span>
-                          ) : undefined
-                        }
-                      />
-                    </div>
+                    <NumberField
+                      label="Montant emprunté"
+                      value={result.montantEmprunte}
+                      onChange={(v) => {
+                        if (v != null && v <= 0) return; // Refuse les valeurs ≤ 0
+                        set("montantEmprunte", v);
+                      }}
+                      suffix="€"
+                    />
                     <ChampHerite
                       label="Taux du crédit"
                       suffix="%/an"
                       override={inputs.tauxCreditPct}
                       resolu={resolus.tauxCreditPct}
-                      onChange={(v) => set("tauxCreditPct", v)}
+                      onChange={(v) => {
+                        if (v != null && v <= 0) return; // Refuse les valeurs ≤ 0
+                        set("tauxCreditPct", v);
+                      }}
+                      showCross={false}
+                      step="0.01"
                     />
                     <ChampHerite
                       label="Durée"
@@ -276,13 +291,19 @@ export default function FinancementSection({
                       override={inputs.dureeAnnees}
                       resolu={resolus.dureeAnnees}
                       onChange={(v) => set("dureeAnnees", v == null ? null : Math.max(1, Math.min(35, v)))}
+                      showCross={false}
                     />
                     <ChampHerite
                       label="Assurance emprunteur"
                       suffix="%/an"
                       override={inputs.tauxAssurancePct}
                       resolu={resolus.tauxAssurancePct}
-                      onChange={(v) => set("tauxAssurancePct", v)}
+                      onChange={(v) => {
+                        if (v != null && v <= 0) return; // Refuse les valeurs ≤ 0
+                        set("tauxAssurancePct", v);
+                      }}
+                      showCross={false}
+                      step="0.01"
                     />
                     <p className="text-[11px] leading-relaxed text-ink-400">
                       En mode <strong className="font-medium text-ink-500">auto</strong>, l&apos;emprunt
@@ -291,69 +312,70 @@ export default function FinancementSection({
                       en auto.
                     </p>
                   </div>
-                  <div className="flex items-center justify-end gap-2 pt-3">
-                    <button
-                      type="button"
-                      onClick={cancelEdit}
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveEdit}
-                      disabled={saving}
-                      className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {saving ? "Enregistrement…" : "Enregistrer"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="py-3.5">
-                    <FinSectionTitle>Crédit immobilier</FinSectionTitle>
-                    <FinRow
-                      label="Montant emprunté"
-                      value={`${euros(result.montantEmprunte)} €`}
-                      badge={
-                        result.montantAutomatique ? (
-                          <Pastille>auto</Pastille>
-                        ) : result.montantPlafonne ? (
-                          <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                            plafonné
-                          </span>
-                        ) : undefined
-                      }
-                    />
-                    <FinRow
-                      label="Taux nominal"
-                      value={`${formatNombre(resolus.tauxCreditPct)} %`}
-                      badge={inputs.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
-                    />
-                    <FinRow
-                      label="Durée"
-                      value={`${formatNombre(resolus.dureeAnnees)} ans`}
-                      badge={inputs.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
-                    />
-                    <FinRow
-                      label="Assurance"
-                      value={`${formatNombre(resolus.tauxAssurancePct)} %`}
-                      badge={inputs.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
-                    />
-                  </div>
-
-                  <div className="py-3.5">
-                    <FinSectionTitle>Apport personnel</FinSectionTitle>
-                    <FinRow label="Frais de notaire + complément" value={`${euros(result.apport)} €`} />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 py-3.5">
+                  <div className="flex items-center justify-end gap-2 border-t border-ink-100/50 pt-3">
                     {surcharges > 0 && (
                       <button
                         type="button"
                         onClick={() => setConfirmReset(true)}
-                        className="min-h-[44px] rounded-lg px-3 py-2 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
+                        className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
+                      >
+                        Réinitialiser
+                      </button>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:bg-ink-50"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveEdit}
+                        disabled={saving}
+                        className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {saving ? "Enregistrement…" : "Enregistrer"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-6">
+                    <div>
+                      <FinSectionTitle>Crédit immobilier</FinSectionTitle>
+                      <FinRow
+                        label="Montant emprunté"
+                        value={`${euros(result.montantEmprunte)} €`}
+                      />
+                      <FinRow
+                        label="Taux nominal"
+                        value={`${formatNombre(resolus.tauxCreditPct)} %`}
+                      />
+                      <FinRow
+                        label="Durée"
+                        value={`${formatNombre(resolus.dureeAnnees)} ans`}
+                      />
+                      <FinRow
+                        label="Assurance"
+                        value={`${formatNombre(resolus.tauxAssurancePct)} %`}
+                      />
+                    </div>
+
+                    <div>
+                      <FinSectionTitle>Apport personnel</FinSectionTitle>
+                      <FinRow label="Frais de notaire + complément" value={`${euros(result.apport)} €`} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-6">
+                    {surcharges > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmReset(true)}
+                        className="min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium text-ink-400 underline underline-offset-2 transition-colors hover:bg-ink-50 hover:text-ink-600"
                       >
                         Réinitialiser
                       </button>

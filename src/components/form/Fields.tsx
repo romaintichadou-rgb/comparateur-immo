@@ -23,7 +23,7 @@ function FieldShell({
 }
 
 const inputClass =
-  "rounded-md border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500";
+  "rounded-md border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500";
 
 export function TextField({
   label,
@@ -98,12 +98,14 @@ export function NumberField({
   onChange,
   hint,
   suffix,
+  step,
 }: {
   label: string;
   value: number | null;
   onChange: (v: number | null) => void;
   hint?: ReactNode;
   suffix?: string;
+  step?: string | number;
 }) {
   // Texte affiché géré séparément de `value` : un <input type="number">
   // contrôlé directement par le nombre parsé casse la saisie d'un signe
@@ -142,6 +144,7 @@ export function NumberField({
           className={inputClass + (suffix ? " w-full pr-10" : " w-full")}
           value={texte}
           onChange={(e) => handleChange(e.target.value)}
+          step={step}
         />
         {suffix && (
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">
