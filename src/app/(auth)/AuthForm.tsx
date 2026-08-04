@@ -70,7 +70,7 @@ export default function AuthForm({
         <AppMark className="mx-auto h-10 w-10 text-accent-600" />
       </div>
 
-      <h1 className="font-display text-2xl font-semibold text-ink-900 max-lg:text-center lg:text-3xl">
+      <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 max-lg:text-center sm:text-3xl">
         {titre}
       </h1>
       <p className="mt-2 text-sm text-ink-500 max-lg:text-center">{sousTitre}</p>

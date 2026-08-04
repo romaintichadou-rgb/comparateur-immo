@@ -72,7 +72,7 @@ export default function HomeView({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
               {apartments.length} bien{apartments.length > 1 ? "s" : ""} suivi
               {apartments.length > 1 ? "s" : ""}
             </h1>

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Download, MousePointerClick } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { buildBookmarkletHref } from "@/lib/bookmarklet";
 import { APP_NAME } from "@/lib/constants";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -67,7 +67,7 @@ export default function BookmarkletView() {
       <RetourPagePrecedente />
 
       <div>
-        <h1 className="font-display text-xl font-semibold text-ink-900">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
           Importer une annonce depuis ton navigateur
         </h1>
         <p className="mt-2 text-sm text-ink-600">
@@ -80,7 +80,7 @@ export default function BookmarkletView() {
       </div>
 
       <div className="rounded-xl border border-ink-200 bg-white p-6">
-        <SectionHeader icon={Download} title="1. Installer le bookmarklet" />
+        <SectionHeader title="1. Installer le bookmarklet" />
         <p className="mt-2 text-sm text-ink-600">
           Glisse ce bouton dans ta barre de favoris (affiche-la si besoin avec{" "}
           <kbd className="rounded border border-ink-300 bg-ink-50 px-1">⌘⇧B</kbd>) :
@@ -104,7 +104,7 @@ export default function BookmarkletView() {
       </div>
 
       <div className="rounded-xl border border-ink-200 bg-white p-6">
-        <SectionHeader icon={MousePointerClick} title="2. Utiliser" />
+        <SectionHeader title="2. Utiliser" />
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-600">
           <li>Ouvre une annonce Leboncoin, SeLoger, PAP ou Orpi normalement dans ton navigateur</li>
           <li>Clique sur le favori &laquo;&nbsp;Importer dans {APP_NAME}&nbsp;&raquo;</li>

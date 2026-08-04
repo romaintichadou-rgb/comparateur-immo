@@ -833,7 +833,7 @@ function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
           </svg>
         </div>
 
-        <h1 className="font-display flex items-center justify-center gap-2 text-2xl font-semibold text-ink-900">
+        <h1 className="font-display flex items-center justify-center gap-2 text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
           <Sparkles className="h-5 w-5 text-accent-500" />
           Analyse de votre bien en cours
         </h1>

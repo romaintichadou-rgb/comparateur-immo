@@ -56,7 +56,9 @@ dans les boutons CTA.
     d'un score ou d'un statut) restent séparées de l'accent de marque — ne
     pas les migrer vers `accent-*`.
 - **Typographie** (`next/font/google` dans `src/app/layout.tsx`) :
-  - `font-display` (Fraunces) : titres H1/H2, jamais le corps de texte.
+  - `font-display` (Fraunces) : **tous** les titres (H1 à H3), jamais le corps
+    de texte. Les tailles sont fixées par l'échelle unique — voir « Échelle
+    typographique des titres ».
   - `font-sans` (IBM Plex Sans) : corps de texte, valeur par défaut.
   - `font-mono` (Geist Mono) : tout chiffre clé — score, prix, rendement,
     cash-flow (voir `ScoreGauge`, `ScoreBadge`, `ApartmentsTable` pour
@@ -136,8 +138,9 @@ dans les boutons CTA.
 | Composant | Fichier | Rôle |
 |---|---|---|
 | `StatCard` | `StatCard.tsx` | Carte métrique tonale (label/valeur/sub/tone). Mode simple ou avant→après. Affordance cliquable : pointillé sous la valeur + « Calcul → » en pied de carte, **dans le flux** (`mt-auto`), jamais en `absolute` — voir « les quatre pièges du mobile ». |
-| `SectionHeader` | `SectionHeader.tsx` | En-tête de carte/section : icon-pill + titre uppercase. Props : `icon`, `title`, `as` (h2/h3), `className`. **OBLIGATOIRE pour tout en-tête de carte bordée.** Voir « Hiérarchie des en-têtes de carte » ci-dessous. |
-| `SectionTitle` | `SectionHeader.tsx` | Titre de section **sans icône**. Utilise `font-display` (Fraunces) pour garantir la cohérence typographique de tous les H2/H3. Props : `as` (h2/h3), `className`. À préférer aux `<h2>`/`<h3>` bruts pour éviter les erreurs de font. |
+| `SectionHeader` | `SectionHeader.tsx` | Titre de carte de section — Fraunces `text-lg`, **sans icône**. Props : `title`, `as` (h2/h3), `className`. **OBLIGATOIRE pour tout en-tête de carte bordée.** Voir « Échelle typographique des titres ». |
+| `SectionTitle` | `SectionHeader.tsx` | Identique à `SectionHeader`, mais le libellé passe par `children` au lieu du prop `title`. Même rendu, à ne jamais faire diverger. |
+| `GroupTitle` | `SectionHeader.tsx` | Titre de GROUPE dans une carte — Fraunces `text-base`, un cran sous `SectionHeader`. Props : `as` (h3/h4/legend), `className`. |
 | `Skeleton` | `Skeleton.tsx` | Barre shimmer de chargement. |
 | `ConfirmDialog` | `ConfirmDialog.tsx` | Modale de confirmation destructive (titre, description, bouton rouge). |
 | `ErrorScreen` | `ErrorScreen.tsx` | Page d'erreur/not-found plein écran. |
@@ -180,37 +183,61 @@ Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 | Séparateur de section | — | `border-t border-ink-100/50` |
 | Séparateur de faits | — | `divide-y divide-ink-100/50` |
 
-## Hiérarchie des en-têtes de carte
+## Échelle typographique des titres — source unique
 
-Trois niveaux, jamais recréés à la main — utiliser le composant ou copier les classes exactes.
+**Tous** les titres de l'app sont en `font-display` (Fraunces), `font-semibold`,
+`text-ink-900`. **Seule la taille distingue les niveaux.** La source de vérité
+est l'en-tête de `SectionHeader.tsx` — la table ci-dessous en est le reflet.
 
-### Niveau 1 — En-tête de carte bordée (`SectionHeader`)
+| Niveau | Rôle | Classe | Composant |
+|---|---|---|---|
+| Hero | Écran plein : vide, erreur, upgrade | `text-3xl sm:text-4xl` | inline |
+| H1 | Titre de page | `text-2xl sm:text-3xl` | inline |
+| H2 | Titre d'une carte de section | `text-lg` | **`SectionHeader`** / `SectionTitle` |
+| H3 | Groupe à l'intérieur d'une carte | `text-base` | **`GroupTitle`** |
 
-Utiliser **obligatoirement** le composant `SectionHeader` pour tout en-tête de carte `rounded-xl border`.
-Classes internes (référence, ne pas recréer) :
-- Icon pill : `rounded-lg bg-accent-50 p-1.5 text-accent-400` (accent) ou `rounded-lg bg-ink-100 p-1.5 text-ink-400` (neutre, sections input)
-- Icon : `h-3.5 w-3.5`
-- Titre : `text-sm font-semibold uppercase tracking-wide text-ink-500`
+Deux exceptions assumées :
 
-### Niveau 2 — En-tête collapsible (Financement, Hypothèses, Cash-flow…)
+- **Verdict de l'Analyse** (`AnalyseIA`) : `text-4xl sm:text-5xl`. C'est LE
+  résultat de l'écran, il doit dominer sa propre carte.
+- **En-tête compact de la fiche bien** (`ApartmentDetail`) : `text-xl
+  sm:text-2xl`, un cran sous un H1 de page. Le titre y est logé entre une
+  vignette et une mini-carte, dans un en-tête volontairement dense.
 
-Quand une carte bordée a un `<button>` toggle au lieu d'un heading, reproduire **exactement** le même rendu visuel que `SectionHeader` :
-```
-<span className="inline-flex items-center justify-center rounded-lg bg-accent-50 p-1.5 text-accent-400">
-  <Icon className="h-3.5 w-3.5" />
-</span>
-<span className="text-sm font-semibold uppercase tracking-wide text-ink-500">
-  Titre
-</span>
-```
-Ne jamais utiliser `text-xs`, `font-bold`, ou `text-accent-600` pour ces en-têtes — ce sont les erreurs corrigées.
+Les micro-libellés en capitales des panneaux latéraux (`text-xs uppercase
+tracking-wide`) ne font **pas** partie de cette échelle : ce sont des
+étiquettes de données, pas des titres de contenu. Ne pas les migrer en
+Fraunces.
 
-### Niveau 3 — Sous-titre de groupe (`FinSectionTitle`, `HypGroupTitle`)
+### Plus aucune icône dans un titre
 
-Titres internes de sous-sections (ex. « Crédit immobilier », « Fiscalité LMNP ») :
-- Taille réduite : `text-[11px]` ou `text-[10px]`
-- Style : `font-semibold uppercase tracking-wide text-ink-400`
-- Icon nu (pas de pill) : `h-3.5 w-3.5` directement dans le texte
+`SectionHeader` posait une pastille `accent-50` + icône Lucide devant un
+libellé en capitales `ink-500`. Retiré partout, pour deux raisons :
+
+1. Chaque carte réclamait le choix d'une icône. Aucune ne portait
+   d'information — elles décoraient, et il fallait en inventer une à chaque
+   nouvelle section.
+2. Le titre restait un petit label gris, à la même taille que les étiquettes
+   de champs qu'il surplombait. La hiérarchie ne se lisait pas.
+
+Corollaire : `GroupHeading` (`SettingsForm`) a perdu la sienne aussi. Décorer
+le niveau subordonné plus que son parent inversait la hiérarchie.
+
+### `SectionHeader` et `SectionTitle` rendent STRICTEMENT la même chose
+
+Les deux ne diffèrent que par le passage du contenu — `title` en prop pour le
+premier, `children` pour le second. Ne pas les faire diverger : c'était déjà
+deux composants pour un seul niveau, l'un avec icône et l'autre sans, et c'est
+exactement ce qui avait produit deux styles concurrents.
+
+### Balise `h2` par défaut, rendu de troisième rang
+
+Le niveau **sémantique** et la taille **visuelle** sont deux choses distinctes.
+Une carte de section vit sous le `h1` de la page : la baliser `h3` sauterait un
+niveau, ce que les lecteurs d'écran signalent comme une hiérarchie cassée
+(WCAG `heading-hierarchy`). Le rendu est bien celui d'un titre de troisième
+rang, la balise reste `h2`. Passer `as="h3"` seulement quand la carte est
+elle-même imbriquée sous un `h2`.
 
 ## Pattern « Sections sans card »
 
@@ -1578,13 +1605,15 @@ des valeurs déjà lues par les deux champs et leurs sous-titres.
 
 | Niveau | Composant | Rendu | Exemples |
 |---|---|---|---|
-| Carte | `SectionHeader` (partagé) | pastille `accent-50` + CAPITALES + `ink-500` | « PROFIL EMPRUNTEUR », « SEUILS DE DÉCISION » |
-| Groupe | `GroupHeading` (local) | icône `ink-400` + casse normale + `ink-800` | « Couverture de l'emprunt », « Rendement net », « Cash-flow mensuel » |
+| Carte | `SectionHeader` (partagé) | Fraunces `text-lg` `ink-900` | « Profil emprunteur », « Seuils de décision » |
+| Groupe | `GroupHeading` (local) → rend `GroupTitle` | Fraunces `text-base` `ink-900` + phrase d'explication | « Couverture de l'emprunt », « Rendement net », « Cash-flow mensuel » |
 
 `GroupHeading` accepte `as="legend"` pour le `fieldset` de la couverture
 d'emprunt — sans quoi ce titre divergeait (il était en `font-medium ink-700` face
-à des `h3` en `semibold ink-800`, pour le même niveau hiérarchique). Chaque niveau
-porte une phrase d'explication sous le titre : c'est la forme commune à tous les
+à des `h3` en `semibold ink-800`, pour le même niveau hiérarchique). Il ne rend
+plus le titre lui-même : il délègue à `GroupTitle` et n'ajoute que la phrase
+d'explication, seule façon d'empêcher la même divergence de revenir. Chaque
+niveau porte cette phrase sous le titre : c'est la forme commune à tous les
 blocs de la page.
 
 La page n'a **plus aucun tooltip `Info`** — elle en portait trois (en-tête, profil

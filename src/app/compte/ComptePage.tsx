@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
-import { Eye, EyeOff, KeyRound, TriangleAlert, Zap } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { StatCard, type StatCardTone } from "@/components/StatCard";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -139,7 +139,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
     <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
       <div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="font-display text-xl font-semibold text-ink-900">Mon compte</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">Mon compte</h1>
           <BadgePlan plan={profil.plan} isTester={profil.isTester} />
         </div>
         <p className="mt-1 text-sm text-ink-500">{email}</p>
@@ -169,7 +169,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
           abonné » n'informerait de rien que les cartes ne disent. */}
       {gratuit && (
         <section className="rounded-xl border border-ink-200 bg-white p-6">
-          <SectionHeader icon={Zap} title="Passer à Pro" />
+          <SectionHeader title="Passer à Pro" />
           <p className="mt-4 text-sm leading-relaxed text-ink-600">
             Biens illimités et {LIMITE_ANALYSES_PRO}&nbsp;analyses par mois, pour
             5,99&nbsp;€ par mois sans engagement.
@@ -186,7 +186,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
       )}
 
       <section className="rounded-xl border border-ink-200 bg-white p-6">
-        <SectionHeader icon={KeyRound} title="Mot de passe" />
+        <SectionHeader title="Mot de passe" />
         <form action={mdpAction} className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
           <ChampMotDePasse
             name="motDePasse"
@@ -225,7 +225,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
           survol. La carte reste la dernière de la page : séparée des actions
           courantes, mais lisible. */}
       <section className="rounded-xl border border-ink-200 bg-white p-6">
-        <SectionHeader icon={TriangleAlert} title="Supprimer le compte" />
+        <SectionHeader title="Supprimer le compte" />
         <p className="mt-4 text-sm leading-relaxed text-ink-600">
           Tes biens, tes analyses et ton profil investisseur seront définitivement
           effacés. Cette action est irréversible.

@@ -37,7 +37,7 @@ export default function UrlHeroCard({
             <Link2 className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ink-900">{title}</h2>
+            <h2 className="font-display text-lg font-semibold text-ink-900">{title}</h2>
             <p className="mt-0.5 text-sm text-ink-500">{subtitle}</p>
           </div>
         </div>

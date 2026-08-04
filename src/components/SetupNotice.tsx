@@ -2,7 +2,7 @@ export default function SetupNotice({ message }: { message: string }) {
   return (
     <div className="mx-auto max-w-2xl px-6 py-16">
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-        <h1 className="text-lg font-semibold text-amber-900">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-amber-900 sm:text-3xl">
           Configuration de la base de données requise
         </h1>
         <p className="mt-2 text-sm text-amber-800">

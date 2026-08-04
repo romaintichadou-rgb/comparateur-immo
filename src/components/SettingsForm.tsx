@@ -1,19 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import {
-  Banknote,
-  Landmark,
-  TrendingUp,
-  SlidersHorizontal,
-  Wallet,
-  ChevronDown,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  type LucideIcon,
-} from "lucide-react";
-import { SectionHeader } from "@/components/SectionHeader";
+import { Banknote, TrendingUp, Wallet, ChevronDown, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { GroupTitle, SectionHeader } from "@/components/SectionHeader";
 import {
   FINANCEMENT_MODE_INFOS,
   type AppSettings,
@@ -121,7 +110,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
       {/* Pas d'icône « i » ici : son contenu tenait en une phrase, et un tooltip
           isolé à l'autre bout du titre se lit comme un élément orphelin. */}
       <div>
-        <h1 className="font-display text-xl font-semibold text-ink-900">Profil investisseur</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">Profil investisseur</h1>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-ink-500">
           Tes conditions d&apos;emprunt et tes seuils par défaut, appliqués à tous tes biens.
           Chaque bien peut les surcharger dans sa Simulation financière.
@@ -129,7 +118,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
       </div>
 
       <section className="rounded-xl border border-ink-200 bg-white p-6">
-        <SectionHeader icon={Landmark} title="Profil emprunteur" />
+        <SectionHeader title="Profil emprunteur" />
         <p className="mt-2 text-xs leading-relaxed text-ink-500">
           Les modifier rend les analyses déjà calculées obsolètes : chaque bien te proposera
           de relancer la sienne.
@@ -172,7 +161,6 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         <fieldset className="mt-6">
           <GroupHeading
             as="legend"
-            icon={Wallet}
             titre="Couverture de l'emprunt"
             description="Ce que couvre l'emprunt tant que tu ne saisis pas de montant sur un bien."
           />
@@ -239,7 +227,6 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
 
       <CollapsibleSection
         id="seuils"
-        icon={SlidersHorizontal}
         title="Seuils de décision"
         isOpen={expandedSections.has("seuils")}
         onToggle={toggleSection}
@@ -251,7 +238,6 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         </p>
 
         <SeuilGroup
-          icon={TrendingUp}
           titre="Rendement net"
           description="Le loyer annuel, net de charges et d'impôts, rapporté au coût total de l'opération."
           rougeLabel="Seuil rouge"
@@ -270,7 +256,6 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         <hr className="border-t border-ink-100/50" />
 
         <SeuilGroup
-          icon={Banknote}
           titre="Cash-flow mensuel"
           description="Ce qu'il reste chaque mois une fois le crédit, les charges et l'impôt payés."
           rougeLabel="Seuil rouge"
@@ -346,14 +331,12 @@ function SettingsBanner({ phase, label }: BannerState) {
 
 function CollapsibleSection({
   id,
-  icon: Icon,
   title,
   isOpen,
   onToggle,
   children,
 }: {
   id: string;
-  icon: LucideIcon;
   title: string;
   isOpen: boolean;
   onToggle: (id: string) => void;
@@ -367,7 +350,7 @@ function CollapsibleSection({
         aria-controls={`section-${id}`}
         className="flex w-full items-center justify-between px-6 py-4 transition-colors hover:bg-ink-50 sm:pointer-events-none sm:cursor-default sm:hover:bg-transparent"
       >
-        <SectionHeader icon={Icon} title={title} />
+        <SectionHeader title={title} />
         <ChevronDown
           className={`h-5 w-5 text-ink-400 transition-transform sm:hidden ${isOpen ? "rotate-180" : ""}`}
         />
@@ -382,7 +365,6 @@ function CollapsibleSection({
 /** Un couple de seuils (rouge / vert) pour une métrique. Rendu comme un groupe
  *  au sein de la carte « Seuils de décision », pas comme une carte autonome. */
 function SeuilGroup({
-  icon: Icon,
   titre,
   description,
   rougeLabel,
@@ -397,7 +379,6 @@ function SeuilGroup({
   formatValue,
   valide,
 }: {
-  icon: LucideIcon;
   titre: string;
   description: string;
   rougeLabel: string;
@@ -414,7 +395,7 @@ function SeuilGroup({
 }) {
   return (
     <section className="space-y-4">
-      <GroupHeading icon={Icon} titre={titre} description={description} />
+      <GroupHeading titre={titre} description={description} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
@@ -480,27 +461,30 @@ function ZonesBar({ valide, rouge, vert }: { valide: boolean; rouge: string; ver
   );
 }
 
-/** Sous-titre de groupe, niveau 2 : casse normale + `ink-800`, là où le titre de
- *  carte (`SectionHeader`) est en capitales + `ink-500`. Partagé par les trois
- *  groupes de la page pour qu'ils ne divergent pas — ils l'avaient déjà fait une
- *  fois (`legend` en `font-medium ink-700` face à des `h3` en `semibold ink-800`). */
+/**
+ * Sous-titre de groupe + sa phrase d'explication.
+ *
+ * Le rendu du titre vient de `GroupTitle` (échelle partagée, `text-base`) :
+ * ce composant n'ajoute que la description. Sans ça, on aurait de nouveau deux
+ * définitions du même niveau — c'est exactement ce qui avait déjà fait diverger
+ * le `legend` (`font-medium ink-700`) des `h3` (`semibold ink-800`).
+ *
+ * Plus d'icône : elle était en `ink-400` devant le titre, alors que le titre de
+ * carte au-dessus n'en a plus. Décorer le niveau subordonné plus que son parent
+ * inversait la hiérarchie.
+ */
 function GroupHeading({
-  as: Tag = "h3",
-  icon: Icon,
+  as = "h3",
   titre,
   description,
 }: {
   as?: "h3" | "legend";
-  icon: LucideIcon;
   titre: string;
   description: string;
 }) {
   return (
     <div className="w-full">
-      <Tag className="flex items-center gap-2 text-sm font-semibold text-ink-800">
-        <Icon className="h-4 w-4 text-ink-400" />
-        {titre}
-      </Tag>
+      <GroupTitle as={as}>{titre}</GroupTitle>
       <p className="mt-1 text-xs leading-relaxed text-ink-500">{description}</p>
     </div>
   );

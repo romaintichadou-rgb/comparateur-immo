@@ -4,32 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ArrowLeft,
-  Banknote,
-  Calculator,
-  HandCoins,
-  Check,
-  CheckCircle2,
-  ClipboardList,
-  ExternalLink,
-  Home,
-  TrendingUp,
-  Lightbulb,
-  Loader2,
-  Mail,
-  MapPin,
-  Pencil,
-  Phone,
-  ReceiptText,
-  RotateCcw,
-  Trash2,
-  Sparkles,
-  Star,
-  User,
-  X,
-  XCircle,
-} from "lucide-react";
+import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, RotateCcw, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
 import {
   DPE_GES_VALEURS,
   ETATS_BIEN,
@@ -862,7 +837,7 @@ export default function ApartmentDetail({
 
         {/* Titre + adresse + quartier + meta */}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-lg font-semibold text-ink-900">
+          <h1 className="truncate font-display text-xl font-semibold text-ink-900 sm:text-2xl">
             {formatApartmentTitle(apt)}
           </h1>
           {localisation && <p className="truncate text-sm text-ink-500">{localisation}</p>}
@@ -1011,7 +986,7 @@ export default function ApartmentDetail({
 
           <section id="fin-achat" className="space-y-4 scroll-mt-24 rounded-xl border border-ink-200 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
-                  <SectionHeader icon={Banknote} title="Achat" />
+                  <SectionHeader title="Achat" />
                   {editingAchat ? (
                     <div className="flex shrink-0 gap-2">
                       <button
@@ -1106,7 +1081,7 @@ export default function ApartmentDetail({
           />
 
           <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-            <SectionHeader icon={TrendingUp} title="Revenus" />
+            <SectionHeader title="Revenus" />
             {rentPending ? (
               <div className="space-y-3">
                 <PendingFieldLabel label="Loyer mensuel, charges comprises" />
@@ -1155,7 +1130,7 @@ export default function ApartmentDetail({
           </section>
 
           <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
-            <SectionHeader icon={ReceiptText} title="Charges annuelles" />
+            <SectionHeader title="Charges annuelles" />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 {chargesPending ? (
@@ -1378,7 +1353,7 @@ export default function ApartmentDetail({
         {/* Colonne latérale */}
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-xl border border-ink-200 bg-white p-5">
-            <SectionHeader icon={ClipboardList} title="Suivi" className="mb-4" />
+            <SectionHeader title="Suivi" className="mb-4" />
             <div className="space-y-4">
               <div>
                 <span className="mb-1.5 block text-sm font-medium text-ink-700">Statut</span>
@@ -1428,7 +1403,7 @@ export default function ApartmentDetail({
           </div>
 
           <div className="rounded-xl border border-ink-200 bg-white p-5">
-            <SectionHeader icon={User} title="Contact" className="mb-4" />
+            <SectionHeader title="Contact" className="mb-4" />
             <div className="space-y-3">
               <TextField
                 label="Nom"
