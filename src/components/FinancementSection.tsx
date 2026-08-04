@@ -77,7 +77,7 @@ function FinRow({ label, value, badge, suffix }: { label: string; value: string;
       <span className="text-ink-500">{label}</span>
       <span className="flex shrink-0 items-center gap-1.5">
         {badge}
-        <span className="font-mono font-medium tabular-nums text-ink-800">{value}</span>
+        <span className="font-medium tabular-nums text-ink-800">{value}</span>
         {suffix && <span className="text-[10px] text-ink-400">{suffix}</span>}
       </span>
     </div>

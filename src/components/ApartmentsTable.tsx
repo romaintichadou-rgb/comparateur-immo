@@ -99,7 +99,7 @@ export default function ApartmentsTable({
     <div className="hidden overflow-x-auto rounded-lg border border-ink-200 bg-white sm:block">
       <table className="w-full min-w-[720px] text-sm">
         <thead>
-          <tr className="border-b border-ink-200 bg-ink-50/80 font-mono text-[11px] font-medium uppercase tracking-wide text-ink-500">
+          <tr className="border-b border-ink-200 bg-ink-50/80 text-[11px] font-medium uppercase tracking-wide text-ink-500">
             <th className="px-5 py-3 text-left">Bien</th>
             <th className="w-[150px] px-5 py-3 text-center">Prix</th>
             <th className="w-[170px] px-5 py-3 text-center">Rendement net</th>
@@ -152,9 +152,9 @@ export default function ApartmentsTable({
                   </div>
                 </td>
                 <td className="px-5 py-3 text-center leading-tight">
-                  <p className="font-mono text-base font-semibold text-ink-900">{formatEuros(apt.prix)}</p>
+                  <p className="text-base font-semibold tabular-nums text-ink-900">{formatEuros(apt.prix)}</p>
                   {apt.prix_m2 != null && (
-                    <p className="mt-0.5 font-mono text-xs text-ink-400">{formatEuros(apt.prix_m2)}/m²</p>
+                    <p className="mt-0.5 text-xs tabular-nums text-ink-400">{formatEuros(apt.prix_m2)}/m²</p>
                   )}
                 </td>
                 <td className={`px-5 py-3 text-center ${scoreTone.grad}`}>
@@ -165,7 +165,7 @@ export default function ApartmentsTable({
                       openRendementDetail(apt, seuilsRendement);
                     }}
                     title="Voir le détail du calcul"
-                    className={`font-mono text-base font-bold transition hover:underline hover:decoration-dotted hover:underline-offset-2 ${TONE_TEXT_CLASS[tone]}`}
+                    className={`text-base font-bold tabular-nums transition hover:underline hover:decoration-dotted hover:underline-offset-2 ${TONE_TEXT_CLASS[tone]}`}
                   >
                     {formatPercent(apt.rendement_net)}
                   </button>

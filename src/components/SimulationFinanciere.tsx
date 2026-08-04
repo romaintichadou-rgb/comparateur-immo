@@ -137,7 +137,7 @@ function HypRow({ label, value, badge }: { label: string; value: string; badge?:
       <span className="truncate text-[11px] text-ink-500">{label}</span>
       <span className="flex shrink-0 items-center gap-1.5">
         {badge}
-        <span className="font-mono text-xs tabular-nums text-ink-800">{value}</span>
+        <span className="text-xs tabular-nums text-ink-800">{value}</span>
       </span>
     </div>
   );
@@ -153,7 +153,7 @@ function FinRow({ label, value, badge, suffix }: { label: string; value: string;
       <span className="text-ink-500">{label}</span>
       <span className="flex shrink-0 items-center gap-1.5">
         {badge}
-        <span className="font-mono font-medium tabular-nums text-ink-800">{value}</span>
+        <span className="font-medium tabular-nums text-ink-800">{value}</span>
         {suffix && <span className="text-[10px] text-ink-400">{suffix}</span>}
       </span>
     </div>
@@ -715,14 +715,7 @@ export default function SimulationFinanciere({
           onClick={() => setTableOpen((o) => !o)}
           className="flex w-full items-center justify-between px-5 py-3"
         >
-          <span className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center rounded-lg bg-ink-100 p-1.5 text-ink-400">
-              <Calculator className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-sm font-semibold uppercase tracking-wide text-ink-500">
-              Cash-flow année par année
-            </span>
-          </span>
+          <span className={TITRE_SECTION}>Cash-flow année par année</span>
           <ChevronDown
             className={`h-4 w-4 text-ink-400 transition-transform ${tableOpen ? "rotate-180" : ""}`}
           />
@@ -742,7 +735,11 @@ export default function SimulationFinanciere({
                     <th className="px-2 py-2 text-right font-medium sm:px-5">/mois</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ink-50 font-mono tabular-nums">
+                {/* Chiffres en IBM Plex Sans, pas en Geist Mono : ce sont des
+                    lignes de détail. L'alignement des colonnes n'en souffre pas —
+                    IBM Plex Sans a des chiffres tabulaires natifs (mesuré :
+                    « 1111 » et « 0000 » à la même largeur au pixel). */}
+                <tbody className="divide-y divide-ink-50 tabular-nums">
                   {result.annees.map((a) => (
                     <tr key={a.annee} className="hover:bg-ink-50/60">
                       <td className="px-2 py-1.5 text-ink-500 sm:px-5">{a.annee}</td>

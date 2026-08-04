@@ -209,7 +209,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
                       <span className="mt-1 block text-[11px] leading-tight text-ink-500">
                         {info.detail}
                       </span>
-                      <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium font-mono tabular-nums ${
+                      <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium tabular-nums ${
                         actif
                           ? "bg-accent-100 text-accent-700"
                           : "bg-ink-100 text-ink-600"
@@ -453,7 +453,7 @@ function ZonesBar({ valide, rouge, vert }: { valide: boolean; rouge: string; ver
       </div>
       {/* Positionnées aux tiers, décalées de leur demi-largeur : la valeur est
           centrée sur la frontière de couleur, pas sur une des deux zones. */}
-      <div className="relative mt-1.5 h-4 font-mono text-[10px] tabular-nums text-ink-500">
+      <div className="relative mt-1.5 h-4 text-[10px] tabular-nums text-ink-500">
         <span className="absolute left-1/3 -translate-x-1/2">{rouge}</span>
         <span className="absolute left-2/3 -translate-x-1/2">{vert}</span>
       </div>

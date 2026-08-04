@@ -76,9 +76,9 @@ export default function ApartmentsCardList({
               <div className="grid flex-1 grid-cols-3 gap-2">
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-ink-400">Prix</p>
-                  <p className="font-mono text-sm font-semibold text-ink-900">{formatEuros(apt.prix)}</p>
+                  <p className="text-sm font-semibold tabular-nums text-ink-900">{formatEuros(apt.prix)}</p>
                   {apt.prix_m2 != null && (
-                    <p className="font-mono text-[11px] text-ink-400">{formatEuros(apt.prix_m2)}/m²</p>
+                    <p className="text-[11px] tabular-nums text-ink-400">{formatEuros(apt.prix_m2)}/m²</p>
                   )}
                 </div>
                 <div>
@@ -90,14 +90,14 @@ export default function ApartmentsCardList({
                       openRendementDetail(apt, seuilsRendement);
                     }}
                     title="Voir le détail du calcul"
-                    className={`-mx-1 rounded-md px-1 font-mono text-sm font-bold transition ${RENDEMENT_HOVER_RING[tone]} ${TONE_TEXT_CLASS[tone]}`}
+                    className={`-mx-1 rounded-md px-1 text-sm font-bold tabular-nums transition ${RENDEMENT_HOVER_RING[tone]} ${TONE_TEXT_CLASS[tone]}`}
                   >
                     {formatPercent(apt.rendement_net)}
                   </button>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-ink-400">Loyer</p>
-                  <p className="font-mono text-sm font-semibold text-ink-900">
+                  <p className="text-sm font-semibold tabular-nums text-ink-900">
                     {apt.loyer_retenu ? formatEuros(apt.loyer_retenu) : "—"}
                   </p>
                 </div>

@@ -231,7 +231,7 @@ function ResultTile({
       <p className={`text-xs font-medium ${t.label}`}>{label}</p>
       <p className={`mt-1 font-mono text-3xl font-bold tabular-nums ${t.value}`}>{value}</p>
       <p className={`mt-1.5 text-[11px] ${t.label}`}>{formule}</p>
-      <p className={`font-mono text-[11px] font-medium tabular-nums ${t.value} opacity-70`}>{calcul}</p>
+      <p className={`text-[11px] font-medium tabular-nums ${t.value} opacity-70`}>{calcul}</p>
     </div>
   );
 }
@@ -247,7 +247,7 @@ function Row({ label, value, badge }: { label: string; value: number; badge?: Re
         <span>{label}</span>
         {badge && <span className="shrink-0 self-center">{badge}</span>}
       </span>
-      <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">
+      <span className="shrink-0 font-medium tabular-nums text-ink-800">
         {formatEuros(Math.abs(value))}
       </span>
     </li>
@@ -258,7 +258,7 @@ function TotalRow({ label, value }: { label: string; value: number }) {
   return (
     <li className="flex items-baseline justify-between gap-3 py-2">
       <span className="font-semibold text-ink-900">{label}</span>
-      <span className="shrink-0 font-mono text-base font-bold tabular-nums text-ink-900">
+      <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">
         {formatEuros(value)}
       </span>
     </li>

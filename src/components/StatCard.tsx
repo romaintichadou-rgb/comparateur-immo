@@ -44,10 +44,13 @@ export function StatCard({
     <>
       <p className="text-xs font-medium text-ink-500">{label}</p>
       {avant != null ? (
-        <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 font-mono tabular-nums">
+        <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 tabular-nums">
+          {/* `avant` est une petite ligne de référence : IBM Plex Sans. Seule
+              la valeur d'arrivée — le résultat — garde Geist Mono. La police
+              ne peut donc plus être posée sur le conteneur commun. */}
           <span className="text-sm text-ink-500">{avant}</span>
           <ArrowRight className="h-3 w-3 shrink-0 self-center text-ink-300" aria-hidden />
-          <span className={`text-2xl font-bold ${TONE_TEXT_CLASS[tone]}${dotted}`}>{value}</span>
+          <span className={`font-mono text-2xl font-bold ${TONE_TEXT_CLASS[tone]}${dotted}`}>{value}</span>
         </p>
       ) : (
         <p className={`mt-1.5 font-mono text-2xl font-bold tabular-nums ${TONE_TEXT_CLASS[tone]}${dotted}`}>

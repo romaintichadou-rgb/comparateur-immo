@@ -205,7 +205,7 @@ function Row({ label, value, sign = true }: { label: string; value: number; sign
         )}
         <span>{label}</span>
       </span>
-      <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">
+      <span className="shrink-0 font-medium tabular-nums text-ink-800">
         {formatEuros(Math.abs(Math.round(value)))}
       </span>
     </li>
@@ -217,7 +217,7 @@ function TotalRow({ label, value, tone }: { label: string; value: number; tone: 
   return (
     <li className="flex items-baseline justify-between gap-3 py-2">
       <span className="font-semibold text-ink-900">{label}</span>
-      <span className={`shrink-0 font-mono text-base font-bold tabular-nums ${cls}`}>
+      <span className={`shrink-0 text-base font-bold tabular-nums ${cls}`}>
         {fmtSigned(value)} <span className="text-xs font-normal opacity-70">/mois</span>
       </span>
     </li>

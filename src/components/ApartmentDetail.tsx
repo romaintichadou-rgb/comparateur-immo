@@ -1025,12 +1025,12 @@ export default function ApartmentDetail({
                       <AchatEditRow label="Travaux" value={value(achatPatch, "travaux")} onChange={(v) => setAchatPatch((p) => ({ ...p, travaux: v }))} />
                       <li className="flex items-baseline justify-between gap-3 py-2">
                         <span className="font-semibold text-ink-900">Budget total</span>
-                        <span className="shrink-0 font-mono text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
+                        <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
                       </li>
                     </ul>
                     {live.prix_m2 != null && (
                       <p className="text-xs text-ink-400">
-                        Prix au m² (achat + travaux) : <span className="font-mono tabular-nums font-medium text-ink-600">{formatEuros(live.prix_m2)}</span>
+                        Prix au m² (achat + travaux) : <span className="tabular-nums font-medium text-ink-600">{formatEuros(live.prix_m2)}</span>
                       </p>
                     )}
                   </div>
@@ -1042,7 +1042,7 @@ export default function ApartmentDetail({
                           <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
                           <span>Prix d&apos;achat</span>
                         </span>
-                        <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">{formatEuros(apt.prix)}</span>
+                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{formatEuros(apt.prix)}</span>
                       </li>
                       <li className="flex items-baseline justify-between gap-3 py-2">
                         <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
@@ -1050,23 +1050,23 @@ export default function ApartmentDetail({
                           <span>Frais de notaire</span>
                           {!fraisNotaireManuel && fraisNotaireLive != null && <span className="shrink-0 self-center"><EstimatedBadge /></span>}
                         </span>
-                        <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">{fraisNotaireLive != null ? formatEuros(fraisNotaireLive) : "—"}</span>
+                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{fraisNotaireLive != null ? formatEuros(fraisNotaireLive) : "—"}</span>
                       </li>
                       <li className="flex items-baseline justify-between gap-3 py-2">
                         <span className="flex items-baseline gap-x-2 text-ink-600">
                           <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
                           <span>Travaux</span>
                         </span>
-                        <span className="shrink-0 font-mono font-medium tabular-nums text-ink-800">{apt.travaux != null ? formatEuros(apt.travaux) : formatEuros(0)}</span>
+                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{apt.travaux != null ? formatEuros(apt.travaux) : formatEuros(0)}</span>
                       </li>
                       <li className="flex items-baseline justify-between gap-3 py-2">
                         <span className="font-semibold text-ink-900">Budget total</span>
-                        <span className="shrink-0 font-mono text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
+                        <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
                       </li>
                     </ul>
                     {live.prix_m2 != null && (
                       <p className="text-xs text-ink-400">
-                        Prix au m² (achat + travaux) : <span className="font-mono tabular-nums font-medium text-ink-600">{formatEuros(live.prix_m2)}</span>
+                        Prix au m² (achat + travaux) : <span className="tabular-nums font-medium text-ink-600">{formatEuros(live.prix_m2)}</span>
                       </p>
                     )}
                   </>
@@ -1566,12 +1566,10 @@ function ReadOnlyField({
   label: string;
   value: string;
   badge?: React.ReactNode;
-  /** `font-mono` + `tabular-nums`, réservé aux CHIFFRES CLÉS (prix, budget,
-   * prix/m²) comme l'impose la charte. Faux par défaut : un champ lu (ville,
-   * adresse, description) doit avoir la même police que le même champ en
-   * mode édition — `inputClass` ne pose aucune classe de police et hérite
-   * donc de `font-sans`. Deux polices pour un même champ selon qu'on le lit
-   * ou qu'on l'édite ne veut rien dire. */
+  /** `tabular-nums` sur un champ NUMÉRIQUE lu (prix, budget, prix/m²), pour
+   * que les chiffres s'alignent d'une ligne à l'autre. Plus de `font-mono` :
+   * une ligne de formulaire est une petite ligne, pas un résultat. Faux par
+   * défaut — un champ texte (ville, adresse) n'a rien à aligner. */
   mono?: boolean;
   multiline?: boolean;
 }) {
@@ -1583,7 +1581,7 @@ function ReadOnlyField({
       </span>
       <div
         className={`rounded-md border border-dashed border-ink-300 bg-white px-3 py-2 text-ink-900${
-          mono ? " font-mono tabular-nums" : ""
+          mono ? " tabular-nums" : ""
         }${multiline ? " whitespace-pre-wrap" : ""}`}
       >
         {value}

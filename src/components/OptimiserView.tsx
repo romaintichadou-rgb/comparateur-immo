@@ -346,7 +346,7 @@ function LevierPanel({
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h3 className="font-display text-2xl font-semibold text-ink-900">{reco.action}</h3>
           {pivot?.delta && (
-            <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-emerald-700">
+            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-700">
               {pivot.delta}
             </span>
           )}
@@ -373,7 +373,7 @@ function LevierPanel({
           {pivot?.avant && (
             <p className="whitespace-nowrap text-sm text-ink-500">
               {pivot.label} :{" "}
-              <span className="font-mono tabular-nums text-ink-700">{pivot.avant}</span>
+              <span className="tabular-nums text-ink-700">{pivot.avant}</span>
             </p>
           )}
           {reco.pourquoi && <p className="max-w-2xl text-sm text-ink-600">{reco.pourquoi}</p>}
@@ -448,7 +448,7 @@ function SectionLabel({ titre, nombre }: { titre: string; nombre: number }) {
   return (
     <div className="mb-3 flex items-baseline gap-2">
       <h4 className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">{titre}</h4>
-      <span className="font-mono text-[11px] tabular-nums text-ink-300">{nombre}</span>
+      <span className="text-[11px] tabular-nums text-ink-300">{nombre}</span>
     </div>
   );
 }

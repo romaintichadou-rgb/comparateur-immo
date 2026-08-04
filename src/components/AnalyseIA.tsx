@@ -393,7 +393,7 @@ export default function AnalyseIA({
                   >
                     {b.titre}
                   </button>
-                  <span className={`ml-1.5 font-mono font-bold tabular-nums ${colorClass}`}>
+                  <span className={`ml-1.5 font-bold tabular-nums ${colorClass}`}>
                     {b.note != null ? formatNote(b.note) : "—"}
                   </span>
                 </span>
@@ -736,7 +736,7 @@ function FaitRow({ fait }: { fait: Fait }) {
         </div>
       </div>
       {hasValue && (
-        <div className={`max-w-[45%] shrink-0 text-right font-mono text-base font-semibold tabular-nums ${style.value}`}>
+        <div className={`max-w-[45%] shrink-0 text-right text-base font-semibold tabular-nums ${style.value}`}>
           {/* Un `number` rendu tel quel passe par `String(n)` et sort SANS
               séparateur de milliers (« 4706 »). Le groupage se fait donc ici,
               au point de passage unique, plutôt que dans chaque bloc — c'est
