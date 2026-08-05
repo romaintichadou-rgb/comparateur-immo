@@ -194,7 +194,15 @@ function OptionalRateField({
   }
   return (
     <div className="flex items-end gap-1">
-      <NumberField label={label} value={value} onChange={(v) => onChange(v ?? 0)} suffix={suffix} />
+      <NumberField
+        label={label}
+        value={value}
+        onChange={(v) => {
+          if (v != null && v <= 0) return;
+          onChange(v ?? 0);
+        }}
+        suffix={suffix}
+      />
       <button
         type="button"
         onClick={() => onChange(null)}
@@ -506,7 +514,7 @@ export default function SimulationFinanciere({
 
                     <div className="space-y-3">
                       <HypGroupTitle>Projection</HypGroupTitle>
-                      <div className="flex flex-wrap items-end gap-2">
+                      <div className="space-y-3">
                         <OptionalRateField
                           label="Revalorisation du bien"
                           value={inputs.revalorisationBienPct}
