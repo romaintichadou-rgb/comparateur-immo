@@ -471,12 +471,9 @@ export default function SimulationFinanciere({
                         options={REGIMES_FISCAUX_OPTIONS}
                         optionLabel={(v) => REGIMES_FISCAUX[v]}
                         allowEmpty={false}
-                        hint={
-                          <span className="text-xs font-normal text-ink-400">seul régime géré</span>
-                        }
                       />
                       <div className="flex items-end gap-1">
-                        <div className="flex-1">
+                        <div className="min-w-0 flex-1">
                           <SelectField
                             label="Tranche marginale d'imposition (TMI)"
                             value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
@@ -492,17 +489,19 @@ export default function SimulationFinanciere({
                             }
                           />
                         </div>
-                        {inputs.tmiPct != null && (
-                          <button
-                            type="button"
-                            onClick={() => set("tmiPct", null)}
-                            title="Revenir à la valeur du profil investisseur"
-                            aria-label="TMI : revenir au profil"
-                            className="mb-[3px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
+                        <div className="mb-[3px] w-11 shrink-0 flex justify-center">
+                          {inputs.tmiPct != null && (
+                            <button
+                              type="button"
+                              onClick={() => set("tmiPct", null)}
+                              title="Revenir à la valeur du profil investisseur"
+                              aria-label="TMI : revenir au profil"
+                              className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <NumberField
                         label="Quote-part terrain"
@@ -541,10 +540,6 @@ export default function SimulationFinanciere({
                           suffix="% du loyer"
                         />
                       </div>
-                      <p className="text-[11px] leading-relaxed text-ink-400">
-                        Désactivées par défaut : aucune revalorisation, indexation ni vacance n&apos;est
-                        supposée, c&apos;est l&apos;hypothèse la plus prudente.
-                      </p>
                     </div>
                   </div>
                   <div className="flex items-center justify-end gap-2 border-t border-ink-100/50 pt-3">
