@@ -1687,12 +1687,17 @@ Hypothèses a son propre mode édition, ça faisait **deux portes à franchir** 
 taper un chiffre — on venait déjà de cliquer « Modifier » sur le panneau. Ne pas
 réintroduire ce second niveau.
 
-- hérité → champ pré-rempli avec `resolus.*` + pastille « profil » ;
+- hérité → champ pré-rempli avec `resolus.*`, sans `✕` ;
 - surchargé → même champ + `✕` (revenir au profil).
 
-L'origine de la valeur est dite par la **pastille**, pas par une désactivation —
-exactement comme le montant emprunté, lui aussi dérivé (pastille « auto ») ET
-directement éditable depuis toujours.
+⚠️ **Les pastilles « profil » / « auto » / « plafonné » / « ramené au coût
+total » ont été retirées de la section Financement** (onglet Détails de
+l'opération), décision produit assumée — champs et FinRow en lecture n'y
+portent plus aucun badge. L'origine de la valeur (héritée ou surchargée) se
+lit désormais uniquement à la présence du `✕` : pas de `✕` = héritée, `✕`
+visible = surchargée. Les summary pills du hero (Crédit %, durée, Apport),
+elles, restent — ce ne sont pas des pastilles d'origine mais un résumé de
+lecture toujours visible, hors sujet de ce retrait.
 
 Deux détails que le composant doit garder :
 

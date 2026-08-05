@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
-import { FINANCEMENT_MODE_COURT, type AppSettings } from "@/lib/settings";
+import type { AppSettings } from "@/lib/settings";
 import {
   defaultInputs,
   resolveInputs,
@@ -14,14 +14,6 @@ import { NumberField } from "@/components/form/Fields";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { GroupTitle, TITRE_SECTION } from "@/components/SectionHeader";
 import { formatNombre } from "@/lib/format";
-
-function Pastille({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
-      {children}
-    </span>
-  );
-}
 
 function ChampHerite({
   label,
@@ -50,7 +42,6 @@ function ChampHerite({
           value={herite ? resolu : override}
           onChange={onChange}
           suffix={suffix}
-          hint={herite ? <Pastille>profil</Pastille> : undefined}
           step={step}
           nonNegative={nonNegative}
         />
@@ -76,12 +67,11 @@ function FinSectionTitle({ children }: { children: ReactNode }) {
   return <GroupTitle className="mb-2">{children}</GroupTitle>;
 }
 
-function FinRow({ label, value, badge, suffix }: { label: string; value: string; badge?: ReactNode; suffix?: string }) {
+function FinRow({ label, value, suffix }: { label: string; value: string; suffix?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2 py-1.5 text-[13px]">
       <span className="text-ink-500">{label}</span>
       <span className="flex shrink-0 items-center gap-1.5">
-        {badge}
         <span className="font-medium tabular-nums text-ink-800">{value}</span>
         {suffix && <span className="text-[10px] text-ink-400">{suffix}</span>}
       </span>
@@ -268,15 +258,6 @@ export default function FinancementSection({
                         onChange={(v) => set("montantEmprunte", v)}
                         suffix="€"
                         nonNegative
-                        hint={
-                          result.montantAutomatique ? (
-                            <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
-                          ) : result.montantPlafonne ? (
-                            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                              ramené au coût total
-                            </span>
-                          ) : undefined
-                        }
                       />
                     </div>
                     <ChampHerite
@@ -336,30 +317,18 @@ export default function FinancementSection({
                     <FinRow
                       label="Montant emprunté"
                       value={`${euros(resultAffiche.montantEmprunte)} €`}
-                      badge={
-                        resultAffiche.montantAutomatique ? (
-                          <Pastille>auto</Pastille>
-                        ) : resultAffiche.montantPlafonne ? (
-                          <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                            plafonné
-                          </span>
-                        ) : undefined
-                      }
                     />
                     <FinRow
                       label="Taux nominal"
                       value={`${formatNombre(resolusAffiches.tauxCreditPct)} %`}
-                      badge={savedInputs?.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
                     />
                     <FinRow
                       label="Durée"
                       value={`${formatNombre(resolusAffiches.dureeAnnees)} ans`}
-                      badge={savedInputs?.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
                     />
                     <FinRow
                       label="Assurance"
                       value={`${formatNombre(resolusAffiches.tauxAssurancePct)} %`}
-                      badge={savedInputs?.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
                     />
                   </div>
 
