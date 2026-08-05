@@ -453,7 +453,7 @@ export default function SimulationFinanciere({
             <div className="border-t border-ink-100/50 pt-1">
               {editingId === "hypotheses" ? (
                 <>
-                  <div className="grid grid-cols-1 gap-x-16 gap-y-5 py-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-32 gap-y-5 py-4 sm:grid-cols-2">
                     <div className="space-y-3">
                       <HypGroupTitle>Fiscalité</HypGroupTitle>
                       <SelectField
@@ -559,7 +559,7 @@ export default function SimulationFinanciere({
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 gap-x-16 py-3.5 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-32 py-3.5 sm:grid-cols-2">
                     <div>
                       <FinSectionTitle>Fiscalité</FinSectionTitle>
                       <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
