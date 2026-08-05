@@ -38,83 +38,6 @@ import { formatEurosSigned, formatNombre } from "@/lib/format";
 
 /** Petit contrôle "+" discret pour activer une hypothèse optionnelle
  * (désactivée par défaut = la plus prudente), avec une valeur de repli au clic. */
-/** Pastille d'origine d'une valeur (accent, discrète), à côté du libellé. */
-function Pastille({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
-      {children}
-    </span>
-  );
-}
-
-/**
- * Champ HÉRITÉ du Profil investisseur, avec surcharge possible sur ce bien.
- *
- * Miroir d'`OptionalRateField`, sens inversé : là où une hypothèse optionnelle
- * est absente par défaut et s'active, celle-ci a TOUJOURS une valeur (celle du
- * profil) et c'est la surcharge qui s'active.
- *
- * **Toujours un champ de saisie, jamais un encart en lecture seule.** Le mode
- * hérité affichait auparavant la valeur derrière un second bouton « Modifier »,
- * pour éviter de laisser croire que le chiffre était stocké sur le bien. Mais
- * depuis que le panneau a son propre mode édition, ça faisait DEUX portes à
- * franchir pour taper un chiffre — on avait déjà cliqué « Modifier » sur le
- * panneau. L'origine de la valeur reste dite par la pastille « profil », comme
- * le fait déjà le montant emprunté avec sa pastille « auto », lui aussi dérivé
- * ET directement éditable.
- */
-function ChampHerite({
-  label,
-  suffix,
-  override,
-  resolu,
-  onChange,
-}: {
-  label: string;
-  suffix: string;
-  /** Valeur propre au bien. `null` = héritée. */
-  override: number | null;
-  /** Valeur effectivement utilisée par le calcul (profil ou surcharge). */
-  resolu: number;
-  onChange: (v: number | null) => void;
-}) {
-  const herite = override == null;
-  return (
-    <div className="flex items-end gap-1">
-      <div className="min-w-0 flex-1">
-        <NumberField
-          // Force le réamorçage du texte affiché quand on repasse en hérité :
-          // sans ça, vider une surcharge laissait le champ vide au lieu de
-          // réafficher la valeur du profil qui reprend effet.
-          key={herite ? "herite" : "override"}
-          label={label}
-          value={herite ? resolu : override}
-          // `v` passe tel quel : vider le champ renvoie `null`, donc retour au
-          // profil. L'ancien `v ?? 0` transformait un champ vidé en 0 — sur la
-          // durée, `Math.max(1, …)` le ramenait à 1 an sans que rien ne le dise.
-          onChange={onChange}
-          suffix={suffix}
-          hint={herite ? <Pastille>profil</Pastille> : undefined}
-        />
-      </div>
-      {/* Emplacement réservé même sans bouton : sinon les champs surchargés
-          sont plus étroits que les autres et la colonne devient irrégulière. */}
-      <div className="mb-[3px] w-11 shrink-0 flex justify-center">
-        {!herite && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            title="Revenir à la valeur du profil investisseur"
-            aria-label={`${label} : revenir au profil`}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /** Intitulé d'un groupe d'hypothèses (Crédit / Fiscalité / Projection). */
 function HypGroupTitle({ children }: { children: ReactNode }) {
@@ -198,11 +121,9 @@ function OptionalRateField({
         <NumberField
           label={label}
           value={value}
-          onChange={(v) => {
-            if (v != null && v <= 0) return;
-            onChange(v);
-          }}
+          onChange={onChange}
           suffix={suffix}
+          strictlyPositive
         />
       </div>
       <div className="mb-[3px] w-11 shrink-0 flex justify-center">
@@ -211,7 +132,7 @@ function OptionalRateField({
           onClick={() => onChange(null)}
           title="Désactiver cette hypothèse"
           aria-label={`Désactiver ${label}`}
-          className="flex h-11 w-11 items-center justify-center rounded-md text-ink-200 transition-colors hover:text-ink-400"
+          className="flex h-11 w-11 items-center justify-center rounded-md text-ink-400 transition-colors hover:text-ink-700"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -468,15 +389,25 @@ export default function SimulationFinanciere({
                   <div className="grid grid-cols-1 gap-x-32 gap-y-5 py-4 sm:grid-cols-2">
                     <div className="space-y-3">
                       <HypGroupTitle>Fiscalité</HypGroupTitle>
+                      {/* Les trois champs partagent la même largeur : chacun réserve la
+                          même gouttière `w-11` pour son bouton ✕ (même absent), sinon
+                          le TMI — seul à porter réellement le bouton — serait plus
+                          étroit que Régime fiscal et Quote-part terrain (cf. le pattern
+                          `ChampHerite` de FinancementSection). */}
                       <div className="flex flex-col gap-3">
-                        <SelectField
-                          label="Régime fiscal"
-                          value={resolus.regimeFiscal}
-                          onChange={(v) => set("regimeFiscal", v)}
-                          options={REGIMES_FISCAUX_OPTIONS}
-                          optionLabel={(v) => REGIMES_FISCAUX[v]}
-                          allowEmpty={false}
-                        />
+                        <div className="flex items-end gap-1">
+                          <div className="min-w-0 flex-1">
+                            <SelectField
+                              label="Régime fiscal"
+                              value={resolus.regimeFiscal}
+                              onChange={(v) => set("regimeFiscal", v)}
+                              options={REGIMES_FISCAUX_OPTIONS}
+                              optionLabel={(v) => REGIMES_FISCAUX[v]}
+                              allowEmpty={false}
+                            />
+                          </div>
+                          <div className="w-11 shrink-0" />
+                        </div>
                         <div className="flex items-end gap-1">
                           <div className="min-w-0 flex-1">
                             <SelectField
@@ -508,15 +439,18 @@ export default function SimulationFinanciere({
                             )}
                           </div>
                         </div>
-                        <NumberField
-                          label="Quote-part terrain"
-                          value={result.quotePartTerrainPct}
-                          onChange={(v) => {
-                            if (v != null && v <= 0) return;
-                            setQuotePartDraft({ value: v });
-                          }}
-                          suffix="% du prix"
-                        />
+                        <div className="flex items-end gap-1">
+                          <div className="min-w-0 flex-1">
+                            <NumberField
+                              label="Quote-part terrain"
+                              value={result.quotePartTerrainPct}
+                              onChange={(v) => setQuotePartDraft({ value: v })}
+                              suffix="% du prix"
+                              strictlyPositive
+                            />
+                          </div>
+                          <div className="w-11 shrink-0" />
+                        </div>
                       </div>
                     </div>
 

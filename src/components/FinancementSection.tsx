@@ -31,6 +31,7 @@ function ChampHerite({
   resolu,
   onChange,
   step,
+  strictlyPositive,
 }: {
   label: string;
   suffix: string;
@@ -38,6 +39,7 @@ function ChampHerite({
   resolu: number;
   onChange: (v: number | null) => void;
   step?: string | number;
+  strictlyPositive?: boolean;
 }) {
   const herite = override == null;
   return (
@@ -51,6 +53,7 @@ function ChampHerite({
           suffix={suffix}
           hint={herite ? <Pastille>profil</Pastille> : undefined}
           step={step}
+          strictlyPositive={strictlyPositive}
         />
       </div>
       <div className="mb-[3px] w-11 shrink-0 flex justify-center">
@@ -253,11 +256,9 @@ export default function FinancementSection({
                       <NumberField
                         label="Montant emprunté"
                         value={result.montantEmprunte}
-                        onChange={(v) => {
-                          if (v != null && v <= 0) return;
-                          set("montantEmprunte", v);
-                        }}
+                        onChange={(v) => set("montantEmprunte", v)}
                         suffix="€"
+                        strictlyPositive
                         hint={
                           result.montantAutomatique ? (
                             <Pastille>auto · {FINANCEMENT_MODE_COURT[resolus.financementMode]}</Pastille>
@@ -274,11 +275,9 @@ export default function FinancementSection({
                       suffix="%/an"
                       override={inputs.tauxCreditPct}
                       resolu={resolus.tauxCreditPct}
-                      onChange={(v) => {
-                        if (v != null && v <= 0) return;
-                        set("tauxCreditPct", v);
-                      }}
+                      onChange={(v) => set("tauxCreditPct", v)}
                       step="0.01"
+                      strictlyPositive
                     />
                     <ChampHerite
                       label="Durée"
@@ -292,10 +291,8 @@ export default function FinancementSection({
                       suffix="%/an"
                       override={inputs.tauxAssurancePct}
                       resolu={resolus.tauxAssurancePct}
-                      onChange={(v) => {
-                        if (v != null && v <= 0) return;
-                        set("tauxAssurancePct", v);
-                      }}
+                      onChange={(v) => set("tauxAssurancePct", v)}
+                      strictlyPositive
                       step="0.01"
                     />
                     <p className="text-[11px] leading-relaxed text-ink-400">
