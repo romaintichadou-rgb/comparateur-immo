@@ -453,7 +453,7 @@ export default function SimulationFinanciere({
             <div className="border-t border-ink-100/50 pt-1">
               {editingId === "hypotheses" ? (
                 <>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-5 py-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-16 gap-y-5 py-4 sm:grid-cols-2">
                     <div className="space-y-3">
                       <HypGroupTitle>Fiscalité</HypGroupTitle>
                       <SelectField
@@ -476,9 +476,7 @@ export default function SimulationFinanciere({
                             options={TMI_OPTIONS}
                             allowEmpty={false}
                             hint={
-                              inputs.tmiPct == null ? (
-                                <Pastille>profil</Pastille>
-                              ) : (
+                              inputs.tmiPct == null ? undefined : (
                                 <span className="text-xs font-normal text-ink-400">
                                   + {LMNP.prelevementsSociauxPct} % PS
                                 </span>
@@ -503,7 +501,6 @@ export default function SimulationFinanciere({
                         value={result.quotePartTerrainPct}
                         onChange={(v) => setQuotePartDraft({ value: v })}
                         suffix="% du prix"
-                        hint={quotePartDraft?.value == null ? <Pastille>auto</Pastille> : undefined}
                       />
                     </div>
 
@@ -562,20 +559,18 @@ export default function SimulationFinanciere({
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 gap-x-10 py-3.5 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-16 py-3.5 sm:grid-cols-2">
                     <div>
                       <FinSectionTitle>Fiscalité</FinSectionTitle>
                       <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
                       <FinRow
                         label="TMI"
                         value={`${formatNombre(resolus.tmiPct)} %`}
-                        badge={inputs.tmiPct == null ? <Pastille>profil</Pastille> : undefined}
                         suffix={`+ ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
                       />
                       <FinRow
                         label="Quote-part terrain"
                         value={`${formatNombre(result.quotePartTerrainPct)} %`}
-                        badge={apartment.quote_part_terrain_pct == null ? <Pastille>auto</Pastille> : undefined}
                       />
                     </div>
                     <div>
