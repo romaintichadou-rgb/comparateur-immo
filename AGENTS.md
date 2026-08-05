@@ -1837,9 +1837,18 @@ surcharges existent. Les deux partagent le même `persist()` et le même
 - **`snapshot`** est la copie d'`inputs` prise à l'ouverture de l'édition ;
   c'est elle qui rend « Annuler » possible. Il n'existait pas : on éditait en
   direct et le seul retour en arrière était de retaper les valeurs de mémoire.
-- **L'aperçu reste vivant pendant l'édition** : coût du crédit, amortissements
-  et tableau se recalculent à la frappe. C'est ce qui rend la saisie utile.
-  Rien n'est persisté pour autant.
+- **Aucun aperçu vivant pendant l'édition** — décision produit assumée,
+  qui revient sur une version antérieure de cette doc. Coût du crédit,
+  amortissements, tableau année par année, cash-flow, pastilles résumé :
+  TOUT ce qui est visible EN DEHORS du formulaire d'édition lit les valeurs
+  **enregistrées** (`resolusAffiches`/`resultAffiche`, dérivées de
+  `savedInputs`), jamais le brouillon `inputs` en cours de frappe. Seuls les
+  champs DU formulaire lui-même (Régime fiscal, TMI, Quote-part terrain,
+  Montant emprunté, Taux du crédit…) affichent la valeur qu'on est en train
+  de taper — c'est `resolus`/`result`, calculés depuis `inputs`, réservés à
+  cet usage précis. Corollaire : la sticky bar « feedback temps réel du
+  cash-flow » qui accompagnait l'édition a été retirée avec elle — son seul
+  rôle était de montrer ce live-preview.
 - **Le mode d'emploi de la saisie** (« vide le champ pour repasser en auto »)
   n'est rendu **qu'en édition**. En lecture il occupait quatre lignes pour
   expliquer un geste que l'utilisateur n'était pas en train de faire.

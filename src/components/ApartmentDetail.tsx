@@ -1076,7 +1076,6 @@ export default function ApartmentDetail({
           <FinancementSection
             apartment={live}
             settings={settings}
-            cashflowSeuils={cashflowSeuils}
             onSaved={setApt}
           />
 

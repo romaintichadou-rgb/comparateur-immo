@@ -4,7 +4,6 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { FINANCEMENT_MODE_COURT, type AppSettings } from "@/lib/settings";
-import { TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
   defaultInputs,
   resolveInputs,
@@ -14,7 +13,7 @@ import {
 import { NumberField } from "@/components/form/Fields";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { GroupTitle, TITRE_SECTION } from "@/components/SectionHeader";
-import { formatEurosSigned, formatNombre } from "@/lib/format";
+import { formatNombre } from "@/lib/format";
 
 function Pastille({ children }: { children: ReactNode }) {
   return (
@@ -98,12 +97,10 @@ function euros(n: number): string {
 export default function FinancementSection({
   apartment,
   settings,
-  cashflowSeuils,
   onSaved,
 }: {
   apartment: ApartmentWithComputed;
   settings: AppSettings;
-  cashflowSeuils: CashflowSeuils;
   onSaved?: (apartment: ApartmentWithComputed) => void;
 }) {
   const [savedInputs, setSavedInputs] = useState(apartment.simulation_inputs);
@@ -121,14 +118,26 @@ export default function FinancementSection({
   const [open, setOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
+  // `resolus`/`result` : brouillon en cours de frappe — sert UNIQUEMENT à
+  // afficher la valeur courante DANS les champs du formulaire d'édition.
   const resolus = useMemo(() => resolveInputs(inputs, settings), [inputs, settings]);
   const result = useMemo(() => simulate(apartment, resolus), [apartment, resolus]);
 
+  // Valeurs ENREGISTRÉES uniquement — c'est ce que le hero (mensualité + pills,
+  // toujours visible) et le mode lecture affichent. Ne doit changer qu'au clic
+  // sur « Enregistrer », jamais à la frappe.
+  const resolusAffiches = useMemo(
+    () => resolveInputs(savedInputs, settings),
+    [savedInputs, settings],
+  );
+  const resultAffiche = useMemo(() => simulate(apartment, resolusAffiches), [apartment, resolusAffiches]);
+
+  // N'affiche « Réinitialiser » que pour des surcharges réellement ENREGISTRÉES.
   const surcharges =
-    (inputs.montantEmprunte != null ? 1 : 0) +
-    (inputs.tauxCreditPct != null ? 1 : 0) +
-    (inputs.dureeAnnees != null ? 1 : 0) +
-    (inputs.tauxAssurancePct != null ? 1 : 0);
+    (savedInputs?.montantEmprunte != null ? 1 : 0) +
+    (savedInputs?.tauxCreditPct != null ? 1 : 0) +
+    (savedInputs?.dureeAnnees != null ? 1 : 0) +
+    (savedInputs?.tauxAssurancePct != null ? 1 : 0);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
@@ -185,10 +194,7 @@ export default function FinancementSection({
     await persist(patched);
   }
 
-  if (!result) return null;
-
-  const cfLMNP = result.cashflowMensuelMoyenLMNP;
-  const cashflowCls = TONE_TEXT_CLASS[cashflowTone(cfLMNP, cashflowSeuils)];
+  if (!result || !resultAffiche) return null;
 
   return (
     <>
@@ -221,26 +227,29 @@ export default function FinancementSection({
             />
           </div>
 
-          {/* Hero : mensualité + summary pills — toujours visible, cliquable */}
+          {/* Hero : mensualité + summary pills — toujours visible, cliquable.
+              Lit les valeurs ENREGISTRÉES (`resultAffiche`/`resolusAffiches`),
+              jamais le brouillon en cours de frappe : ça ne doit changer qu'au
+              clic sur « Enregistrer ». */}
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-ink-700">Mensualité de crédit</p>
               <p className="mt-0.5 text-[11px] text-ink-400">assurance emprunteur incluse</p>
             </div>
             <p className="shrink-0 font-mono text-2xl font-bold tabular-nums text-ink-900">
-              {euros(result.mensualiteTotale)} €
+              {euros(resultAffiche.mensualiteTotale)} €
               <span className="text-[13px] font-normal text-ink-400">/mois</span>
             </p>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Crédit {formatNombre(resolus.tauxCreditPct)} %
+              Crédit {formatNombre(resolusAffiches.tauxCreditPct)} %
             </span>
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              {formatNombre(resolus.dureeAnnees)} ans
+              {formatNombre(resolusAffiches.dureeAnnees)} ans
             </span>
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Apport {euros(result.apport)} €
+              Apport {euros(resultAffiche.apport)} €
             </span>
           </div>
         </button>
@@ -326,11 +335,11 @@ export default function FinancementSection({
                     <FinSectionTitle>Crédit immobilier</FinSectionTitle>
                     <FinRow
                       label="Montant emprunté"
-                      value={`${euros(result.montantEmprunte)} €`}
+                      value={`${euros(resultAffiche.montantEmprunte)} €`}
                       badge={
-                        result.montantAutomatique ? (
+                        resultAffiche.montantAutomatique ? (
                           <Pastille>auto</Pastille>
-                        ) : result.montantPlafonne ? (
+                        ) : resultAffiche.montantPlafonne ? (
                           <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                             plafonné
                           </span>
@@ -339,24 +348,24 @@ export default function FinancementSection({
                     />
                     <FinRow
                       label="Taux nominal"
-                      value={`${formatNombre(resolus.tauxCreditPct)} %`}
-                      badge={inputs.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
+                      value={`${formatNombre(resolusAffiches.tauxCreditPct)} %`}
+                      badge={savedInputs?.tauxCreditPct == null ? <Pastille>profil</Pastille> : undefined}
                     />
                     <FinRow
                       label="Durée"
-                      value={`${formatNombre(resolus.dureeAnnees)} ans`}
-                      badge={inputs.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
+                      value={`${formatNombre(resolusAffiches.dureeAnnees)} ans`}
+                      badge={savedInputs?.dureeAnnees == null ? <Pastille>profil</Pastille> : undefined}
                     />
                     <FinRow
                       label="Assurance"
-                      value={`${formatNombre(resolus.tauxAssurancePct)} %`}
-                      badge={inputs.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
+                      value={`${formatNombre(resolusAffiches.tauxAssurancePct)} %`}
+                      badge={savedInputs?.tauxAssurancePct == null ? <Pastille>profil</Pastille> : undefined}
                     />
                   </div>
 
                   <div className="py-3.5">
                     <FinSectionTitle>Apport personnel</FinSectionTitle>
-                    <FinRow label="Frais de notaire + complément" value={`${euros(result.apport)} €`} />
+                    <FinRow label="Frais de notaire + complément" value={`${euros(resultAffiche.apport)} €`} />
                   </div>
 
                   <div className="flex items-center justify-end gap-3 py-3.5">
@@ -384,18 +393,6 @@ export default function FinancementSection({
         )}
       </section>
 
-      {/* Sticky bar : feedback cash-flow temps réel pendant l'édition */}
-      {editing && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-100 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-            <span className="text-xs text-ink-500">Cash-flow mensuel</span>
-            <span className={`font-mono text-lg font-bold tabular-nums ${cashflowCls}`}>
-              {formatEurosSigned(cfLMNP)}
-              <span className="ml-0.5 text-xs font-normal text-ink-400">/mois</span>
-            </span>
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -209,27 +209,44 @@ export default function SimulationFinanciere({
   // `null` = pas de brouillon actif ; `{value: null}` = brouillon « auto ».
   const [quotePartDraft, setQuotePartDraft] = useState<{ value: number | null } | null>(null);
 
-  // `inputs` = ce qui est STOCKÉ sur le bien (profil emprunteur en `null` tant
-  // qu'il n'est pas surchargé). `resolus` = ce que la simulation consomme, une
-  // fois l'héritage du Profil investisseur appliqué. Les champs lisent `resolus`
-  // pour AFFICHER, et écrivent dans `inputs` pour créer un override.
+  // `inputs` = brouillon en cours d'édition (peut différer de ce qui est
+  // STOCKÉ tant que « Enregistrer » n'a pas été cliqué). `resolus` = ce brouillon
+  // une fois l'héritage du Profil investisseur appliqué — sert UNIQUEMENT à
+  // afficher la valeur courante DANS les champs du formulaire d'édition
+  // (Régime fiscal, TMI, Quote-part terrain), jamais ailleurs sur la page.
   const resolus = useMemo(() => resolveInputs(inputs, settings), [inputs, settings]);
-  // Le brouillon de quote-part alimente la simulation pour que l'aperçu reste
-  // vivant pendant l'édition, sans rien persister tant qu'on n'a pas enregistré.
+  // Le brouillon de quote-part alimente la simulation pour que le CHAMP lui-même
+  // affiche la bonne valeur pendant la frappe — mais `result` (calculé à partir
+  // de ce brouillon) ne doit jamais fuiter en dehors du formulaire : voir
+  // `resultAffiche` plus bas, seule source pour tout le reste de la page.
   const apartmentSim = useMemo(
     () =>
       quotePartDraft ? { ...apartment, quote_part_terrain_pct: quotePartDraft.value } : apartment,
     [apartment, quotePartDraft],
   );
   const result = useMemo(() => simulate(apartmentSim, resolus), [apartmentSim, resolus]);
-  const surchargesHyp = (inputs.regimeFiscal != null && inputs.regimeFiscal !== REGIME_FISCAL_DEFAUT ? 1 : 0)
-    + (inputs.tmiPct != null ? 1 : 0)
+
+  // Valeurs ENREGISTRÉES uniquement — c'est ce que toute la page affiche EN
+  // DEHORS du formulaire d'édition (cash-flow, tableau année par année,
+  // patrimoine, pastilles résumé…). Les chiffres de l'onglet ne doivent
+  // changer qu'au clic sur « Enregistrer », jamais à la frappe : `inputs`/
+  // `quotePartDraft` (brouillons) n'entrent pour rien dans ce calcul.
+  const resolusAffiches = useMemo(
+    () => resolveInputs(savedInputs, settings),
+    [savedInputs, settings],
+  );
+  const resultAffiche = useMemo(() => simulate(apartment, resolusAffiches), [apartment, resolusAffiches]);
+  // N'affiche « Réinitialiser » (bouton du mode LECTURE) que pour des
+  // surcharges réellement ENREGISTRÉES — le brouillon `inputs` en cours de
+  // frappe ne doit rien y changer avant l'enregistrement.
+  const surchargesHyp = (savedInputs?.regimeFiscal != null && savedInputs.regimeFiscal !== REGIME_FISCAL_DEFAUT ? 1 : 0)
+    + (savedInputs?.tmiPct != null ? 1 : 0)
     + (apartment.quote_part_terrain_pct != null ? 1 : 0)
-    + (inputs.revalorisationBienPct != null ? 1 : 0)
-    + (inputs.revalorisationLoyerPct != null ? 1 : 0)
-    + (inputs.indexationChargesPct != null ? 1 : 0)
-    + (inputs.vacanceLocativePct != null ? 1 : 0)
-    + (inputs.gestionPct != null ? 1 : 0);
+    + (savedInputs?.revalorisationBienPct != null ? 1 : 0)
+    + (savedInputs?.revalorisationLoyerPct != null ? 1 : 0)
+    + (savedInputs?.indexationChargesPct != null ? 1 : 0)
+    + (savedInputs?.vacanceLocativePct != null ? 1 : 0)
+    + (savedInputs?.gestionPct != null ? 1 : 0);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
@@ -313,7 +330,7 @@ export default function SimulationFinanciere({
     await persist(patched, { quote_part_terrain_pct: null });
   }
 
-  if (!result) {
+  if (!result || !resultAffiche) {
     return (
       <div className="rounded-xl border border-ink-100 bg-white p-10 text-center">
         <Calculator className="mx-auto h-8 w-8 text-ink-300" />
@@ -326,14 +343,14 @@ export default function SimulationFinanciere({
     );
   }
 
-  const cfLMNP = result.cashflowMensuelMoyenLMNP;
-  const cfAn1 = result.cashflowMensuelAn1;
+  const cfLMNP = resultAffiche.cashflowMensuelMoyenLMNP;
+  const cfAn1 = resultAffiche.cashflowMensuelAn1;
 
   // Moyennes mensuelles sur les années exonérées LMNP (année 1 toujours incluse).
-  const exoAnnees = result.annees.filter((a) => a.impot < 1);
+  const exoAnnees = resultAffiche.annees.filter((a) => a.impot < 1);
   const lmnpAnnees = exoAnnees.length > 0
-    ? (exoAnnees[0].annee === 1 ? exoAnnees : [result.annees[0], ...exoAnnees])
-    : [result.annees[0]];
+    ? (exoAnnees[0].annee === 1 ? exoAnnees : [resultAffiche.annees[0], ...exoAnnees])
+    : [resultAffiche.annees[0]];
   const nLmnp = lmnpAnnees.length;
   const avgM = (f: (a: AnneeSimulation) => number) =>
     lmnpAnnees.reduce((s, a) => s + f(a), 0) / nLmnp / 12;
@@ -370,22 +387,25 @@ export default function SimulationFinanciere({
             />
           </div>
 
-          {/* Summary pills — toujours visibles, cliquable */}
+          {/* Summary pills — toujours visibles, cliquable. Lisent les valeurs
+              ENREGISTRÉES (`resolusAffiches`/`savedInputs`), jamais le brouillon
+              `inputs` en cours de frappe : elles ne doivent pas changer avant
+              l'enregistrement. */}
           <div className="flex flex-wrap gap-1.5">
           <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-            {REGIMES_FISCAUX[resolus.regimeFiscal]}
+            {REGIMES_FISCAUX[resolusAffiches.regimeFiscal]}
           </span>
           <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-            TMI {formatNombre(resolus.tmiPct)} %
+            TMI {formatNombre(resolusAffiches.tmiPct)} %
           </span>
-          {inputs.revalorisationLoyerPct != null && (
+          {savedInputs?.revalorisationLoyerPct != null && (
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Revalo loyer {formatNombre(inputs.revalorisationLoyerPct)} %/an
+              Revalo loyer {formatNombre(savedInputs.revalorisationLoyerPct)} %/an
             </span>
           )}
-          {inputs.vacanceLocativePct != null && (
+          {savedInputs?.vacanceLocativePct != null && (
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Vacance {formatNombre(inputs.vacanceLocativePct)} %
+              Vacance {formatNombre(savedInputs.vacanceLocativePct)} %
             </span>
           )}
           </div>
@@ -529,24 +549,24 @@ export default function SimulationFinanciere({
                   <div className="grid grid-cols-1 gap-x-32 py-3.5 sm:grid-cols-2">
                     <div>
                       <FinSectionTitle>Fiscalité</FinSectionTitle>
-                      <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolus.regimeFiscal]} />
+                      <FinRow label="Régime fiscal" value={REGIMES_FISCAUX[resolusAffiches.regimeFiscal]} />
                       <FinRow
                         label="TMI"
-                        value={`${formatNombre(resolus.tmiPct)} %`}
+                        value={`${formatNombre(resolusAffiches.tmiPct)} %`}
                         suffix={`+ ${formatNombre(LMNP.prelevementsSociauxPct)} % PS`}
                       />
                       <FinRow
                         label="Quote-part terrain"
-                        value={pctOrDash(result.quotePartTerrainPct)}
+                        value={pctOrDash(resultAffiche.quotePartTerrainPct)}
                       />
                     </div>
                     <div>
                       <FinSectionTitle>Projection</FinSectionTitle>
-                      <FinRow label="Revalorisation du bien" value={hypPct(inputs.revalorisationBienPct)} />
-                      <FinRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
-                      <FinRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
-                      <FinRow label="Vacance locative" value={hypPct(inputs.vacanceLocativePct)} />
-                      <FinRow label="Frais de gestion locative" value={hypPct(inputs.gestionPct)} />
+                      <FinRow label="Revalorisation du bien" value={hypPct(savedInputs?.revalorisationBienPct ?? null)} />
+                      <FinRow label="Revalorisation du loyer" value={hypPct(savedInputs?.revalorisationLoyerPct ?? null)} />
+                      <FinRow label="Indexation charges" value={hypPct(savedInputs?.indexationChargesPct ?? null)} />
+                      <FinRow label="Vacance locative" value={hypPct(savedInputs?.vacanceLocativePct ?? null)} />
+                      <FinRow label="Frais de gestion locative" value={hypPct(savedInputs?.gestionPct ?? null)} />
                     </div>
                   </div>
 
@@ -607,7 +627,7 @@ export default function SimulationFinanciere({
             plus
             badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
           />
-          <WaterfallRow label="Mensualité de crédit" value={-result.mensualiteTotale} />
+          <WaterfallRow label="Mensualité de crédit" value={-resultAffiche.mensualiteTotale} />
           <WaterfallRow label="Charges d'exploitation" value={-chargesMoyennesM} />
           <WaterfallRow label="Impôt LMNP (moyen)" value={-impotMoyenM} />
         </ul>
@@ -616,9 +636,9 @@ export default function SimulationFinanciere({
             <div>
               <span className={`text-sm font-semibold ${cfTone.label}`}>Cash-flow mensuel</span>
               <p className={`mt-0.5 text-xs ${cfTone.sub}`}>
-                {result.anneesExonerees > 1
-                  ? `Moyen sur ${result.anneesExonerees} ans sans impôt`
-                  : result.anneesExonerees === 1
+                {resultAffiche.anneesExonerees > 1
+                  ? `Moyen sur ${resultAffiche.anneesExonerees} ans sans impôt`
+                  : resultAffiche.anneesExonerees === 1
                     ? "Année 1, sans impôt"
                     : "Année 1, après impôt"}
               </p>
@@ -628,21 +648,21 @@ export default function SimulationFinanciere({
             </span>
           </div>
           <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-xs leading-relaxed text-ink-500">
-            {result.annees[0].impot === 0 ? (<>
+            {resultAffiche.annees[0].impot === 0 ? (<>
               <strong className="font-semibold text-ink-700">Pourquoi 0 € d'impôt ?</strong>{" "}
               En LMNP au réel, tu déduis l'usure du bien (amortissements) de tes revenus locatifs.
               Ici, <strong className="font-medium text-ink-700">
-                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
+                {euros(resultAffiche.amortissements.bati + resultAffiche.amortissements.travaux + resultAffiche.amortissements.notaire)} €/an
               </strong> d'amortissements{" "}
-              (bâti {euros(result.amortissements.bati)} €
-              {result.amortissements.travaux > 0 ? ` + travaux ${euros(result.amortissements.travaux)} €` : ""}
-              {result.amortissements.notaire > 0 ? ` + notaire ${euros(result.amortissements.notaire)} €` : ""})
-              {" "}absorbent tes revenus nets → résultat imposable = 0 € pendant <strong className="font-medium text-ink-700">{result.anneesExonerees} {result.anneesExonerees > 1 ? "ans" : "an"}</strong>.
+              (bâti {euros(resultAffiche.amortissements.bati)} €
+              {resultAffiche.amortissements.travaux > 0 ? ` + travaux ${euros(resultAffiche.amortissements.travaux)} €` : ""}
+              {resultAffiche.amortissements.notaire > 0 ? ` + notaire ${euros(resultAffiche.amortissements.notaire)} €` : ""})
+              {" "}absorbent tes revenus nets → résultat imposable = 0 € pendant <strong className="font-medium text-ink-700">{resultAffiche.anneesExonerees} {resultAffiche.anneesExonerees > 1 ? "ans" : "an"}</strong>.
             </>) : (<>
-              <strong className="font-semibold text-ink-700">Impôt année 1 : {euros(result.annees[0].impot)} €</strong>{" "}
+              <strong className="font-semibold text-ink-700">Impôt année 1 : {euros(resultAffiche.annees[0].impot)} €</strong>{" "}
               Les amortissements LMNP (<strong className="font-medium text-ink-700">
-                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
-              </strong>) réduisent tes revenus imposables à {euros(result.annees[0].resultatImposable)} €/an.
+                {euros(resultAffiche.amortissements.bati + resultAffiche.amortissements.travaux + resultAffiche.amortissements.notaire)} €/an
+              </strong>) réduisent tes revenus imposables à {euros(resultAffiche.annees[0].resultatImposable)} €/an.
             </>)}
           </div>
         </div>
@@ -653,9 +673,9 @@ export default function SimulationFinanciere({
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-100 bg-white p-5">
           <SectionHeader title="Financement du projet" as="h3" />
           <p className="text-xs text-ink-400">
-            {`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolus.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
+            {`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolusAffiches.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
           </p>
-          <FinancementDonut financement={result.financementProjet} />
+          <FinancementDonut financement={resultAffiche.financementProjet} />
         </section>
 
         <section className="min-w-0 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
@@ -664,12 +684,12 @@ export default function SimulationFinanciere({
             Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
             (valeur du bien au-delà de la dette et de l&apos;apport non récupéré), et l&apos;effort
             d&apos;épargne encore porté (apport pas encore compensé par le cash-flow cumulé).{" "}
-            {inputs.revalorisationBienPct != null
-              ? `Hypothèse de revalorisation du bien : ${inputs.revalorisationBienPct} %/an`
+            {savedInputs?.revalorisationBienPct != null
+              ? `Hypothèse de revalorisation du bien : ${savedInputs.revalorisationBienPct} %/an`
               : "Aucune revalorisation du bien supposée"}{" "}
             — hors fiscalité de la plus-value à la revente.
           </p>
-          <PatrimoineChart annees={result.annees} />
+          <PatrimoineChart annees={resultAffiche.annees} />
         </section>
       </div>
 
@@ -705,12 +725,12 @@ export default function SimulationFinanciere({
                     IBM Plex Sans a des chiffres tabulaires natifs (mesuré :
                     « 1111 » et « 0000 » à la même largeur au pixel). */}
                 <tbody className="divide-y divide-ink-50 tabular-nums">
-                  {result.annees.map((a) => (
+                  {resultAffiche.annees.map((a) => (
                     <tr key={a.annee} className="hover:bg-ink-50/60">
                       <td className="px-2 py-1.5 text-ink-500 sm:px-5">{a.annee}</td>
                       <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(a.loyers)}</td>
                       <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">
-                        {euros(-(result.mensualiteTotale * 12))}
+                        {euros(-(resultAffiche.mensualiteTotale * 12))}
                       </td>
                       <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.chargesExploitation)}</td>
                       <td className="px-1.5 py-1.5 text-right text-ink-700 sm:px-3">{euros(-a.impot)}</td>
@@ -726,16 +746,16 @@ export default function SimulationFinanciere({
               </table>
             </div>
             <p className="px-5 py-3 text-xs text-ink-400">
-              Total impôts sur {resolus.dureeAnnees} ans : {euros(result.totalImpots)} € · loyer{" "}
-              {inputs.revalorisationLoyerPct != null
-                ? `revalorisé à ${inputs.revalorisationLoyerPct} %/an`
+              Total impôts sur {resolusAffiches.dureeAnnees} ans : {euros(resultAffiche.totalImpots)} € · loyer{" "}
+              {savedInputs?.revalorisationLoyerPct != null
+                ? `revalorisé à ${savedInputs.revalorisationLoyerPct} %/an`
                 : "supposé constant (pas de revalorisation)"}{" "}
               ; charges de copropriété et taxe foncière{" "}
-              {inputs.indexationChargesPct != null
-                ? `indexées à ${inputs.indexationChargesPct} %/an`
+              {savedInputs?.indexationChargesPct != null
+                ? `indexées à ${savedInputs.indexationChargesPct} %/an`
                 : "supposées constantes (pas d'indexation)"}
-              {inputs.vacanceLocativePct != null
-                ? ` ; vacance locative ${inputs.vacanceLocativePct} %`
+              {savedInputs?.vacanceLocativePct != null
+                ? ` ; vacance locative ${savedInputs.vacanceLocativePct} %`
                 : ""}
               .
             </p>
@@ -743,17 +763,6 @@ export default function SimulationFinanciere({
         )}
       </section>
 
-      {/* Sticky bar pendant l'édition — feedback temps réel du cash-flow */}
-      {editingId !== null && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-100 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-            <span className="text-xs text-ink-500">Cash-flow mensuel</span>
-            <span className={`font-mono text-lg font-bold tabular-nums ${cashflowTextClass(cfLMNP, cashflowSeuils)}`}>
-              {formatEurosSigned(cfLMNP)}<span className="ml-0.5 text-xs font-normal text-ink-400">/mois</span>
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
