@@ -194,24 +194,28 @@ function OptionalRateField({
   }
   return (
     <div className="flex items-end gap-1">
-      <NumberField
-        label={label}
-        value={value}
-        onChange={(v) => {
-          if (v != null && v <= 0) return;
-          onChange(v ?? 0);
-        }}
-        suffix={suffix}
-      />
-      <button
-        type="button"
-        onClick={() => onChange(null)}
-        title="Désactiver cette hypothèse"
-        aria-label={`Désactiver ${label}`}
-        className="mb-[3px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      <div className="min-w-0 flex-1">
+        <NumberField
+          label={label}
+          value={value}
+          onChange={(v) => {
+            if (v != null && v <= 0) return;
+            onChange(v ?? 0);
+          }}
+          suffix={suffix}
+        />
+      </div>
+      <div className="mb-[3px] w-11 shrink-0 flex justify-center">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          title="Désactiver cette hypothèse"
+          aria-label={`Désactiver ${label}`}
+          className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
