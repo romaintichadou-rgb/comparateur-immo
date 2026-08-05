@@ -321,6 +321,7 @@ export default function SimulationFinanciere({
       revalorisationLoyerPct: null,
       indexationChargesPct: null,
       vacanceLocativePct: null,
+      gestionPct: null,
     };
     setInputs(patched);
     setQuotePartDraft(null);
