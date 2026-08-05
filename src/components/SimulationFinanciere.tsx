@@ -211,7 +211,7 @@ function OptionalRateField({
           onClick={() => onChange(null)}
           title="Désactiver cette hypothèse"
           aria-label={`Désactiver ${label}`}
-          className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
+          className="flex h-11 w-11 items-center justify-center rounded-md text-ink-200 transition-colors hover:text-ink-400"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -468,51 +468,56 @@ export default function SimulationFinanciere({
                   <div className="grid grid-cols-1 gap-x-32 gap-y-5 py-4 sm:grid-cols-2">
                     <div className="space-y-3">
                       <HypGroupTitle>Fiscalité</HypGroupTitle>
-                      <SelectField
-                        label="Régime fiscal"
-                        value={resolus.regimeFiscal}
-                        onChange={(v) => set("regimeFiscal", v)}
-                        options={REGIMES_FISCAUX_OPTIONS}
-                        optionLabel={(v) => REGIMES_FISCAUX[v]}
-                        allowEmpty={false}
-                      />
-                      <div className="flex items-end gap-1">
-                        <div className="min-w-0 flex-1">
-                          <SelectField
-                            label="Tranche marginale d'imposition (TMI)"
-                            value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
-                            onChange={(v) => set("tmiPct", Number(v))}
-                            options={TMI_OPTIONS}
-                            allowEmpty={false}
-                            hint={
-                              inputs.tmiPct == null ? undefined : (
-                                <span className="text-xs font-normal text-ink-400">
-                                  + {LMNP.prelevementsSociauxPct} % PS
-                                </span>
-                              )
-                            }
-                          />
+                      <div className="flex flex-col gap-3">
+                        <SelectField
+                          label="Régime fiscal"
+                          value={resolus.regimeFiscal}
+                          onChange={(v) => set("regimeFiscal", v)}
+                          options={REGIMES_FISCAUX_OPTIONS}
+                          optionLabel={(v) => REGIMES_FISCAUX[v]}
+                          allowEmpty={false}
+                        />
+                        <div className="flex items-end gap-1">
+                          <div className="min-w-0 flex-1">
+                            <SelectField
+                              label="Tranche marginale d'imposition (TMI)"
+                              value={String(resolus.tmiPct) as (typeof TMI_OPTIONS)[number]}
+                              onChange={(v) => set("tmiPct", Number(v))}
+                              options={TMI_OPTIONS}
+                              allowEmpty={false}
+                              hint={
+                                inputs.tmiPct == null ? undefined : (
+                                  <span className="text-xs font-normal text-ink-400">
+                                    + {LMNP.prelevementsSociauxPct} % PS
+                                  </span>
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="mb-[3px] w-11 shrink-0 flex justify-center">
+                            {inputs.tmiPct != null && (
+                              <button
+                                type="button"
+                                onClick={() => set("tmiPct", null)}
+                                title="Revenir à la valeur du profil investisseur"
+                                aria-label="TMI : revenir au profil"
+                                className="flex h-11 w-11 items-center justify-center rounded-md text-ink-200 transition-colors hover:text-ink-400"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="mb-[3px] w-11 shrink-0 flex justify-center">
-                          {inputs.tmiPct != null && (
-                            <button
-                              type="button"
-                              onClick={() => set("tmiPct", null)}
-                              title="Revenir à la valeur du profil investisseur"
-                              aria-label="TMI : revenir au profil"
-                              className="flex h-11 w-11 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-100 hover:text-ink-600"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
+                        <NumberField
+                          label="Quote-part terrain"
+                          value={result.quotePartTerrainPct}
+                          onChange={(v) => {
+                            if (v != null && v <= 0) return;
+                            setQuotePartDraft({ value: v });
+                          }}
+                          suffix="% du prix"
+                        />
                       </div>
-                      <NumberField
-                        label="Quote-part terrain"
-                        value={result.quotePartTerrainPct}
-                        onChange={(v) => setQuotePartDraft({ value: v })}
-                        suffix="% du prix"
-                      />
                     </div>
 
                     <div className="space-y-3">
