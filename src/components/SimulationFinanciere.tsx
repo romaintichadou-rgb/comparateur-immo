@@ -413,78 +413,6 @@ export default function SimulationFinanciere({
         onCancel={() => setConfirmReset(false)}
       />
 
-      {/* Cash-flow mensuel détaillé (remonté en tête pour montrer le détail d'abord) */}
-      <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
-        <SectionHeader title="Cash-flow mensuel" as="h3" />
-        <ul className="divide-y divide-ink-100/50 text-sm">
-          <WaterfallRow
-            label="Loyers encaissés"
-            value={loyerMoyenM}
-            plus
-            badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
-          />
-          <WaterfallRow label="Mensualité de crédit" value={-result.mensualiteTotale} />
-          <WaterfallRow label="Charges d'exploitation" value={-chargesMoyennesM} />
-          <WaterfallRow label="Impôt LMNP (moyen)" value={-impotMoyenM} />
-        </ul>
-        <div className={`rounded-xl p-4 ${cfTone.wrap}`}>
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
-              <span className={`text-sm font-semibold ${cfTone.label}`}>Cash-flow mensuel</span>
-              <p className={`mt-0.5 text-xs ${cfTone.sub}`}>
-                {result.anneesExonerees > 1
-                  ? `Moyen sur ${result.anneesExonerees} ans sans impôt`
-                  : result.anneesExonerees === 1
-                    ? "Année 1, sans impôt"
-                    : "Année 1, après impôt"}
-              </p>
-            </div>
-            <span className={`font-mono text-2xl font-bold tabular-nums ${cfTone.value}`}>
-              {formatEurosSigned(cfLMNP)}
-            </span>
-          </div>
-          <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-xs leading-relaxed text-ink-500">
-            {result.annees[0].impot === 0 ? (<>
-              <strong className="font-semibold text-ink-700">Pourquoi 0 € d'impôt ?</strong>{" "}
-              En LMNP au réel, tu déduis l'usure du bien (amortissements) de tes revenus locatifs.
-              Ici, <strong className="font-medium text-ink-700">
-                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
-              </strong> d'amortissements{" "}
-              (bâti {euros(result.amortissements.bati)} €
-              {result.amortissements.travaux > 0 ? ` + travaux ${euros(result.amortissements.travaux)} €` : ""}
-              {result.amortissements.notaire > 0 ? ` + notaire ${euros(result.amortissements.notaire)} €` : ""})
-              {" "}absorbent tes revenus nets → résultat imposable = 0 € pendant <strong className="font-medium text-ink-700">{result.anneesExonerees} {result.anneesExonerees > 1 ? "ans" : "an"}</strong>.
-            </>) : (<>
-              <strong className="font-semibold text-ink-700">Impôt année 1 : {euros(result.annees[0].impot)} €</strong>{" "}
-              Les amortissements LMNP (<strong className="font-medium text-ink-700">
-                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
-              </strong>) réduisent tes revenus imposables à {euros(result.annees[0].resultatImposable)} €/an.
-            </>)}
-          </div>
-        </div>
-      </section>
-
-      {/* `editingId === null` : quand une carte est en édition, c'est SON pied
-          qui porte Enregistrer. Laisser la bannière en plus afficherait deux
-          boutons pour la même action, à deux endroits de l'écran. La bannière
-          reste indispensable pour les hypothèses du tableau année par année,
-          qui s'éditent en ligne sans passer par une carte. */}
-      {dirty && editingId === null && (
-        <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
-          <p className="text-xs text-accent-700">
-            Hypothèses modifiées, non enregistrées — le score de l&apos;Analyse IA se base sur les
-            dernières hypothèses enregistrées.
-          </p>
-          <button
-            onClick={handleSaveInputs}
-            disabled={saving}
-            className="shrink-0 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
-          >
-            {saving ? "Enregistrement..." : "Enregistrer les hypothèses"}
-          </button>
-        </div>
-      )}
-
       {/* Hypothèses — Fiscalité + Projection, séparées du financement */}
       <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "hypotheses" ? "border-accent-300" : "border-ink-100"}`}>
         <button
@@ -522,7 +450,7 @@ export default function SimulationFinanciere({
 
         {hypOpen && (
           <div className="px-5 pb-4">
-            <div className="border-t border-ink-100 pt-1">
+            <div className="border-t border-ink-100/50 pt-1">
               {editingId === "hypotheses" ? (
                 <>
                   <div className="grid grid-cols-1 gap-x-6 gap-y-5 py-4 sm:grid-cols-2">
@@ -659,7 +587,7 @@ export default function SimulationFinanciere({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 border-t border-ink-100 py-3.5">
+                  <div className="flex items-center justify-end gap-3 py-3.5">
                     {surchargesHyp > 0 && (
                       <button
                         type="button"
@@ -683,6 +611,78 @@ export default function SimulationFinanciere({
             </div>
           </div>
         )}
+      </section>
+
+      {/* `editingId === null` : quand une carte est en édition, c'est SON pied
+          qui porte Enregistrer. Laisser la bannière en plus afficherait deux
+          boutons pour la même action, à deux endroits de l'écran. La bannière
+          reste indispensable pour les hypothèses du tableau année par année,
+          qui s'éditent en ligne sans passer par une carte. */}
+      {dirty && editingId === null && (
+        <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
+          <p className="text-xs text-accent-700">
+            Hypothèses modifiées, non enregistrées — le score de l&apos;Analyse IA se base sur les
+            dernières hypothèses enregistrées.
+          </p>
+          <button
+            onClick={handleSaveInputs}
+            disabled={saving}
+            className="shrink-0 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+          >
+            {saving ? "Enregistrement..." : "Enregistrer les hypothèses"}
+          </button>
+        </div>
+      )}
+
+      {/* Cash-flow mensuel détaillé */}
+      <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
+        <SectionHeader title="Cash-flow mensuel" as="h3" />
+        <ul className="divide-y divide-ink-100/50 text-sm">
+          <WaterfallRow
+            label="Loyers encaissés"
+            value={loyerMoyenM}
+            plus
+            badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
+          />
+          <WaterfallRow label="Mensualité de crédit" value={-result.mensualiteTotale} />
+          <WaterfallRow label="Charges d'exploitation" value={-chargesMoyennesM} />
+          <WaterfallRow label="Impôt LMNP (moyen)" value={-impotMoyenM} />
+        </ul>
+        <div className={`rounded-xl p-4 ${cfTone.wrap}`}>
+          <div className="flex items-baseline justify-between gap-4">
+            <div>
+              <span className={`text-sm font-semibold ${cfTone.label}`}>Cash-flow mensuel</span>
+              <p className={`mt-0.5 text-xs ${cfTone.sub}`}>
+                {result.anneesExonerees > 1
+                  ? `Moyen sur ${result.anneesExonerees} ans sans impôt`
+                  : result.anneesExonerees === 1
+                    ? "Année 1, sans impôt"
+                    : "Année 1, après impôt"}
+              </p>
+            </div>
+            <span className={`font-mono text-2xl font-bold tabular-nums ${cfTone.value}`}>
+              {formatEurosSigned(cfLMNP)}
+            </span>
+          </div>
+          <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-xs leading-relaxed text-ink-500">
+            {result.annees[0].impot === 0 ? (<>
+              <strong className="font-semibold text-ink-700">Pourquoi 0 € d'impôt ?</strong>{" "}
+              En LMNP au réel, tu déduis l'usure du bien (amortissements) de tes revenus locatifs.
+              Ici, <strong className="font-medium text-ink-700">
+                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
+              </strong> d'amortissements{" "}
+              (bâti {euros(result.amortissements.bati)} €
+              {result.amortissements.travaux > 0 ? ` + travaux ${euros(result.amortissements.travaux)} €` : ""}
+              {result.amortissements.notaire > 0 ? ` + notaire ${euros(result.amortissements.notaire)} €` : ""})
+              {" "}absorbent tes revenus nets → résultat imposable = 0 € pendant <strong className="font-medium text-ink-700">{result.anneesExonerees} {result.anneesExonerees > 1 ? "ans" : "an"}</strong>.
+            </>) : (<>
+              <strong className="font-semibold text-ink-700">Impôt année 1 : {euros(result.annees[0].impot)} €</strong>{" "}
+              Les amortissements LMNP (<strong className="font-medium text-ink-700">
+                {euros(result.amortissements.bati + result.amortissements.travaux + result.amortissements.notaire)} €/an
+              </strong>) réduisent tes revenus imposables à {euros(result.annees[0].resultatImposable)} €/an.
+            </>)}
+          </div>
+        </div>
       </section>
 
       {/* Graphiques (remontés avant le tableau) */}
