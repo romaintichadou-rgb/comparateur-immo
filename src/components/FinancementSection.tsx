@@ -60,7 +60,7 @@ function ChampHerite({
             onClick={() => onChange(null)}
             title="Revenir à la valeur du profil investisseur"
             aria-label={`${label} : revenir au profil`}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-200 transition-colors hover:text-ink-400"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-ink-400 transition-colors hover:text-ink-700"
           >
             <X className="h-3.5 w-3.5" />
           </button>
