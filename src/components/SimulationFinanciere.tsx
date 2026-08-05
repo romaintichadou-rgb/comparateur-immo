@@ -449,7 +449,7 @@ export default function SimulationFinanciere({
         </button>
 
         {hypOpen && (
-          <div className="px-5 py-5">
+          <div className="px-5 pb-5">
             <div className="border-t border-ink-100/50 pt-1">
               {editingId === "hypotheses" ? (
                 <>
