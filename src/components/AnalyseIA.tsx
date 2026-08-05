@@ -635,7 +635,7 @@ function FlatSection({
 
           {/* Facts */}
           {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
-            <ul className="divide-y divide-ink-100/50/50">
+            <ul className="divide-y divide-ink-100/50">
               {bloc.faits.map((f, i) => (
                 <FaitRow key={i} fait={f} />
               ))}
