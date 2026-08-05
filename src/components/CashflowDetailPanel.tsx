@@ -130,22 +130,22 @@ export default function CashflowDetailPanel({
                 tone={toneLMNP}
               />
 
-              <section className="rounded-xl border border-ink-200 p-4 sm:p-5">
+              <section className="rounded-xl border border-ink-100 p-4 sm:p-5">
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
                   Financement
                 </h3>
-                <ul className="divide-y divide-ink-100 text-sm">
+                <ul className="divide-y divide-ink-100/50 text-sm">
                   <Row label="Montant emprunté" value={result.montantEmprunte} sign={false} />
                   <Row label="Apport personnel" value={result.apport} sign={false} />
                   <Row label="Mensualité de crédit (assurance incluse)" value={result.mensualiteTotale} sign={false} />
                 </ul>
               </section>
 
-              <section className="rounded-xl border border-ink-200 p-4 sm:p-5">
+              <section className="rounded-xl border border-ink-100 p-4 sm:p-5">
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
                   Flux mensuels moyens
                 </h3>
-                <ul className="divide-y divide-ink-100 text-sm">
+                <ul className="divide-y divide-ink-100/50 text-sm">
                   <Row label="Loyers encaissés" value={loyersM} />
                   <Row label="Mensualité de crédit" value={-creditM} />
                   <Row label="Charges d'exploitation" value={-chargesM} />

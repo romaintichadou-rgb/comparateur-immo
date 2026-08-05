@@ -39,7 +39,7 @@ export default function ErrorScreen({
           <AppMark className={`absolute h-28 w-28 ${toneClass.mark}`} />
           <span className={`absolute inset-0 rounded-full blur-xl ${toneClass.glow}`} aria-hidden="true" />
           <span
-            className={`relative flex h-16 w-16 items-center justify-center rounded-xl border border-ink-200 bg-white shadow-lg ${toneClass.ring}`}
+            className={`relative flex h-16 w-16 items-center justify-center rounded-xl border border-ink-100 bg-white shadow-lg ${toneClass.ring}`}
           >
             <Icon className={`h-8 w-8 ${toneClass.icon}`} aria-hidden="true" />
           </span>

@@ -372,7 +372,7 @@ export default function SimulationFinanciere({
 
   if (!result) {
     return (
-      <div className="rounded-xl border border-ink-200 bg-white p-10 text-center">
+      <div className="rounded-xl border border-ink-100 bg-white p-10 text-center">
         <Calculator className="mx-auto h-8 w-8 text-ink-300" />
         <h2 className="mt-3 font-display text-lg font-semibold text-ink-900">Simulation financière</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
@@ -414,9 +414,9 @@ export default function SimulationFinanciere({
       />
 
       {/* Cash-flow mensuel détaillé (remonté en tête pour montrer le détail d'abord) */}
-      <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+      <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
         <SectionHeader title="Cash-flow mensuel" as="h3" />
-        <ul className="divide-y divide-ink-100 text-sm">
+        <ul className="divide-y divide-ink-100/50 text-sm">
           <WaterfallRow
             label="Loyers encaissés"
             value={loyerMoyenM}
@@ -486,7 +486,7 @@ export default function SimulationFinanciere({
       )}
 
       {/* Hypothèses — Fiscalité + Projection, séparées du financement */}
-      <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "hypotheses" ? "border-accent-300" : "border-ink-200"}`}>
+      <section className={`overflow-hidden rounded-xl border bg-white transition-colors ${editingId === "hypotheses" ? "border-accent-300" : "border-ink-100"}`}>
         <button
           type="button"
           onClick={() => !editingId && setHypOpen((o) => !o)}
@@ -687,7 +687,7 @@ export default function SimulationFinanciere({
 
       {/* Graphiques (remontés avant le tableau) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
-        <section className="min-w-0 space-y-3 rounded-xl border border-ink-200 bg-white p-5">
+        <section className="min-w-0 space-y-3 rounded-xl border border-ink-100 bg-white p-5">
           <SectionHeader title="Financement du projet" as="h3" />
           <p className="text-xs text-ink-400">
             {`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolus.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
@@ -695,7 +695,7 @@ export default function SimulationFinanciere({
           <FinancementDonut financement={result.financementProjet} />
         </section>
 
-        <section className="min-w-0 space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+        <section className="min-w-0 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
           <SectionHeader title="Évolution du patrimoine" as="h3" />
           <p className="text-xs text-ink-400">
             Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
@@ -711,7 +711,7 @@ export default function SimulationFinanciere({
       </div>
 
       {/* Tableau année par année — collapsible */}
-      <section className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+      <section className="overflow-hidden rounded-xl border border-ink-100 bg-white">
         <button
           type="button"
           onClick={() => setTableOpen((o) => !o)}
@@ -782,7 +782,7 @@ export default function SimulationFinanciere({
 
       {/* Sticky bar pendant l'édition — feedback temps réel du cash-flow */}
       {editingId !== null && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-200 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-100 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
             <span className="text-xs text-ink-500">Cash-flow mensuel</span>
             <span className={`font-mono text-lg font-bold tabular-nums ${cashflowTextClass(cfLMNP, cashflowSeuils)}`}>
@@ -1086,7 +1086,7 @@ export function ResultCard({
     attention: "hover:border-amber-500",
     alerte: "hover:border-red-500",
   } as const;
-  const base = emphase ? emphaseBg[tone] : "border-ink-200 bg-white";
+  const base = emphase ? emphaseBg[tone] : "border-ink-100 bg-white";
   const hover = emphase ? hoverEmphase[tone] : "hover:border-ink-400";
 
   const content = (

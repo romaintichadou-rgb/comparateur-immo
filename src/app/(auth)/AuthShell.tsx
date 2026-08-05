@@ -19,7 +19,7 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
         <div className="relative flex flex-col items-center px-10">
           <div className="relative flex h-16 w-16 items-center justify-center">
             <span className="absolute inset-0 rounded-full bg-accent-100/70 blur-xl" />
-            <span className="relative flex h-12 w-12 items-center justify-center rounded-md border border-ink-200 bg-white shadow-lg shadow-accent-100">
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-md border border-ink-100 bg-white shadow-lg shadow-accent-100">
               <AppMark className="h-7 w-7 text-accent-600" />
             </span>
           </div>

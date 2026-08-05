@@ -232,7 +232,7 @@ export default function AnalyseIA({
   if (!analyse) {
     const prixManquant = apartment.prix == null;
     return (
-      <section className="rounded-xl border border-ink-200 bg-gradient-to-r from-white to-accent-50 p-8 text-center sm:p-12">
+      <section className="rounded-xl border border-ink-100 bg-gradient-to-r from-white to-accent-50 p-8 text-center sm:p-12">
         <Sparkles className="mx-auto h-8 w-8 text-accent-500" />
         <h2 className="mt-3 font-display text-2xl font-semibold text-ink-900">
           Pas encore de bilan pour {immeuble ? "cet immeuble" : "ce bien"}
@@ -475,7 +475,7 @@ export default function AnalyseIA({
       </div>
 
       {!quartier && (
-        <p className="mt-6 rounded-xl border border-dashed border-ink-200 bg-white p-4 text-center text-xs text-ink-400">
+        <p className="mt-6 rounded-xl border border-dashed border-ink-100 bg-white p-4 text-center text-xs text-ink-400">
           Le bloc Quartier n&apos;existe pas encore pour cette analyse — clique sur « Relancer » pour le générer.
         </p>
       )}
@@ -635,7 +635,7 @@ function FlatSection({
 
           {/* Facts */}
           {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
-            <ul className="divide-y divide-ink-100/50">
+            <ul className="divide-y divide-ink-100/50/50">
               {bloc.faits.map((f, i) => (
                 <FaitRow key={i} fait={f} />
               ))}

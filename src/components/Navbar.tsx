@@ -102,7 +102,7 @@ function UserMenu({ email }: { email: string }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-ink-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-ink-100 bg-white py-1 shadow-lg"
         >
           <div className="border-b border-ink-100 px-4 py-3">
             <p className="text-xs text-ink-400">Connecté</p>
@@ -151,7 +151,7 @@ export default function Navbar({ email }: { email?: string }) {
   const surEcranAuth = ROUTES_AUTH.some((r) => pathname.startsWith(r));
 
   return (
-    <header className="sticky top-0 z-40 border-b border-ink-200/70 bg-white/80 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-ink-100/70 bg-white/80 backdrop-blur-md">
       <div className="h-[3px] w-full bg-gradient-to-r from-accent-600 via-accent-400 to-accent-600" />
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="transition-opacity hover:opacity-80" aria-label={`${APP_NAME} — accueil`}>

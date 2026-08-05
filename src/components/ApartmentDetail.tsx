@@ -984,7 +984,7 @@ export default function ApartmentDetail({
             </div>
           )}
 
-          <section id="fin-achat" className="space-y-4 scroll-mt-24 rounded-xl border border-ink-200 bg-white p-4 sm:p-5">
+          <section id="fin-achat" className="space-y-4 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <SectionHeader title="Achat" />
                   {editingAchat ? (
@@ -1014,7 +1014,7 @@ export default function ApartmentDetail({
 
                 {editingAchat ? (
                   <div className="space-y-3">
-                    <ul className="divide-y divide-ink-100 text-sm">
+                    <ul className="divide-y divide-ink-100/50 text-sm">
                       <AchatEditRow label="Prix d'achat" value={value(achatPatch, "prix")} onChange={(v) => setAchatPatch((p) => ({ ...p, prix: v }))} />
                       <AchatEditRow
                         label="Frais de notaire"
@@ -1036,7 +1036,7 @@ export default function ApartmentDetail({
                   </div>
                 ) : (
                   <>
-                    <ul className="divide-y divide-ink-100 text-sm">
+                    <ul className="divide-y divide-ink-100/50 text-sm">
                       <li className="flex items-baseline justify-between gap-3 py-2">
                         <span className="flex items-baseline gap-x-2 text-ink-600">
                           <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
@@ -1080,7 +1080,7 @@ export default function ApartmentDetail({
             onSaved={setApt}
           />
 
-          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+          <section className="space-y-4 rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Revenus" />
             {rentPending ? (
               <div className="space-y-3">
@@ -1129,7 +1129,7 @@ export default function ApartmentDetail({
             )}
           </section>
 
-          <section className="space-y-4 rounded-xl border border-ink-200 bg-white p-5">
+          <section className="space-y-4 rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Charges annuelles" />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -1330,7 +1330,7 @@ export default function ApartmentDetail({
 
         {/* Colonne latérale */}
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-xl border border-ink-200 bg-white p-5">
+          <div className="rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Suivi" className="mb-4" />
             <div className="space-y-4">
               <div>
@@ -1380,7 +1380,7 @@ export default function ApartmentDetail({
             </div>
           </div>
 
-          <div className="rounded-xl border border-ink-200 bg-white p-5">
+          <div className="rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Contact" className="mb-4" />
             <div className="space-y-3">
               <TextField
@@ -1580,7 +1580,7 @@ function OptimiserSkeleton() {
         <Skeleton className="h-3.5 w-96 max-w-full rounded" />
       </div>
       {/* Panneau du levier : sélecteur + changement + pivot, chiffres, arguments */}
-      <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
         <div className="border-b border-ink-100 bg-accent-50 p-5">
           <Skeleton className="mb-4 h-10 w-80 max-w-full rounded-lg" />
           <Skeleton className="h-8 w-64 max-w-full rounded" />
@@ -1614,7 +1614,7 @@ function AnalyseIASkeleton() {
   return (
     <div className="space-y-0">
       {/* Verdict card */}
-      <section className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
+      <section className="rounded-2xl border border-ink-100 bg-white p-6 sm:p-8">
         <div className="flex items-center gap-5 sm:gap-6">
           <div className="shrink-0 space-y-1.5 text-center">
             <Skeleton className="mx-auto h-12 w-16 rounded-lg" />
@@ -1638,7 +1638,7 @@ function AnalyseIASkeleton() {
       {/* MetricCards */}
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
+          <div key={i} className="flex flex-col rounded-xl border border-ink-100 bg-white p-4">
             <Skeleton className="h-3 w-24 rounded" />
             <Skeleton className="mt-2.5 h-7 w-28 rounded" />
             <Skeleton className="mt-1.5 h-3 w-full rounded" />
@@ -1680,7 +1680,7 @@ function SkeletonFlatSection({ faitCount, isFirst, isLast, isQuartier }: { faitC
           <Skeleton className="h-3 w-5/6" />
         </div>
         {faitCount > 0 && (
-          <ul className="divide-y divide-ink-100">
+          <ul className="divide-y divide-ink-100/50">
             {Array.from({ length: faitCount }, (_, j) => (
               <li key={j} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="flex min-w-0 items-center gap-2">

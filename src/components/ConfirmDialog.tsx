@@ -94,7 +94,7 @@ export default function ConfirmDialog({
         onClick={() => !loading && onCancel()}
       />
       <div
-        className={`relative w-full max-w-md rounded-lg border border-ink-200 bg-white p-6 shadow-xl transition duration-200 ${
+        className={`relative w-full max-w-md rounded-lg border border-ink-100 bg-white p-6 shadow-xl transition duration-200 ${
           show ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >

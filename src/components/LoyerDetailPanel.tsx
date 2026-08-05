@@ -190,7 +190,7 @@ export default function LoyerDetailPanel({
                     <p className="text-sm text-ink-600">
                       Loyer médian meublé dans la commune (source ANIL {anil.annee}, {anil.nbObs.toLocaleString("fr-FR")} annonces), majoré de {Math.round(MAJORATION_MEUBLE * 100)} % par rapport au nu.
                     </p>
-                    <ul className="divide-y divide-ink-100 text-sm">
+                    <ul className="divide-y divide-ink-100/50 text-sm">
                       <Row label="Loyer HC meublé" value={hcMeubleTotal} suffix="/mois" />
                       <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
                         <span>+ Provision charges</span>
@@ -337,7 +337,7 @@ function Row({
   bold?: boolean;
 }) {
   return (
-    <li className={`flex items-center justify-between gap-3 py-1.5 ${bold ? "border-t border-ink-200 pt-2" : ""}`}>
+    <li className={`flex items-center justify-between gap-3 py-1.5 ${bold ? "border-t border-ink-100 pt-2" : ""}`}>
       <span className={`flex items-center gap-1.5 ${bold ? "font-semibold text-ink-900" : "text-ink-600"}`}>
         {label}
         {badge}

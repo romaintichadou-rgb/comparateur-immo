@@ -202,7 +202,7 @@ export default function OptimiserView({
         className={`rounded-xl border p-8 text-center ${
           dejaAchat
             ? "border-emerald-200 bg-gradient-to-r from-white to-emerald-50"
-            : "border-ink-200 bg-white"
+            : "border-ink-100 bg-white"
         }`}
       >
         <p className="font-display text-lg font-semibold text-ink-900">
@@ -332,7 +332,7 @@ function LevierPanel({
   };
 
   return (
-    <section role="tabpanel" className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+    <section role="tabpanel" className="overflow-hidden rounded-xl border border-ink-100 bg-white">
       {/* UNE seule section pour l'action et son impact.
           1. L'action à faire — elle PORTE le chiffre pivot (`reco.action`), il
              n'y a donc pas de carte pivot à côté : titre et carte auraient dit
@@ -465,7 +465,7 @@ function SectionLabel({ titre, nombre }: { titre: string; nombre: number }) {
  */
 function PreuveItem({ arg }: { arg: Argument }) {
   return (
-    <li className="rounded-xl border border-ink-200 bg-white p-4">
+    <li className="rounded-xl border border-ink-100 bg-white p-4">
       <div className="flex items-start gap-4">
         {arg.chiffre && (
           <div className="flex shrink-0 flex-col items-center justify-center rounded-lg bg-ink-50 px-3.5 py-2.5">
@@ -503,7 +503,7 @@ function DegradedCard({
   cta: { label: string; onClick: () => void } | null;
 }) {
   return (
-    <section className="rounded-xl border border-ink-200 bg-gradient-to-r from-white to-accent-50 p-8 text-center sm:p-12">
+    <section className="rounded-xl border border-ink-100 bg-gradient-to-r from-white to-accent-50 p-8 text-center sm:p-12">
       <h2 className="font-display text-2xl font-semibold text-ink-900">{titre}</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">{texte}</p>
       {cta && (

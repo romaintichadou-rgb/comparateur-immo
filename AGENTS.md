@@ -280,6 +280,15 @@ jumeau dans `ApartmentDetail` sont `fixed inset-x-0` avec un enfant
 `2xl`) sans l'ajuster — le message de confirmation démarrait alors 240 px à
 gauche du formulaire qu'il confirmait.
 
+## Borders des sections
+
+**Toutes les cartes et sections utilisent `border-ink-100`**, jamais d'autres teintes :
+- Cartes de section (`border border-ink-100`)
+- Cartes hero/verdict (`border border-ink-100`)
+- Fonds de zones contenantes (`border border-ink-100`)
+
+Cette uniformité prévient la fragmentation visuelle et facilite la maintenance.
+
 ## Border radius
 
 | Contexte | Classe |
@@ -292,10 +301,12 @@ gauche du formulaire qu'il confirmait.
 
 ## Dividers
 
-Opacité 50% partout pour un look épuré sans perdre les landmarks visuels :
-- Entre sections : `border-t border-ink-100/50`
-- Entre items de liste (faits) : `divide-y divide-ink-100/50`
-- Tab bar : `border-b border-ink-100` sur le `<nav>` (pleine opacité, fin)
+**Tous les dividers utilisent `ink-100` avec opacité 50%** pour un look épuré sans perdre les landmarks visuels :
+- Entre sections et groupe : `border-t border-ink-100/50`
+- Entre items de liste (faits, rangées de tableau) : `divide-y divide-ink-100/50`
+- Sous en-têtes (tab bar, headers) : `border-b border-ink-100/50`
+
+**Règle unique** : jamais d'autres opacités ou couleurs pour les dividers. L'opacité 50% rend les séparations subtiles sans disparaître.
 
 ## Responsive
 

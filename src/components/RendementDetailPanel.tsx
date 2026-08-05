@@ -155,11 +155,11 @@ export default function RendementDetailPanel({
               </div>
 
               <div className="space-y-4">
-                <section className="rounded-xl border border-ink-200 p-4 sm:p-5">
+                <section className="rounded-xl border border-ink-100 p-4 sm:p-5">
                   <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
                     Budget total de l&apos;opération
                   </h3>
-                  <ul className="divide-y divide-ink-100 text-sm">
+                  <ul className="divide-y divide-ink-100/50 text-sm">
                     <Row label="Prix d'achat" value={prix} />
                     <Row label="Frais de notaire" value={fraisNotaire} />
                     <Row label="Travaux" value={travaux} />
@@ -167,11 +167,11 @@ export default function RendementDetailPanel({
                   </ul>
                 </section>
 
-                <section className="rounded-xl border border-ink-200 p-4 sm:p-5">
+                <section className="rounded-xl border border-ink-100 p-4 sm:p-5">
                   <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
                     Revenu net annuel
                   </h3>
-                  <ul className="divide-y divide-ink-100 text-sm">
+                  <ul className="divide-y divide-ink-100/50 text-sm">
                     <Row
                       label="Revenu brut annuel"
                       value={loyerAnnuel}

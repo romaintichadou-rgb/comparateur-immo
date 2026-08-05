@@ -28,7 +28,7 @@ export default function UrlHeroCard({
   footer?: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-ink-200 bg-white">
+    <div className="overflow-hidden rounded-lg border border-ink-100 bg-white">
       <div className="relative overflow-hidden bg-gradient-to-br from-accent-50 via-white to-white p-6 sm:p-8">
         <AppMark className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 text-accent-600 opacity-[0.07]" />
         <span className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-accent-100/70 blur-3xl" />

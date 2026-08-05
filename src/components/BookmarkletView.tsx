@@ -79,7 +79,7 @@ export default function BookmarkletView() {
         </p>
       </div>
 
-      <div className="rounded-xl border border-ink-200 bg-white p-6">
+      <div className="rounded-xl border border-ink-100 bg-white p-6">
         <SectionHeader title="1. Installer le bookmarklet" />
         <p className="mt-2 text-sm text-ink-600">
           Glisse ce bouton dans ta barre de favoris (affiche-la si besoin avec{" "}
@@ -103,7 +103,7 @@ export default function BookmarkletView() {
         </p>
       </div>
 
-      <div className="rounded-xl border border-ink-200 bg-white p-6">
+      <div className="rounded-xl border border-ink-100 bg-white p-6">
         <SectionHeader title="2. Utiliser" />
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-600">
           <li>Ouvre une annonce Leboncoin, SeLoger, PAP ou Orpi normalement dans ton navigateur</li>
@@ -119,7 +119,7 @@ export default function BookmarkletView() {
         </ol>
       </div>
 
-      <div className="rounded-lg border border-ink-200 bg-ink-50 p-4 text-xs text-ink-500">
+      <div className="rounded-lg border border-ink-100 bg-ink-50 p-4 text-xs text-ink-500">
         Le bookmarklet s&apos;exécute entièrement dans ton navigateur : aucune donnée n&apos;est
         envoyée ailleurs qu&apos;à ta propre app. Le formulaire s&apos;ouvre dans un nouvel
         onglet, ta page d&apos;annonce reste accessible.

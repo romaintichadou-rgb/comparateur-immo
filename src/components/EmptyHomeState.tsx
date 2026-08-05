@@ -51,7 +51,7 @@ export default function EmptyHomeState() {
       <div className="relative">
       <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
         <span className="absolute inset-0 rounded-full bg-accent-100/70 blur-xl" />
-        <span className="relative flex h-16 w-16 items-center justify-center rounded-md border border-ink-200 bg-white shadow-lg shadow-accent-100">
+        <span className="relative flex h-16 w-16 items-center justify-center rounded-md border border-ink-100 bg-white shadow-lg shadow-accent-100">
           <AppMark className="h-9 w-9 text-accent-600" />
         </span>
       </div>
@@ -91,7 +91,7 @@ export default function EmptyHomeState() {
         {STEPS.map((step, i) => (
           <div
             key={step.title}
-            className="rounded-lg border border-ink-200 bg-white/70 p-4"
+            className="rounded-lg border border-ink-100 bg-white/70 p-4"
           >
             <span className="font-mono text-xs font-semibold tracking-wide text-accent-600">
               0{i + 1}

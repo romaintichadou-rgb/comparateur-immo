@@ -203,7 +203,7 @@ export default function FinancementSection({
 
       <section
         className={`overflow-hidden rounded-xl border bg-white transition-colors ${
-          editing ? "border-accent-300" : "border-ink-200"
+          editing ? "border-accent-300" : "border-ink-100"
         }`}
       >
         <button
@@ -389,7 +389,7 @@ export default function FinancementSection({
 
       {/* Sticky bar : feedback cash-flow temps réel pendant l'édition */}
       {editing && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-200 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-100 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
             <span className="text-xs text-ink-500">Cash-flow mensuel</span>
             <span className={`font-mono text-lg font-bold tabular-nums ${cashflowCls}`}>

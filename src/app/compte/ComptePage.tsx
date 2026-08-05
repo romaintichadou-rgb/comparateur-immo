@@ -92,7 +92,7 @@ function BadgePlan({ plan, isTester }: { plan: UserProfile["plan"]; isTester: bo
         {PLAN_LABEL[plan]}
       </span>
       {isTester && (
-        <span className="rounded-full border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-500">
+        <span className="rounded-full border border-ink-100 px-2.5 py-1 text-xs font-medium text-ink-500">
           Testeur
         </span>
       )}
@@ -168,7 +168,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
           acheter, et un testeur a déjà tout. Rendre un bouton inerte « déjà
           abonné » n'informerait de rien que les cartes ne disent. */}
       {gratuit && (
-        <section className="rounded-xl border border-ink-200 bg-white p-6">
+        <section className="rounded-xl border border-ink-100 bg-white p-6">
           <SectionHeader title="Passer à Pro" />
           <p className="mt-4 text-sm leading-relaxed text-ink-600">
             Biens illimités et {LIMITE_ANALYSES_PRO}&nbsp;analyses par mois, pour
@@ -185,7 +185,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
         </section>
       )}
 
-      <section className="rounded-xl border border-ink-200 bg-white p-6">
+      <section className="rounded-xl border border-ink-100 bg-white p-6">
         <SectionHeader title="Mot de passe" />
         <form action={mdpAction} className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
           <ChampMotDePasse
@@ -224,7 +224,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
           `text-red-600` passe à 4,8:1 et annonce sa nature sans attendre un
           survol. La carte reste la dernière de la page : séparée des actions
           courantes, mais lisible. */}
-      <section className="rounded-xl border border-ink-200 bg-white p-6">
+      <section className="rounded-xl border border-ink-100 bg-white p-6">
         <SectionHeader title="Supprimer le compte" />
         <p className="mt-4 text-sm leading-relaxed text-ink-600">
           Tes biens, tes analyses et ton profil investisseur seront définitivement

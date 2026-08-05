@@ -22,7 +22,7 @@ function AddApartmentCard({ count }: { count: number }) {
       href="/appartements/nouveau"
       className="group flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-ink-300 bg-white/40 px-6 py-8 text-center transition-colors hover:border-accent-400 hover:bg-accent-50/40 xl:min-h-[180px] xl:flex-1"
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-full border border-ink-200 bg-white text-ink-400 transition-colors group-hover:border-accent-300 group-hover:text-accent-600">
+      <span className="flex h-10 w-10 items-center justify-center rounded-full border border-ink-100 bg-white text-ink-400 transition-colors group-hover:border-accent-300 group-hover:text-accent-600">
         <Plus className="h-5 w-5" />
       </span>
       <p className="text-sm font-medium text-ink-700">
@@ -82,7 +82,7 @@ export default function HomeView({
               </span>
             )}
             {isTester && (
-              <span className="rounded-full border border-ink-200 px-2.5 py-0.5 text-xs font-medium text-ink-500">
+              <span className="rounded-full border border-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">
                 Testeur
               </span>
             )}
@@ -127,7 +127,7 @@ export default function HomeView({
         classes `order-*` ne font que réarranger visuellement à partir de xl.
       */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className="isolate order-1 h-[420px] overflow-hidden rounded-lg border border-ink-200 xl:order-2 xl:sticky xl:top-24 xl:h-[600px]">
+        <div className="isolate order-1 h-[420px] overflow-hidden rounded-lg border border-ink-100 xl:order-2 xl:sticky xl:top-24 xl:h-[600px]">
           <ApartmentsMap apartments={apartments} seuilsRendement={seuilsRendement} />
         </div>
 

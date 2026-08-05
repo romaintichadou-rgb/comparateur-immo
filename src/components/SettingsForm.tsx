@@ -117,7 +117,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
         </p>
       </div>
 
-      <section className="rounded-xl border border-ink-200 bg-white p-6">
+      <section className="rounded-xl border border-ink-100 bg-white p-6">
         <SectionHeader title="Profil emprunteur" />
         <p className="mt-2 text-xs leading-relaxed text-ink-500">
           Les modifier rend les analyses déjà calculées obsolètes : chaque bien te proposera
@@ -188,7 +188,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
                     className={`flex gap-2.5 rounded-lg border p-4 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent-600 ${
                       actif
                         ? "border-accent-600 bg-accent-50"
-                        : "border-ink-200 bg-white hover:border-ink-300"
+                        : "border-ink-100 bg-white hover:border-ink-300"
                     }`}
                   >
                     {/* Puce radio dessinée : l'input est en `sr-only` pour que la
@@ -343,7 +343,7 @@ function CollapsibleSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+    <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
       <button
         onClick={() => onToggle(id)}
         aria-expanded={isOpen}

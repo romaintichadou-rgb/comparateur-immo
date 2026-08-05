@@ -39,7 +39,7 @@ export function decisionToneOf(apt: ApartmentWithComputed): DecisionTone {
 // double couleur sur la ligne). La couleur du TEXTE du rendement, elle, reste
 // pilotée par TONE_TEXT_CLASS (signal de rendement conservé).
 const DECISION_ROW_CLASSES: Record<DecisionTone, { bg: string; grad: string; rail: string }> = {
-  inconnu: { bg: "bg-ink-50", grad: "bg-gradient-to-r from-transparent to-ink-50", rail: "border-ink-200" },
+  inconnu: { bg: "bg-ink-50", grad: "bg-gradient-to-r from-transparent to-ink-50", rail: "border-ink-100" },
   achete: { bg: "bg-emerald-50", grad: "bg-gradient-to-r from-transparent to-emerald-50", rail: "border-emerald-400" },
   negocie: { bg: "bg-amber-50", grad: "bg-gradient-to-r from-transparent to-amber-50", rail: "border-amber-400" },
   passe: { bg: "bg-red-50", grad: "bg-gradient-to-r from-transparent to-red-50", rail: "border-red-400" },
@@ -96,10 +96,10 @@ export default function ApartmentsTable({
 
   return (
     <>
-    <div className="hidden overflow-x-auto rounded-lg border border-ink-200 bg-white sm:block">
+    <div className="hidden overflow-x-auto rounded-lg border border-ink-100 bg-white sm:block">
       <table className="w-full min-w-[720px] text-sm">
         <thead>
-          <tr className="border-b border-ink-200 bg-ink-50/80 text-[11px] font-medium uppercase tracking-wide text-ink-500">
+          <tr className="border-b border-ink-100 bg-ink-50/80 text-[11px] font-medium uppercase tracking-wide text-ink-500">
             <th className="px-5 py-3 text-left">Bien</th>
             <th className="w-[150px] px-5 py-3 text-center">Prix</th>
             <th className="w-[170px] px-5 py-3 text-center">Rendement net</th>

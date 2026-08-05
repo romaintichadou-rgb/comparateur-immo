@@ -454,7 +454,7 @@ export default function AddApartmentFlow() {
           {banner && <BannerCard banner={banner} />}
 
           {/* Sur mobile, afficher un champ d'URL au premier rendu */}
-          <section className="lg:hidden rounded-2xl border border-ink-200 bg-white p-6">
+          <section className="lg:hidden rounded-2xl border border-ink-100 bg-white p-6">
             <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900 mb-4">
               <SectionIcon icon={Home} />
               Copier/coller l'URL de l'annonce
@@ -473,7 +473,7 @@ export default function AddApartmentFlow() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
             {/* Colonne principale */}
             <div className="min-w-0 space-y-6">
-              <section className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
+              <section className="rounded-2xl border border-ink-100 bg-white p-6 sm:p-8">
                 <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
                   <SectionIcon icon={Home} />
                   Description du bien
@@ -555,7 +555,7 @@ export default function AddApartmentFlow() {
                 </div>
               </section>
 
-              <section className="space-y-8 rounded-2xl border border-ink-200 bg-white p-6 sm:p-8">
+              <section className="space-y-8 rounded-2xl border border-ink-100 bg-white p-6 sm:p-8">
                 <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
                   <SectionIcon icon={Banknote} />
                   Données financières
@@ -631,7 +631,7 @@ export default function AddApartmentFlow() {
                 (~67px). Sur mobile (1 colonne), la section reste simplement en
                 bas, non figée. */}
             <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
-              <div className="rounded-2xl border border-ink-200 bg-white p-5">
+              <div className="rounded-2xl border border-ink-100 bg-white p-5">
                 <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
                   <SectionIcon icon={User} size="sm" />
                   Contact
@@ -693,7 +693,7 @@ function SectionIcon({
 const BANNER_STYLES = {
   success: { wrap: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2, iconClass: "text-emerald-500" },
   warning: { wrap: "border-amber-200 bg-amber-50 text-amber-800", icon: AlertTriangle, iconClass: "text-amber-500" },
-  info: { wrap: "border-ink-200 bg-ink-50 text-ink-700", icon: Info, iconClass: "text-ink-400" },
+  info: { wrap: "border-ink-100 bg-ink-50 text-ink-700", icon: Info, iconClass: "text-ink-400" },
 } as const;
 
 function BannerCard({ banner }: { banner: NonNullable<Banner> }) {

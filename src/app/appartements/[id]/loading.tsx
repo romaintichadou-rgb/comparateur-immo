@@ -16,7 +16,7 @@ export default function Loading() {
       </div>
 
       {/* Onglets */}
-      <div className="border-b border-ink-200">
+      <div className="border-b border-ink-100">
         <nav className="flex gap-6">
           {[80, 100, 130, 150, 150].map((w, i) => (
             <div key={i} className="my-3 flex items-center gap-1.5">
@@ -28,7 +28,7 @@ export default function Loading() {
       </div>
 
       {/* Verdict */}
-      <div className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-9">
+      <div className="rounded-2xl border border-ink-100 bg-white p-6 sm:p-9">
         <div className="flex flex-col-reverse gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex items-center gap-3">
@@ -57,7 +57,7 @@ export default function Loading() {
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
+          <div key={i} className="flex flex-col rounded-xl border border-ink-100 bg-white p-4">
             <div className="flex items-center justify-between">
               <div className="h-3 w-24 animate-pulse rounded bg-ink-100" />
               <div className="h-5 w-16 animate-pulse rounded-full bg-ink-100" />

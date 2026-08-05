@@ -84,7 +84,7 @@ export function StatCard({
         type="button"
         onClick={onClick}
         title="Voir le détail du calcul"
-        className="group flex flex-col rounded-xl border border-ink-200 bg-white p-4 text-left transition-colors hover:border-ink-400"
+        className="group flex flex-col rounded-xl border border-ink-100 bg-white p-4 text-left transition-colors hover:border-ink-400"
       >
         {inner}
         {footer}
@@ -93,7 +93,7 @@ export function StatCard({
   }
 
   return (
-    <div className="flex flex-col rounded-xl border border-ink-200 bg-white p-4">
+    <div className="flex flex-col rounded-xl border border-ink-100 bg-white p-4">
       {inner}
       {footer}
     </div>

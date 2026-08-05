@@ -45,7 +45,7 @@ export default function UpgradeScreen({
         <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
           <AppMark className="absolute h-28 w-28 text-accent-300/20" />
           <span className="absolute inset-0 rounded-full bg-accent-100/70 blur-xl" aria-hidden="true" />
-          <span className="relative flex h-16 w-16 items-center justify-center rounded-xl border border-ink-200 bg-white shadow-lg shadow-accent-100">
+          <span className="relative flex h-16 w-16 items-center justify-center rounded-xl border border-ink-100 bg-white shadow-lg shadow-accent-100">
             <Icon className="h-8 w-8 text-accent-600" aria-hidden="true" />
           </span>
         </div>
@@ -76,7 +76,7 @@ export default function UpgradeScreen({
 /** Les trois lignes de ce que Pro débloque + le prix. Rendu dans une carte. */
 export function OffrePro() {
   return (
-    <div className="mx-auto max-w-sm rounded-xl border border-ink-200 bg-white p-5 text-left">
+    <div className="mx-auto max-w-sm rounded-xl border border-ink-100 bg-white p-5 text-left">
       <div className="flex items-baseline justify-between">
         <span className="font-display text-lg font-semibold text-ink-900">Pro</span>
         <span className="font-mono text-lg font-semibold text-ink-900">

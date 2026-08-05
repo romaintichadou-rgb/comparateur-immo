@@ -32,7 +32,7 @@ export default function ProcessingStepsList<K extends string>({
           <li
             key={s.key}
             className={`flex items-start gap-3 rounded-lg border p-3 transition ${
-              state === "active" ? "border-accent-200 bg-accent-50/60" : "border-ink-200 bg-white"
+              state === "active" ? "border-accent-200 bg-accent-50/60" : "border-ink-100 bg-white"
             }`}
           >
             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">

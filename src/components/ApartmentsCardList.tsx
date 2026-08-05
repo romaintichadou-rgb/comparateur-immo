@@ -43,7 +43,7 @@ export default function ApartmentsCardList({
             key={apt.id}
             onClick={() => goToApartment(apt.id)}
             className={`relative rounded-lg border bg-white transition-colors active:bg-ink-50 ${
-              navigatingId === apt.id ? "border-accent-300 bg-accent-50/50" : "border-ink-200"
+              navigatingId === apt.id ? "border-accent-300 bg-accent-50/50" : "border-ink-100"
             } ${deletingId === apt.id ? "opacity-40" : ""}`}
           >
             {navigatingId === apt.id && (
