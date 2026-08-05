@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Calculator, ChevronDown, Plus, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
+import { DEFAULT_HYPOTHESE_GESTION_PCT } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
@@ -116,7 +117,7 @@ function OptionalRateField({
     );
   }
   return (
-    <div className="flex items-end gap-1">
+    <div className="flex w-full items-end gap-1">
       <div className="min-w-0 flex-1">
         <NumberField
           label={label}
@@ -219,7 +220,8 @@ export default function SimulationFinanciere({
     + (inputs.revalorisationBienPct != null ? 1 : 0)
     + (inputs.revalorisationLoyerPct != null ? 1 : 0)
     + (inputs.indexationChargesPct != null ? 1 : 0)
-    + (inputs.vacanceLocativePct != null ? 1 : 0);
+    + (inputs.vacanceLocativePct != null ? 1 : 0)
+    + (inputs.gestionPct != null ? 1 : 0);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
@@ -456,7 +458,11 @@ export default function SimulationFinanciere({
 
                     <div className="space-y-3">
                       <HypGroupTitle>Projection</HypGroupTitle>
-                      <div className="space-y-3">
+                      {/* `flex-wrap` : les boutons "+" (compacts, inline) enchaînaient sans
+                          espace horizontal sous `space-y-3` — cet utilitaire n'ajoute une
+                          marge qu'en `margin-top`, sans effet entre éléments d'une même
+                          ligne. `gap-2.5` couvre les deux axes, boutons comme lignes actives. */}
+                      <div className="flex flex-wrap gap-2.5">
                         <OptionalRateField
                           label="Revalorisation du bien"
                           value={inputs.revalorisationBienPct}
@@ -480,6 +486,13 @@ export default function SimulationFinanciere({
                           value={inputs.vacanceLocativePct}
                           defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
                           onChange={(v) => set("vacanceLocativePct", v)}
+                          suffix="% du loyer"
+                        />
+                        <OptionalRateField
+                          label="Frais de gestion locative"
+                          value={inputs.gestionPct}
+                          defaut={DEFAULT_HYPOTHESE_GESTION_PCT}
+                          onChange={(v) => set("gestionPct", v)}
                           suffix="% du loyer"
                         />
                       </div>
@@ -525,6 +538,7 @@ export default function SimulationFinanciere({
                       <FinRow label="Revalorisation du loyer" value={hypPct(inputs.revalorisationLoyerPct)} />
                       <FinRow label="Indexation charges" value={hypPct(inputs.indexationChargesPct)} />
                       <FinRow label="Vacance locative" value={hypPct(inputs.vacanceLocativePct)} />
+                      <FinRow label="Frais de gestion locative" value={hypPct(inputs.gestionPct)} />
                     </div>
                   </div>
 
