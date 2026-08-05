@@ -99,7 +99,7 @@ export function NumberField({
   hint,
   suffix,
   step,
-  strictlyPositive,
+  nonNegative,
 }: {
   label: string;
   value: number | null;
@@ -107,16 +107,14 @@ export function NumberField({
   hint?: ReactNode;
   suffix?: string;
   step?: string | number;
-  /** Rejette 0 et les valeurs négatives. La validation vit ICI (pas chez
-   * l'appelant) : un appelant qui se contente de faire
-   * `if (v <= 0) return` avant de relayer `onChange` bloque bien la valeur
+  /** Rejette les valeurs négatives ; 0 reste autorisé. La validation vit ICI
+   * (pas chez l'appelant) : un appelant qui se contente de faire
+   * `if (v < 0) return` avant de relayer `onChange` bloque bien la valeur
    * externe, mais `texte` (l'état interne de ce champ) a déjà été mis à jour
    * par `handleChange` — l'input affiche alors une saisie invalide ("-3")
    * qui ne correspond à aucune valeur réellement retenue. Le signe moins est
-   * bloqué dès la frappe ; "0" et ses préfixes ("0", "00") restent affichés
-   * sans déclencher `onChange`, le temps de laisser taper un décimal légitime
-   * comme "0,36" (taux d'assurance emprunteur). */
-  strictlyPositive?: boolean;
+   * donc bloqué dès la frappe, pas seulement rejeté après coup. */
+  nonNegative?: boolean;
 }) {
   // Texte affiché géré séparément de `value` : un <input type="number">
   // contrôlé directement par le nombre parsé casse la saisie d'un signe
@@ -142,19 +140,14 @@ export function NumberField({
       onChange(null);
       return;
     }
-    if (strictlyPositive && text.startsWith("-")) return; // bloque le signe moins à la frappe
+    if (nonNegative && text.startsWith("-")) return; // bloque le signe moins à la frappe
     if (estEtatIntermediaire(text)) {
       setTexte(text);
       return; // ex. "-" ou "12." : pas encore un nombre
     }
     const n = Number(text);
     if (Number.isNaN(n)) return;
-    if (strictlyPositive && n <= 0) {
-      if (/^0+$/.test(text)) {
-        setTexte(text); // "0", "00"… reste un préfixe valide vers "0,xx"
-      }
-      return; // valeur finale ≤ 0 : ni affichée, ni remontée
-    }
+    if (nonNegative && n < 0) return; // rejette le négatif ; 0 est une valeur valide
     setTexte(text);
     onChange(n);
   }

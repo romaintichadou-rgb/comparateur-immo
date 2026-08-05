@@ -84,10 +84,18 @@ function FinRow({ label, value, badge, suffix }: { label: string; value: string;
   );
 }
 
-/** Hypothèse optionnelle en lecture : « — » quand elle est désactivée.
+/** Hypothèse optionnelle en lecture : « — » quand elle est désactivée OU
+ *  fixée à 0 (0 est une valeur valide en édition, mais visuellement
+ *  indissociable de « pas d'effet » — même traitement que « désactivée »).
  *  (`pct` est déjà pris plus bas par le calcul de part d'un total.) */
 function hypPct(v: number | null): string {
-  return v == null ? "—" : `${formatNombre(v)} %`;
+  return v == null || v === 0 ? "—" : `${formatNombre(v)} %`;
+}
+
+/** Même règle que `hypPct`, pour un champ TOUJOURS renseigné (jamais
+ *  désactivable) comme la quote-part terrain : seul le cas 0 % affiche « — ». */
+function pctOrDash(v: number): string {
+  return v === 0 ? "—" : `${formatNombre(v)} %`;
 }
 
 
@@ -124,7 +132,7 @@ function OptionalRateField({
           value={value}
           onChange={onChange}
           suffix={suffix}
-          strictlyPositive
+          nonNegative
         />
       </div>
       <div className="mb-[3px] w-11 shrink-0 flex justify-center">
@@ -448,7 +456,7 @@ export default function SimulationFinanciere({
                               value={result.quotePartTerrainPct}
                               onChange={(v) => setQuotePartDraft({ value: v })}
                               suffix="% du prix"
-                              strictlyPositive
+                              nonNegative
                             />
                           </div>
                           <div className="w-11 shrink-0" />
@@ -498,7 +506,7 @@ export default function SimulationFinanciere({
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-end gap-2 border-t border-ink-100/50 pt-3">
+                  <div className="flex items-center justify-end gap-2 pt-3">
                     <button
                       type="button"
                       onClick={cancelEdit}
@@ -529,7 +537,7 @@ export default function SimulationFinanciere({
                       />
                       <FinRow
                         label="Quote-part terrain"
-                        value={`${formatNombre(result.quotePartTerrainPct)} %`}
+                        value={pctOrDash(result.quotePartTerrainPct)}
                       />
                     </div>
                     <div>
