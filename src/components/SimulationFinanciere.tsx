@@ -418,7 +418,7 @@ export default function SimulationFinanciere({
         <button
           type="button"
           onClick={() => !editingId && setHypOpen((o) => !o)}
-          className="flex w-full flex-col gap-3 px-5 py-3 text-left"
+          className="flex w-full flex-col gap-3 p-5 text-left"
         >
           <div className="flex items-center justify-between">
             <span className={TITRE_SECTION}>Hypothèses</span>
@@ -449,7 +449,7 @@ export default function SimulationFinanciere({
         </button>
 
         {hypOpen && (
-          <div className="px-5 pb-4">
+          <div className="px-5 py-5">
             <div className="border-t border-ink-100/50 pt-1">
               {editingId === "hypotheses" ? (
                 <>
