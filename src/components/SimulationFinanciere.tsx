@@ -200,7 +200,7 @@ function OptionalRateField({
           value={value}
           onChange={(v) => {
             if (v != null && v <= 0) return;
-            onChange(v ?? 0);
+            onChange(v);
           }}
           suffix={suffix}
         />
