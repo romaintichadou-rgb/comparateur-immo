@@ -390,7 +390,11 @@ export default function SimulationFinanciere({
           {/* Summary pills — toujours visibles, cliquable. Lisent les valeurs
               ENREGISTRÉES (`resolusAffiches`/`savedInputs`), jamais le brouillon
               `inputs` en cours de frappe : elles ne doivent pas changer avant
-              l'enregistrement. */}
+              l'enregistrement. Régime fiscal et TMI sont toujours renseignés
+              (pas d'état désactivé) donc toujours affichés ; les 5 hypothèses
+              de Projection n'apparaissent QUE si activées — même ordre que le
+              formulaire (gestion, vacance, puis les autres), et chacune porte
+              un libellé qui se lit seul, sans dépendre du titre de la carte. */}
           <div className="flex flex-wrap gap-1.5">
           <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
             {REGIMES_FISCAUX[resolusAffiches.regimeFiscal]}
@@ -398,14 +402,29 @@ export default function SimulationFinanciere({
           <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
             TMI {formatNombre(resolusAffiches.tmiPct)} %
           </span>
-          {savedInputs?.revalorisationLoyerPct != null && (
+          {savedInputs?.gestionPct != null && (
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Revalo loyer {formatNombre(savedInputs.revalorisationLoyerPct)} %/an
+              Frais de gestion {formatNombre(savedInputs.gestionPct)} % du loyer
             </span>
           )}
           {savedInputs?.vacanceLocativePct != null && (
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Vacance {formatNombre(savedInputs.vacanceLocativePct)} %
+              Vacance locative {formatNombre(savedInputs.vacanceLocativePct)} % du loyer
+            </span>
+          )}
+          {savedInputs?.revalorisationBienPct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Revalorisation du bien {formatNombre(savedInputs.revalorisationBienPct)} %/an
+            </span>
+          )}
+          {savedInputs?.revalorisationLoyerPct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Revalorisation du loyer {formatNombre(savedInputs.revalorisationLoyerPct)} %/an
+            </span>
+          )}
+          {savedInputs?.indexationChargesPct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Indexation des charges {formatNombre(savedInputs.indexationChargesPct)} %/an
             </span>
           )}
           </div>
@@ -492,6 +511,20 @@ export default function SimulationFinanciere({
                           ligne. `gap-2.5` couvre les deux axes, boutons comme lignes actives. */}
                       <div className="flex flex-wrap gap-2.5">
                         <OptionalRateField
+                          label="Frais de gestion locative"
+                          value={inputs.gestionPct}
+                          defaut={DEFAULT_HYPOTHESE_GESTION_PCT}
+                          onChange={(v) => set("gestionPct", v)}
+                          suffix="% du loyer"
+                        />
+                        <OptionalRateField
+                          label="Vacance locative"
+                          value={inputs.vacanceLocativePct}
+                          defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
+                          onChange={(v) => set("vacanceLocativePct", v)}
+                          suffix="% du loyer"
+                        />
+                        <OptionalRateField
                           label="Revalorisation du bien"
                           value={inputs.revalorisationBienPct}
                           defaut={REVALORISATION_BIEN_DEFAUT_PCT}
@@ -508,20 +541,6 @@ export default function SimulationFinanciere({
                           value={inputs.indexationChargesPct}
                           defaut={INDEXATION_CHARGES_DEFAUT_PCT}
                           onChange={(v) => set("indexationChargesPct", v)}
-                        />
-                        <OptionalRateField
-                          label="Vacance locative"
-                          value={inputs.vacanceLocativePct}
-                          defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
-                          onChange={(v) => set("vacanceLocativePct", v)}
-                          suffix="% du loyer"
-                        />
-                        <OptionalRateField
-                          label="Frais de gestion locative"
-                          value={inputs.gestionPct}
-                          defaut={DEFAULT_HYPOTHESE_GESTION_PCT}
-                          onChange={(v) => set("gestionPct", v)}
-                          suffix="% du loyer"
                         />
                       </div>
                     </div>
@@ -562,11 +581,11 @@ export default function SimulationFinanciere({
                     </div>
                     <div>
                       <FinSectionTitle>Projection</FinSectionTitle>
+                      <FinRow label="Frais de gestion locative" value={hypPct(savedInputs?.gestionPct ?? null)} />
+                      <FinRow label="Vacance locative" value={hypPct(savedInputs?.vacanceLocativePct ?? null)} />
                       <FinRow label="Revalorisation du bien" value={hypPct(savedInputs?.revalorisationBienPct ?? null)} />
                       <FinRow label="Revalorisation du loyer" value={hypPct(savedInputs?.revalorisationLoyerPct ?? null)} />
                       <FinRow label="Indexation charges" value={hypPct(savedInputs?.indexationChargesPct ?? null)} />
-                      <FinRow label="Vacance locative" value={hypPct(savedInputs?.vacanceLocativePct ?? null)} />
-                      <FinRow label="Frais de gestion locative" value={hypPct(savedInputs?.gestionPct ?? null)} />
                     </div>
                   </div>
 
