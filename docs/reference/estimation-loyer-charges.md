@@ -127,9 +127,10 @@ Le résidu et les critères (structurés, avec `categorie` — `quartier` /
 en un texte (`synthetiserJustification`) pour `loyer_justification` — c'est
 ce texte qui s'affiche partout aujourd'hui. Mais ils sont AUSSI persistés
 tels quels dans `Apartment.loyer_calcul` (`LoyerCalcul`, `rentEstimation.ts` :
-`ajustementPct`, `criteres`, `typologie`, `loyerDeterministe`, `echecIa`) —
-migration `0013_loyer_calcul.sql`, **à exécuter à la main sur CHAQUE projet
-Supabase (dev, puis prod)**, comme toutes les autres.
+`ajustementPct`, `criteres`, `typologie`, `loyerDeterministe`, `echecIa`,
+`referenceFiable`, `empreinteResidu`, `reutilise`) — migration
+`0013_loyer_calcul.sql`, **à exécuter à la main sur CHAQUE projet Supabase
+(dev, puis prod)**, comme toutes les autres.
 
 Deux raisons de le garder structuré plutôt que de s'arrêter au texte :
 - **Rejouable sans nouvel appel Gemini.** Un panneau futur pourra afficher les
@@ -141,6 +142,44 @@ Même statut que `analyse_ia` : écrit UNIQUEMENT par `/api/estimate-rent`,
 absent de `apartmentBaseFields`/des schémas Zod (jamais soumis par un
 formulaire), `null` tant qu'aucune estimation IA n'a été lancée ou sur les
 chemins sans résidu (immeuble, logement sans référence ANIL).
+
+### Cache par empreinte — ne pas rappeler Gemini si rien n'a changé
+
+`LoyerCalcul.empreinteResidu` (sha256 de `calculerEmpreinteResidu()`,
+`rentEstimation.ts`) fige les champs qui déterminent le texte envoyé à
+Gemini : `ville`/`quartier`/`code_postal`/`surface_m2`/`nb_pieces`/
+`nb_chambres`/`type_bien`/`etage`/`ascenseur`/`annee_construction`/
+`etat_bien`/`dpe`/`travaux`/`description`/`precisionLocalisation`, PLUS la
+typologie et la référence ANIL utilisées (`loyerRef`) — ce dernier point
+couvre aussi bien un changement de typologie qu'un rafraîchissement annuel
+des données ANIL (§3/§5), qui changent `ancre` sans qu'aucun champ du bien
+n'ait bougé.
+
+`estimerAvecReference()` compare cette empreinte à celle du
+`loyer_calcul` déjà enregistré (passé par `estimate-rent/route.ts` comme
+3ᵉ argument d'`estimateRent()`) :
+- **empreinte identique ET calcul précédent sans échec** → `ajustementPct`/
+  `criteres` sont RÉUTILISÉS tels quels, aucun appel Gemini. Mesuré :
+  ~0,2 ms contre ~3 s pour un appel réel. Le déterministe (`det`) est
+  quand même TOUJOURS recalculé (local, rapide) — filet de sécurité si un
+  facteur qui influence `det` sans être couvert par l'empreinte avait
+  changé.
+- **empreinte différente, OU calcul précédent en échec (`echecIa: true`)**
+  → rappel normal de Gemini. Un résidu à 0 par échec IA n'est pas un
+  résultat à perpétuer : la prochaine estimation doit retenter l'appel
+  plutôt que de "mettre en cache" une panne.
+
+S'applique aussi bien au clic manuel « Estimer avec IA » qu'au recalcul
+automatique (`runRecalc`) : les deux passent par la même route API, donc
+par le même `estimateRent()` — aucune duplication côté client. Ne
+s'applique QU'au chemin résidu (`calcul` non `null`) : immeuble et logement
+sans référence ANIL n'ont rien à réutiliser, ils rappellent Gemini à
+chaque fois.
+
+`LoyerCalcul.reutilise` (`boolean`) enregistre si CE calcul a réutilisé le
+précédent — pour que le panneau de détail (Phase 4) puisse afficher
+« résidu inchangé depuis la dernière estimation » plutôt qu'un silence qui
+donnerait l'impression d'un bouton cassé.
 
 ### Dégradation gracieuse — ne jamais écrire `loyer_retenu: null`
 

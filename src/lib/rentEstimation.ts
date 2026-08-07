@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { generateGeminiText, getGeminiApiKey } from "./gemini";
 import { isImmeuble, type PrecisionLocalisation } from "./types";
 import { formatSecteur } from "./adresse";
@@ -89,6 +90,22 @@ export interface LoyerCalcul {
    * toujours la meilleure donnée disponible.
    */
   referenceFiable: boolean;
+  /**
+   * Empreinte des données qui alimentent le résidu IA (voir
+   * `calculerEmpreinteResidu`) — permet à l'appel SUIVANT de savoir s'il peut
+   * réutiliser `ajustementPct`/`criteres` sans rappeler Gemini (plan
+   * d'optimisation §6). Absente (`undefined`) sur les calculs enregistrés
+   * avant ce champ — traitée comme "jamais égale", donc un premier rappel
+   * après mise à jour du code recalcule normalement, sans corrompre rien.
+   */
+  empreinteResidu?: string;
+  /**
+   * `true` si ce calcul a RÉUTILISÉ le résidu (`ajustementPct`/`criteres`) du
+   * calcul précédent au lieu de rappeler Gemini — l'empreinte n'avait pas
+   * changé. Sert au panneau de détail (Phase 4) pour ne pas laisser croire
+   * qu'un nouveau calcul a tourné pour rien.
+   */
+  reutilise: boolean;
 }
 
 export interface RentEstimationResult {
@@ -467,6 +484,62 @@ RÈGLE DE CALIBRAGE — la plus importante : un logement ORDINAIRE pour son sect
 Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères ORDONNÉS du plus important au moins important. Si le logement est ordinaire, rends 0 et un seul critère expliquant qu'il est conforme à son secteur.`;
 }
 
+/**
+ * Empreinte des données qui déterminent le TEXTE de `buildPromptResidu`
+ * (plan d'optimisation §6) : si elle est identique à celle du dernier calcul
+ * enregistré, le prompt qu'on enverrait à Gemini serait mot pour mot le même,
+ * donc `ajustementPct`/`criteres` peuvent être réutilisés SANS le rappeler.
+ *
+ * Couvre deux catégories de champs, toutes deux nécessaires :
+ * - ceux qui apparaissent littéralement dans le prompt (`carac`, la
+ *   description, le secteur, le caveat de localisation) ;
+ * - ceux qui n'y apparaissent qu'INDIRECTEMENT via `ancre` (le loyer
+ *   déterministe affiché en tête du prompt) : étage, état, travaux, DPE
+ *   modifient `computeDeterministicRent` sans changer `carac` littéralement,
+ *   mais changent bien le nombre "LOYER DE RÉFÉRENCE DE CE LOGEMENT : X" que
+ *   l'IA lit. Les oublier ferait réutiliser un résidu calibré sur une ancre
+ *   obsolète.
+ *
+ * La référence ANIL (`loyerRef` + `typologie`) est incluse pour la même
+ * raison que `ancre` : un rafraîchissement annuel des données (§3/§5) ou un
+ * changement de typologie (`nb_pieces`, `type_bien`) change `ancre` et la
+ * fourchette affichées, même si aucun champ du bien n'a bougé.
+ *
+ * `charges_copro_annuelles` et `nb_lots` sont volontairement ABSENTS : ni
+ * l'un ni l'autre n'entre dans `buildPromptResidu` (la conversion HC→CC ne
+ * concerne que les chemins sans résidu) ni dans `computeDeterministicRent`.
+ */
+function calculerEmpreinteResidu(
+  input: RentEstimationInput,
+  loyerRef: LoyerReference,
+  typologie: TypologieAnil
+): string {
+  const cle = JSON.stringify([
+    input.ville,
+    input.quartier,
+    input.code_postal,
+    input.surface_m2,
+    input.nb_pieces,
+    input.nb_chambres,
+    input.type_bien,
+    input.etage,
+    input.ascenseur,
+    input.annee_construction,
+    input.etat_bien,
+    input.dpe,
+    input.travaux,
+    input.description,
+    input.precisionLocalisation,
+    typologie,
+    loyerRef.loyerM2,
+    loyerRef.min,
+    loyerRef.max,
+    loyerRef.annee,
+    loyerRef.niveauPrediction,
+  ]);
+  return createHash("sha256").update(cle).digest("hex");
+}
+
 function buildLogementPromptSansReference(input: RentEstimationInput, secteur: string): string {
   const carac = buildCaracteristiques(input);
   const etage = buildConsigneEtage(input);
@@ -591,7 +664,15 @@ function extractJson<T>(text: string): T | null {
 
 export async function estimateRent(
   input: RentEstimationInput,
-  loyerRef?: LoyerReference | null
+  loyerRef?: LoyerReference | null,
+  /**
+   * `loyer_calcul` déjà enregistré sur le bien (avant cet appel) — permet au
+   * chemin résidu de réutiliser `ajustementPct`/`criteres` sans rappeler
+   * Gemini si l'empreinte n'a pas changé (plan §6, voir
+   * `calculerEmpreinteResidu`). Sans effet sur l'immeuble ou le chemin sans
+   * référence : aucun des deux ne persiste de résidu réutilisable.
+   */
+  calculPrecedent?: LoyerCalcul | null
 ): Promise<RentEstimationResult> {
   const secteur = buildSecteur(input);
   const model = process.env.GEMINI_RENT_MODEL || "gemini-2.5-flash";
@@ -607,7 +688,7 @@ export async function estimateRent(
   if (!refCC || !loyerRef || input.surface_m2 == null || input.surface_m2 <= 0) {
     return estimerSansReference(input, secteur, model);
   }
-  return estimerAvecReference(input, secteur, model, loyerRef, refCC);
+  return estimerAvecReference(input, secteur, model, loyerRef, refCC, calculPrecedent ?? null);
 }
 
 async function estimerImmeuble(
@@ -688,34 +769,59 @@ async function estimerAvecReference(
   secteur: string,
   model: string,
   loyerRef: LoyerReference,
-  refCC: ReferenceCC
+  refCC: ReferenceCC,
+  calculPrecedent: LoyerCalcul | null
 ): Promise<RentEstimationResult> {
   const surface = input.surface_m2 as number;
+  // TOUJOURS recalculé, même en cas de réutilisation ci-dessous : c'est un
+  // calcul local (pas d'appel réseau), et il sert de filet de sécurité si un
+  // facteur qui influence `det` sans être couvert par l'empreinte avait
+  // changé — voir `calculerEmpreinteResidu`.
   const det = computeDeterministicRent(input, refCC);
-  const prompt = buildPromptResidu(input, secteur, det, refCC, loyerRef);
+  const empreinte = calculerEmpreinteResidu(input, loyerRef, refCC.typologie);
 
-  let pct = 0;
-  let criteres: CritereResidu[] = [];
+  // Plan d'optimisation §6 : ne pas rappeler Gemini si rien n'a changé depuis
+  // le dernier calcul enregistré. `echecIa` sur le calcul précédent exclut la
+  // réutilisation — un résidu à 0 par échec IA n'est pas un résultat à
+  // perpétuer, la prochaine estimation doit retenter l'appel.
+  const reutilisable =
+    calculPrecedent != null &&
+    !calculPrecedent.echecIa &&
+    calculPrecedent.empreinteResidu === empreinte;
+
+  let pct: number;
+  let criteres: CritereResidu[];
   let echecIa = false;
-  try {
-    const text = await generateGeminiText({
-      apiKey: requireApiKey(),
-      model,
-      prompt,
-      thinkingBudget: 512,
-      temperature: 0,
-      responseSchema: SCHEMA_RESIDU,
-    });
-    const parsed = extractJson<{ ajustement_pct?: number | null; criteres?: CritereResidu[] }>(text);
-    const pctBrut = typeof parsed?.ajustement_pct === "number" ? parsed.ajustement_pct : null;
-    if (pctBrut == null) {
+  let reutilise = false;
+
+  if (reutilisable) {
+    pct = calculPrecedent.ajustementPct;
+    criteres = calculPrecedent.criteres;
+    reutilise = true;
+  } else {
+    pct = 0;
+    criteres = [];
+    const prompt = buildPromptResidu(input, secteur, det, refCC, loyerRef);
+    try {
+      const text = await generateGeminiText({
+        apiKey: requireApiKey(),
+        model,
+        prompt,
+        thinkingBudget: 512,
+        temperature: 0,
+        responseSchema: SCHEMA_RESIDU,
+      });
+      const parsed = extractJson<{ ajustement_pct?: number | null; criteres?: CritereResidu[] }>(text);
+      const pctBrut = typeof parsed?.ajustement_pct === "number" ? parsed.ajustement_pct : null;
+      if (pctBrut == null) {
+        echecIa = true;
+      } else {
+        pct = Math.max(RESIDU_MIN, Math.min(RESIDU_MAX, pctBrut));
+        criteres = filtrerCriteresDejaComptes(Array.isArray(parsed?.criteres) ? parsed.criteres : []);
+      }
+    } catch {
       echecIa = true;
-    } else {
-      pct = Math.max(RESIDU_MIN, Math.min(RESIDU_MAX, pctBrut));
-      criteres = filtrerCriteresDejaComptes(Array.isArray(parsed?.criteres) ? parsed.criteres : []);
     }
-  } catch {
-    echecIa = true;
   }
 
   const avantClamp = Math.round(det * (1 + pct / 100));
@@ -745,6 +851,8 @@ async function estimerAvecReference(
     // ANIL (« les utilisateurs sont invités à considérer avec prudence les
     // indicateurs […] où le nombre d'observations est inférieur à 30 »).
     referenceFiable: loyerRef.niveauPrediction === "commune" && loyerRef.nbObs >= 30,
+    empreinteResidu: empreinte,
+    reutilise,
   };
   const loyerHC = deriveLoyerHC(finalLoyer, input.charges_copro_annuelles ?? 0);
   return { loyer: finalLoyer, loyerHC, justification, ancreAnil, plafonne, calcul };

@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       travaux: apartment.travaux,
       description: apartment.description,
       precisionLocalisation: apartment.precision_localisation,
-    }, loyerRef);
+    }, loyerRef, apartment.loyer_calcul);
 
     // Ceci est l'action explicite "réestimer" : on écrase loyer_retenu même
     // s'il avait été marqué manuel, et on le (re)marque comme estimé par IA
