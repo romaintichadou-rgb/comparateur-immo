@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { X, ArrowDown, Info, Sparkles, Database, SlidersHorizontal } from "lucide-react";
+import { X, Info, Sparkles, Database, SlidersHorizontal } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, sanitizeJustification } from "@/lib/format";
 import { isAiEstimated } from "@/lib/estimates";
 import { TONE_PANEL_STYLES, type RendementTone, type TonePanelStyle } from "@/lib/analyse/scoring";
-import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderBoldInline } from "@/components/richText";
 import Skeleton from "@/components/Skeleton";
 import { lotsEffectifs } from "@/lib/estimates";
+import type { CritereResidu } from "@/lib/rentEstimation";
 import {
   MAJORATION_MEUBLE,
+  SEUIL_NB_OBS_FIABLE,
+  estReferenceFiable,
   referenceCCMeuble,
   typologieAnil,
   type TypologieAnil,
@@ -167,15 +169,32 @@ export default function LoyerDetailPanel({
       ? ((loyer - anilMedian) / anilMedian) * 100
       : null;
 
-  const caracteristiques: string[] = [];
-  if (apt.type_bien) caracteristiques.push(apt.type_bien);
-  if (hasSurface) caracteristiques.push(`${surface} m²`);
-  if (apt.nb_pieces != null) caracteristiques.push(`${apt.nb_pieces} pièce(s)`);
-  if (apt.etage) caracteristiques.push(`étage ${apt.etage}`);
-  if (apt.ascenseur === true) caracteristiques.push("ascenseur");
-  if (apt.etat_bien) caracteristiques.push(apt.etat_bien);
-  if (apt.dpe) caracteristiques.push(`DPE ${apt.dpe}`);
-  if (apt.travaux != null && apt.travaux > 0) caracteristiques.push("travaux prévus");
+  // Détail structuré du résidu IA (Phase 4) — `null` sur les chemins sans
+  // résidu (immeuble, logement sans référence ANIL) ou tant qu'aucune
+  // estimation IA n'a encore tourné : `Etape2AjustementIa` retombe alors sur
+  // la justification en prose (comportement d'avant Phase 4).
+  const calcul = apt.loyer_calcul;
+
+  // Recalculée ici plutôt que lue sur `calcul.referenceFiable` : ce dernier
+  // peut être absent (aucune estimation IA lancée) ou obsolète (référence
+  // ANIL rafraîchie annuellement sans nouvelle estimation) — `anil` est
+  // toujours la donnée la plus fraîche affichée dans ce panneau.
+  const referenceFiable = anil ? estReferenceFiable(anil.niveauPrediction, anil.nbObs) : true;
+
+  // Facteurs du barème (étage, état×travaux, DPE), tels qu'APPLIQUÉS au moment
+  // du calcul — jamais recalculés ici : les coefficients vivent dans
+  // `rentEstimation.ts` et les recopier côté client rejouerait la divergence
+  // que `anilReference.ts` a été écrit pour supprimer.
+  //
+  // Repli pour les calculs enregistrés avant ce champ : `loyerDeterministe`
+  // (persisté de longue date) porte l'effet GLOBAL du barème par rapport au
+  // loyer de référence, qu'on rend alors en un seul tag agrégé.
+  const facteursBareme: { libelle: string; pct: number }[] = (() => {
+    if (calcul?.facteursDeterministes) return calcul.facteursDeterministes;
+    if (!calcul || anilMedian == null || anilMedian <= 0) return [];
+    const pct = Math.round((calcul.loyerDeterministe / anilMedian - 1) * 100);
+    return pct === 0 ? [] : [{ libelle: "Étage · état · DPE", pct }];
+  })();
 
   return (
     <div className="fixed inset-0 z-[2000]">
@@ -220,6 +239,11 @@ export default function LoyerDetailPanel({
               {/* ── ÉTAPE 1 : Ancre ANIL ── */}
               {anil && refCC && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface && (() => {
                 const anilBrutTotal = Math.round(anil.loyerM2 * surface);
+                // Intermédiaire calculé à partir des €/m² NON arrondis : le
+                // recomposer depuis `anilBrutTotal` déjà arrondi ferait dériver
+                // la chaîne de quelques euros, et la dernière ligne ne
+                // retomberait plus sur `anilMedian`.
+                const anilSurfaceTotal = Math.round(anil.loyerM2 * refCC.facteurSurface * surface);
                 return (
                 <section className="space-y-1.5">
                   <div className="flex items-center gap-2">
@@ -229,48 +253,91 @@ export default function LoyerDetailPanel({
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">
                       Étape 1 — Référence de marché
                     </h3>
+                    {/* Phase 4 (2) : signal discret quand la prédiction ANIL ne
+                        vient pas de la commune elle-même, ou repose sur trop
+                        peu d'observations — jamais affiché avant. Le loyer de
+                        référence reste la meilleure donnée disponible : ce
+                        badge relativise, il n'invalide rien. */}
+                    {!referenceFiable && (
+                      <span
+                        className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700"
+                        title={raisonFiabiliteReduite(anil)}
+                      >
+                        Fiabilité réduite
+                      </span>
+                    )}
                   </div>
-                  <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
-                    <p className="text-sm text-ink-600">
-                      Loyer médian <strong>charges comprises</strong> pour ce type de bien (source ANIL {anil.annee}, {anil.nbObs.toLocaleString("fr-FR")} annonces), majoré de {Math.round(MAJORATION_MEUBLE * 100)} % pour le meublé et ajusté à la surface réelle.
-                    </p>
-                    <ul className="divide-y divide-ink-100/50 text-sm">
-                      <Row label={`Loyer ANIL non meublé (${TYPOLOGIE_LABEL[refCC.typologie]})`} value={anilBrutTotal} suffix="/mois" />
-                      <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
-                        <span>× Majoration meublé</span>
-                        <span className="font-medium text-ink-800">+{Math.round(MAJORATION_MEUBLE * 100)} %</span>
-                      </li>
+                  {/* Progression de VALEURS : chaque ligne est un vrai €/mois
+                      pour CE bien, pas un chiffre abstrait corrigé après coup.
+                      ⚠️ Il n'y a PAS d'étape « hors charges → charges
+                      comprises » : `loypredm2` (ANIL) est DÉJÀ charges
+                      comprises. Les libellés le disent comme une PROPRIÉTÉ de
+                      la source, jamais comme une marche du calcul — l'ancienne
+                      progression « Loyer ANIL non meublé » → « Loyer CC
+                      meublé » laissait croire que deux choses avaient changé
+                      alors qu'une seule bouge (le meublé). Ne pas réintroduire
+                      de provision de charges ici : double comptage de +5 à
+                      +12 %, voir anilReference.ts. */}
+                  <div className="rounded-lg border border-ink-100 bg-white px-4 py-3">
+                    <ul className="divide-y divide-ink-100/50">
+                      <StepRow
+                        label={`Loyer médian ANIL — ${TYPOLOGIE_LABEL[refCC.typologie]}`}
+                        hint={`logement de référence ${refCC.surfaceReference} m², ramené à ${surface} m²`}
+                        value={anilBrutTotal}
+                      />
                       {/* Le loyer/m² décroît avec la surface (élasticité −0,485
-                          mesurée sur les données ANIL) : un studio se loue bien
-                          plus cher au m² que la surface de référence. */}
+                          mesurée sur les données ANIL) : un studio se loue plus
+                          cher au m² que la surface de référence, un grand
+                          logement moins. */}
                       {Math.abs(refCC.facteurSurface - 1) > 0.005 && (
-                        <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
-                          <span>× Ajustement surface <span className="text-ink-400">({surface} m² vs {refCC.surfaceReference} m² de référence)</span></span>
-                          <span className="font-medium text-ink-800">
-                            {refCC.facteurSurface > 1 ? "+" : "−"}{Math.abs(Math.round((refCC.facteurSurface - 1) * 100))} %
-                          </span>
-                        </li>
+                        <StepRow
+                          label="Ajusté à la surface réelle"
+                          pct={Math.round((refCC.facteurSurface - 1) * 100)}
+                          value={anilSurfaceTotal}
+                        />
                       )}
-                      <Row label="Loyer CC meublé (référence)" value={anilMedian} suffix="/mois" bold />
-                      <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
-                        <span>Fourchette CC</span>
-                        <span className="font-medium text-ink-800">
-                          {formatEuros(anilMinTotal)} – {formatEuros(anilMaxTotal)}<span className="text-ink-400 text-xs ml-0.5">/mois</span>
-                        </span>
-                      </li>
+                      <StepRow
+                        label="Majoration meublé"
+                        pct={Math.round(MAJORATION_MEUBLE * 100)}
+                        value={anilMedian}
+                        total
+                        totalLabel="Loyer de référence"
+                      />
                     </ul>
+                    <div className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-ink-100/50 pt-2.5">
+                      <span className="text-xs text-ink-400">Fourchette du marché</span>
+                      <span className="font-mono text-xs text-ink-500">
+                        {formatEuros(anilMinTotal)} – {formatEuros(anilMaxTotal)}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-start gap-1.5">
                     <Info className="h-3 w-3 text-ink-300 mt-0.5 shrink-0" />
-                    <p className="text-[11px] text-ink-400">
-                      Source : Carte des loyers ANIL {anil.annee}, ressource « {TYPOLOGIE_LABEL[refCC.typologie]} » (loyers charges comprises, non meublé) · majoration meublé +{Math.round(MAJORATION_MEUBLE * 100)} % · {surface} m².
+                    <p className="text-[11px] leading-relaxed text-ink-400">
+                      Carte des loyers ANIL {anil.annee} · {anil.nbObs.toLocaleString("fr-FR")} annonces observées · loyers <strong className="font-medium">charges comprises</strong>, logement non meublé.
+                      {/* Tooltip du badge ci-dessus, en clair : un `title` seul
+                          n'est pas fiable au toucher (mobile). */}
+                      {!referenceFiable && <> {raisonFiabiliteReduite(anil)}</>}
                     </p>
                   </div>
                 </section>
                 );
               })()}
 
-              {/* ── ÉTAPE 2 : Ajustement IA ── */}
+              {/* ── ÉTAPE 2 : tout ce qui fait varier le loyer de référence ──
+                  Barème déterministe ET résidu IA dans UNE carte : l'utilisateur
+                  se demande « qu'est-ce qui a fait bouger mon loyer », pas « quel
+                  sous-système l'a calculé ». L'ancien découpage en deux étapes
+                  était calqué sur l'architecture du code (barème → résidu).
+                  Les deux familles restent des SOUS-GROUPES distincts, pour deux
+                  raisons qui tiennent toujours :
+                  - fiabilité : le barème est une table de coefficients
+                    reproductible, le résidu est le jugement d'un LLM. L'app badge
+                    partout ce qui vient d'une IA, tout aplatir ferait passer une
+                    opinion pour une règle ;
+                  - granularité : chaque facteur du barème porte SON %, alors que
+                    le résidu n'en a qu'un seul pour l'ensemble de ses critères
+                    (le % par critère n'existe pas dans les données). */}
               {aiEstimated && (
                 <section className="space-y-1.5">
                   <div className="flex items-center gap-2">
@@ -278,31 +345,106 @@ export default function LoyerDetailPanel({
                       <SlidersHorizontal className="h-3.5 w-3.5" />
                     </span>
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                      Étape 2 — Ajustement IA
+                      Étape 2 — Ce qui fait varier ce loyer
                     </h3>
-                  </div>
-                  <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
-                    <p className="text-sm text-ink-600">
-                      À partir du loyer médian{anilMedian != null && <> (<strong>{formatEuros(anilMedian)}</strong>)</>},
-                      l&apos;IA croise <strong>annonces récentes</strong> du secteur et <strong>caractéristiques du bien</strong> pour
-                      ajuster le loyer à la hausse ou à la baisse.
-                    </p>
-                    {caracteristiques.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {caracteristiques.map((c) => (
-                          <span
-                            key={c}
-                            className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600"
-                          >
-                            {c}
-                          </span>
-                        ))}
-                      </div>
+                    {/* Total = écart réel entre la référence et le loyer retenu.
+                        ⚠️ Ce n'est PAS la somme des tags ci-dessous : les
+                        facteurs sont multiplicatifs, bornés, puis suivis du
+                        plafonnement sur la fourchette ANIL. Les tags disent ce
+                        qui a joué, ce badge dit où on a atterri.
+                        ⚠️ Colorisé par `ecartTone` (perspective INVESTISSEUR),
+                        pas par `pctToneClasses` : c'est LE MÊME nombre que
+                        l'« Écart vs marché » de l'Étape 3, il doit donc porter
+                        exactement la même couleur — deux teintes pour une seule
+                        valeur à quelques centimètres d'écart se lisent comme un
+                        bug. Les badges des familles ci-dessous gardent, eux, la
+                        colorisation DIRECTIONNELLE (hausse/baisse) : ils
+                        décrivent un effet, pas une position vs marché. */}
+                    {ecartPct != null && (
+                      <span
+                        className={`ml-auto shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold ${ecartTone(ecartPct, "wrap")} ${ecartTone(ecartPct, "value")}`}
+                      >
+                        {ecartPct > 0 ? "+" : ""}{ecartPct.toFixed(0)} %
+                      </span>
                     )}
-                    {apt.loyer_justification && (
-                      <div className="rounded-lg bg-ink-50 p-3 text-sm text-ink-600 whitespace-pre-line">
-                        {renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))}
-                      </div>
+                  </div>
+                  <div className="space-y-4 rounded-lg border border-ink-100 bg-white p-4">
+                    {!calcul ? (
+                      // Chemins sans résidu structuré (immeuble, logement sans
+                      // référence ANIL) : rien à décomposer, on retombe sur la
+                      // justification en prose.
+                      apt.loyer_justification && (
+                        <div className="rounded-lg bg-ink-50 p-3 text-sm text-ink-600 whitespace-pre-line">
+                          {renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))}
+                        </div>
+                      )
+                    ) : (
+                      <>
+                        {/* ── Famille 1 : barème du bien (déterministe) ── */}
+                        {facteursBareme.length > 0 && (
+                          <FamilleFacteurs
+                            titre="Caractéristiques du bien"
+                            aide="Barème appliqué automatiquement"
+                          >
+                            {facteursBareme.map((f) => (
+                              <FacteurTag key={f.libelle} label={f.libelle} pct={f.pct} />
+                            ))}
+                          </FamilleFacteurs>
+                        )}
+
+                        {/* ── Famille 2 : critères qualitatifs (résidu IA) ── */}
+                        <FamilleFacteurs
+                          titre="Analyse IA"
+                          aide="Critères qualitatifs non couverts par le barème"
+                          badge={
+                            !calcul.echecIa ? (
+                              <span
+                                className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold ${pctToneClasses(calcul.ajustementPct)}`}
+                              >
+                                {calcul.ajustementPct > 0 ? "+" : ""}{calcul.ajustementPct} %
+                              </span>
+                            ) : undefined
+                          }
+                        >
+                          {calcul.echecIa ? (
+                            <p className="text-xs text-ink-500">
+                              Indisponible pour ce calcul — seul le barème ci-dessus a été appliqué.
+                            </p>
+                          ) : calcul.criteres.length === 0 ? (
+                            <p className="text-xs text-ink-500">
+                              Aucun critère marquant — logement conforme à son secteur.
+                            </p>
+                          ) : (
+                            grouperCriteresParCategorie(calcul.criteres).map((groupe, _, groupes) => (
+                              <div key={groupe.key} className="contents">
+                                {/* Le libellé de catégorie n'apparaît que s'il
+                                    DISCRIMINE : avec une seule catégorie il
+                                    répète le titre de famille pour rien (cas le
+                                    plus fréquent — 3 critères, 1 catégorie). */}
+                                {groupes.length > 1 && (
+                                  <span className="mt-0.5 w-full text-[10px] font-medium uppercase tracking-wide text-ink-400">
+                                    {groupe.label}
+                                  </span>
+                                )}
+                                {groupe.items.map((c, i) => (
+                                  <CritereTag key={i} critere={c} />
+                                ))}
+                              </div>
+                            ))
+                          )}
+                        </FamilleFacteurs>
+
+                        {/* Phase 4 (3) : sans ce texte, un clic sur "Estimer
+                            avec IA" qui réutilise le résidu (cache par
+                            empreinte, §6) semblerait n'avoir rien fait — un
+                            bouton qui ne répond pas plutôt qu'un calcul jugé
+                            toujours valide. */}
+                        {calcul.reutilise && (
+                          <p className="border-t border-ink-100/50 pt-2.5 text-[11px] italic text-ink-400">
+                            Résidu IA inchangé depuis la dernière estimation.
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </section>
@@ -375,6 +517,104 @@ function ecartTone(pct: number, slot: keyof TonePanelStyle): string {
   return TONE_PANEL_STYLES[tone][slot];
 }
 
+/**
+ * Catégories du résidu IA — mêmes clés que `SCHEMA_RESIDU.criteres.categorie`
+ * (`rentEstimation.ts`), dans l'ordre d'affichage. `autre` est un filet pour
+ * une catégorie absente/inattendue (donnée écrite par un LLM) — jamais
+ * censé arriver vu le schéma contraint côté serveur, mais un critère ne doit
+ * jamais disparaître silencieusement pour autant.
+ */
+const CATEGORIES: { key: string; label: string }[] = [
+  { key: "quartier", label: "Quartier" },
+  { key: "prestations", label: "Prestations" },
+  { key: "exposition", label: "Exposition" },
+  { key: "nuisances", label: "Nuisances" },
+  { key: "copropriete", label: "Copropriété" },
+  { key: "autre", label: "Autre" },
+];
+
+function grouperCriteresParCategorie(
+  criteres: CritereResidu[]
+): { key: string; label: string; items: CritereResidu[] }[] {
+  const parCategorie = new Map<string, CritereResidu[]>();
+  for (const c of criteres) {
+    const cle = CATEGORIES.some((cat) => cat.key === c.categorie) ? c.categorie! : "autre";
+    const liste = parCategorie.get(cle) ?? [];
+    liste.push(c);
+    parCategorie.set(cle, liste);
+  }
+  return CATEGORIES
+    .map((cat) => ({ ...cat, items: parCategorie.get(cat.key) ?? [] }))
+    .filter((groupe) => groupe.items.length > 0);
+}
+
+/**
+ * Couleur du badge d'ajustement (Étape 2) — PAS `TONE_PANEL_STYLES` : ce n'est
+ * pas un chiffre jugé par un seuil investisseur (comme l'écart au marché de
+ * l'Étape 3), juste le signe brut renvoyé par l'IA. 0 % n'est ni bon ni
+ * mauvais — c'est le cas normal, "conforme au secteur" — d'où le neutre
+ * plutôt qu'une des deux couleurs.
+ */
+function pctToneClasses(pct: number): string {
+  if (pct > 0) return "bg-emerald-50 text-emerald-700";
+  if (pct < 0) return "bg-amber-50 text-amber-700";
+  return "bg-ink-100 text-ink-500";
+}
+
+/**
+ * Tag d'un critère du résidu. `positif`/`négatif` reprend `emerald`/`amber` —
+ * pas `emerald`/`red` : un critère négatif (rez-de-chaussée, vis-à-vis…) pèse
+ * un peu sur le loyer, ce n'est pas une alerte au sens de la charte (`red`
+ * réservé au danger réel — DPE G, risques, destructif).
+ */
+function CritereTag({ critere }: { critere: CritereResidu }) {
+  const positif = critere.sens === "positif";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+        positif ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+      }`}
+    >
+      <span aria-hidden="true">{positif ? "+" : "−"}</span>
+      {critere.libelle}
+    </span>
+  );
+}
+
+/**
+ * Tag d'un facteur DÉTERMINISTE de l'Étape 1 (majoration meublé, ajustement
+ * surface) — même langage visuel que `CritereTag` ci-dessus, à dessein : les
+ * deux étapes listent des "facteurs qui ont joué", déterministes ici,
+ * qualitatifs IA à l'Étape 2. Le pourcentage porte déjà le signe, pas besoin
+ * du symbole `+`/`−` séparé de `CritereTag` (qui, lui, n'a qu'un sens sans
+ * magnitude).
+ */
+function FacteurTag({ label, pct }: { label: string; pct: number }) {
+  const positif = pct >= 0;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${
+        positif ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+      }`}
+    >
+      {label} {positif ? "+" : "−"}{Math.abs(Math.round(pct))} %
+    </span>
+  );
+}
+
+/** Texte, en clair, du badge "Fiabilité réduite" de l'Étape 1 (Phase 4). */
+function raisonFiabiliteReduite(anil: AnilData): string {
+  const raisons: string[] = [];
+  if (anil.niveauPrediction === "maille") {
+    raisons.push("estimée à partir de communes voisines similaires, pas de la commune elle-même");
+  } else if (anil.niveauPrediction === "epci") {
+    raisons.push("estimée au niveau intercommunal, pas communal");
+  }
+  if (anil.nbObs < SEUIL_NB_OBS_FIABLE) {
+    raisons.push(`seulement ${anil.nbObs} annonce${anil.nbObs > 1 ? "s" : ""} observée${anil.nbObs > 1 ? "s" : ""}`);
+  }
+  return `Référence à relativiser : ${raisons.join(" · ")}.`;
+}
 
 /**
  * Squelette du temps où l'Étape 1 (référence ANIL) charge encore. Fidèle à la
@@ -401,28 +641,86 @@ function LoyerDetailSkeleton() {
   );
 }
 
-function Row({
+/**
+ * Une marche de la progression de l'Étape 1 : ce qui s'applique (label + son
+ * effet en %) et la valeur qui en RÉSULTE. Chaque ligne est donc un vrai
+ * €/mois pour ce bien, pas un coefficient abstrait à composer mentalement.
+ *
+ * La colonne de valeurs est en `font-mono` : des chiffres empilés doivent
+ * s'aligner sur leurs unités (chasse fixe), sinon la progression se lit mal —
+ * c'est aussi la règle de la charte pour tout chiffre clé.
+ */
+function StepRow({
   label,
+  hint,
+  pct,
   value,
-  suffix,
-  badge,
-  bold,
+  total,
+  totalLabel,
 }: {
   label: string;
+  /** Précision en petit sous le libellé (provenance, surface de référence…). */
+  hint?: string;
+  /** Effet de cette marche, en % signé. Absent sur la ligne de départ. */
+  pct?: number;
   value: number;
-  suffix?: string;
-  badge?: ReactNode;
-  bold?: boolean;
+  /** Dernière marche : c'est LE chiffre de l'étape, mis en avant. */
+  total?: boolean;
+  /** Libellé de synthèse affiché à la place de `label` sur la ligne totale. */
+  totalLabel?: string;
 }) {
   return (
-    <li className={`flex items-center justify-between gap-3 py-1.5 ${bold ? "border-t border-ink-100 pt-2" : ""}`}>
-      <span className={`flex items-center gap-1.5 ${bold ? "font-semibold text-ink-900" : "text-ink-600"}`}>
-        {label}
-        {badge}
+    <li className={`flex items-baseline justify-between gap-3 py-2 ${total ? "border-t border-ink-100" : ""}`}>
+      <span className="min-w-0">
+        <span className={`block text-sm ${total ? "font-semibold text-ink-900" : "text-ink-600"}`}>
+          {total && totalLabel ? totalLabel : label}
+        </span>
+        {total && totalLabel ? (
+          <span className="block text-[11px] text-ink-400">après {label.toLowerCase()}</span>
+        ) : hint ? (
+          <span className="block text-[11px] text-ink-400">{hint}</span>
+        ) : null}
       </span>
-      <span className={`shrink-0 ${bold ? "text-base font-bold text-ink-900" : "font-medium text-ink-800"}`}>
-        {formatEuros(value)}{suffix ? <span className="text-ink-400 text-xs ml-0.5">{suffix}</span> : null}
+      <span className="flex shrink-0 items-baseline gap-2">
+        {pct != null && pct !== 0 && (
+          <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold ${pctToneClasses(pct)}`}>
+            {pct > 0 ? "+" : "−"}{Math.abs(pct)} %
+          </span>
+        )}
+        <span className={`font-mono ${total ? "text-base font-bold text-ink-900" : "text-sm font-medium text-ink-700"}`}>
+          {formatEuros(value)}
+        </span>
       </span>
     </li>
+  );
+}
+
+/**
+ * Une famille de facteurs dans la carte « Ce qui fait varier ce loyer » :
+ * un intertitre discret + sa grille de tags. Les enfants sont posés dans le
+ * MÊME conteneur `flex-wrap` que les tags (d'où le `contents` côté appelant
+ * pour les groupes par catégorie) : les tags de toute la famille coulent
+ * ensemble et se répartissent naturellement sur 375 px comme sur desktop.
+ */
+function FamilleFacteurs({
+  titre,
+  aide,
+  badge,
+  children,
+}: {
+  titre: string;
+  aide: string;
+  badge?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline gap-2">
+        <h4 className="text-xs font-semibold text-ink-700">{titre}</h4>
+        {badge}
+        <span className="min-w-0 flex-1 truncate text-[11px] text-ink-400">{aide}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
+    </div>
   );
 }

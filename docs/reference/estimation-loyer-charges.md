@@ -323,9 +323,16 @@ référence/immeuble.
 vient PAS de la commune elle-même mais d'un groupe de communes similaires
 (`maille`).
 
-`LoyerCalcul.referenceFiable` = `niveauPrediction === "commune" && nbObs >= 30`
-— seuil repris de la note méthodologique ANIL. Sert à SIGNALER l'incertitude,
-pas à écarter la référence.
+`LoyerCalcul.referenceFiable` = `estReferenceFiable(niveauPrediction, nbObs)`
+(`anilReference.ts`, seuil `SEUIL_NB_OBS_FIABLE = 30` repris de la note
+méthodologique ANIL) — **fonction partagée**, pas un calcul inline dupliqué :
+le serveur (`rentEstimation.ts`) l'appelle au moment du calcul, et
+`LoyerDetailPanel` la RECALCULE côté client à partir de la référence
+fraîchement récupérée plutôt que de lire `calcul.referenceFiable`, qui peut
+être absent (aucune estimation IA encore lancée) ou obsolète (référence ANIL
+rafraîchie annuellement sans nouvelle estimation). Sert à SIGNALER
+l'incertitude (badge « Fiabilité réduite », Étape 1 du panneau), pas à
+écarter la référence.
 
 `fetchLoyerReferenceLocal` (agrégation multi-communes dans un rayon de 500 m)
 retient le niveau de fiabilité le PLUS FAIBLE des communes combinées.
@@ -337,6 +344,83 @@ retient le niveau de fiabilité le PLUS FAIBLE des communes combinées.
 | **Ratio DVF local/communal** (indice quartier) | Écarté | Convertir une prime de prix en prime de loyer demande un coefficient d'amortissement inventé — exactement ce que la Phase 2 vient de nettoyer. |
 | **Revenu médian IRIS** | Écarté | Signal indirect alors que l'ANIL mesure déjà le loyer observé. Donnée non localisée sur data.gouv.fr en temps raisonnable. |
 | **QPV** (quartier prioritaire) | Écarté | Faisable mais hébergé par un portail tiers, et l'ANIL différencie déjà par arrondissement — complément marginal pour la dépendance ajoutée. |
+
+## Panneau de détail (`LoyerDetailPanel.tsx`) — Phase 4
+
+Deux étapes, pas trois. L'Étape 1 (référence de marché) et l'Étape 2
+(tout ce qui fait varier ce loyer) répondent chacune à UNE question ; le
+découpage précédent en 3 étapes suivait l'architecture du CODE
+(référence → barème → résidu), pas la question que se pose l'utilisateur.
+
+### Étape 1 — progression de VALEURS, pas de coefficients
+
+Chaque ligne (`StepRow`) est un vrai €/mois pour CE bien : loyer médian ANIL
+→ ajusté à la surface réelle → majoration meublé = loyer de référence. Chaque
+marche affiche l'effet (%) qui y mène ET la valeur qui en résulte — jamais
+l'un sans l'autre, sinon l'utilisateur doit composer les pourcentages de tête.
+
+⚠️ **Il n'y a PAS d'étape « hors charges → charges comprises ».**
+`loypredm2` (ANIL) est DÉJÀ charges comprises (voir plus bas) : l'ancienne
+progression « Loyer ANIL **non meublé** » → « Loyer **CC** meublé » laissait
+croire que deux choses changeaient (le meublé ET les charges) alors qu'une
+seule bouge. « Charges comprises » est énoncé comme une PROPRIÉTÉ de la
+source (footer « Source »), jamais comme une marche du calcul.
+
+### Étape 2 — barème ET résidu IA dans UNE SEULE carte, en deux familles
+
+L'utilisateur se demande « qu'est-ce qui a fait varier mon loyer », pas quel
+sous-système (table de coefficients ou LLM) l'a calculé — les deux familles
+sont donc dans la même carte (`FamilleFacteurs` × 2), mais restent des
+sous-groupes VISUELLEMENT distincts, pour deux raisons qui ne disparaissent
+pas avec la fusion :
+- **Fiabilité** : le barème est reproductible et auditable (une table de
+  coefficients), le résidu est le jugement d'un LLM. Tout aplatir ferait
+  passer une opinion pour une règle.
+- **Granularité** : chaque facteur du barème porte SON propre %
+  (`FacteurTag`). Le résidu n'en a qu'UN SEUL pour l'ensemble de ses
+  critères — cette donnée n'existe pas au niveau du critère individuel,
+  inutile de l'inventer.
+
+Le badge d'en-tête de l'Étape 2 (`ecartPct`) est colorisé par `ecartTone`
+(perspective INVESTISSEUR), **pas** par `pctToneClasses` : c'est le MÊME
+nombre que l'« Écart vs marché » de l'Étape 3 (même `apt.loyer_retenu` vs
+`anilMedian`), il doit donc porter EXACTEMENT la même couleur — deux teintes
+pour une seule valeur à quelques centimètres d'écart se lisent comme un bug,
+pas comme deux informations différentes. Les tags de facteurs individuels
+(`FacteurTag`, `CritereTag`), eux, restent en `pctToneClasses` : ils décrivent
+un EFFET directionnel (hausse/baisse), pas une position vs marché.
+
+⚠️ La somme des tags ne reconstitue PAS l'écart du badge : les facteurs
+déterministes sont multiplicatifs puis bornés (`FACTEUR_DETERMINISTE_MIN/MAX`),
+suivis du résidu IA puis du plafonnement sur la fourchette ANIL
+(`RentEstimationResult.plafonne`). Les tags disent CE QUI a joué, le badge dit
+OÙ on a atterri — ne pas laisser un utilisateur vérifier l'un par l'autre.
+
+### Facteurs déterministes exposés — persistés, jamais recalculés côté client
+
+`LoyerCalcul.facteursDeterministes` (`FacteurDeterministe[]`, optionnel) est
+produit par `detailFacteursDeterministes()` (`rentEstimation.ts`), juste à
+côté des coefficients qu'il décrit, et persisté avec le reste de `loyer_calcul`.
+**Jamais recalculé dans le composant** : les coefficients (`ETAT_COEF`,
+`DPE_ADJUST`, seuils d'étage) ne vivent qu'à un seul endroit — les recopier
+côté client recréerait exactement la divergence serveur/client que
+`anilReference.ts` a été écrit pour supprimer (voir plus bas). Ne rend que les
+facteurs NON neutres : un bien sans étage renseigné, en bon état et sans DPE
+n'affiche aucun tag, jamais trois tags « 0 % ».
+
+**Repli pour les calculs enregistrés avant ce champ** (`undefined`) :
+`LoyerDetailPanel` déduit l'effet GLOBAL du barème depuis
+`loyerDeterministe / anilMedian − 1` et l'affiche en un seul tag agrégé
+(« Étage · état · DPE »), plutôt que de ne rien montrer ou de tenter un
+recalcul.
+
+### Fusion des groupes IA sans catégorie inutile
+
+`grouperCriteresParCategorie` groupe toujours les critères par catégorie,
+mais le panneau n'affiche le LIBELLÉ de catégorie que si plusieurs catégories
+sont réellement présentes (`groupes.length > 1`) — le cas le plus fréquent
+(3-5 critères, souvent une seule catégorie dominante) ne répète pas le titre
+de famille « Analyse IA » pour rien.
 
 ## Taxe foncière — mode déterministe (taux communal disponible)
 

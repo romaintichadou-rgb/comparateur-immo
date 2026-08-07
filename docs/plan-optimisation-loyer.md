@@ -200,35 +200,17 @@ d'ajouter des optimisations à côté de l'existant :
 
 ---
 
-## Phase 4 — Panneau de détail du loyer (mise à jour)
+## Phase 4 — Panneau de détail du loyer
 
-Rappel : Phase 4 était déjà planifiée avant cet audit (afficher les critères
-du résidu dans `LoyerDetailPanel`, avec leurs tags par catégorie, et le
-pourcentage d'ajustement final). Elle reste le prochain chantier après
-l'optimisation ci-dessus, avec trois ajustements liés aux décisions prises
-ici :
-
-1. **Pas de bloc « environnement » dans le panneau.** OSM disparaissant, il
-   n'y a plus de données d'environnement mesuré à afficher à côté des
-   critères qualitatifs — seuls les critères réellement utilisés (issus du
-   résidu IA, filtrés du double comptage) sont montrés.
-2. **Afficher l'indicateur de fiabilité de la référence** (`referenceFiable`,
-   déjà calculé et persisté depuis la Phase 3, jamais encore affiché) : un
-   signal visuel discret quand la référence ANIL s'appuie sur un niveau EPCI
-   ou maille plutôt que communal, ou sur moins de 30 observations — pour que
-   l'utilisateur sache quand relativiser le loyer de référence.
-3. **Signaler une estimation réutilisée** (conséquence du cache par
-   empreinte, §6) : si l'utilisateur clique « Estimer avec IA » et que rien
-   n'a changé, le panneau ne doit pas laisser croire qu'un nouveau calcul a
-   tourné pour rien — un texte discret du type « Résidu IA inchangé depuis la
-   dernière estimation » plutôt qu'un silence qui donnerait l'impression d'un
-   bug (bouton qui ne fait rien).
-
-Les critères par catégorie (`quartier` / `prestations` / `exposition` /
-`nuisances` / `copropriete`) sont déjà collectés et stockés dans
-`loyer_calcul.criteres` depuis la Phase 2 — Phase 4 consiste à les **afficher
-enfin**, groupés par catégorie avec des tags, ce qui n'a jamais été fait côté
-UI jusqu'ici.
-
-**Phase 4 ne démarre pas avant que ce plan d'optimisation soit terminé et
-vérifié.**
+Architecture retenue, différente du découpage en 3 étapes envisagé
+initialement (Référence → Barème → Résidu, calqué sur l'architecture du
+code) : un audit avec l'utilisateur a établi que l'Étape 1 doit rester la
+progression de VALEURS (référence → surface → meublé), mais que barème
+déterministe et résidu IA fusionnent en une seule Étape 2 — l'utilisateur se
+demande « qu'est-ce qui a fait varier ce loyer », pas quel sous-système l'a
+calculé. Les deux familles restent des sous-groupes visuellement distincts à
+l'intérieur de cette étape (fiabilité différente : coefficients reproductibles
+vs jugement d'un LLM ; granularité différente : un % par facteur déterministe,
+un seul % pour tout le résidu). Détail complet, y compris la persistance des
+facteurs déterministes nécessaire pour les afficher sans les recalculer côté
+client : `docs/reference/estimation-loyer-charges.md`.

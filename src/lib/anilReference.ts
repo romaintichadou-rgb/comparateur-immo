@@ -126,6 +126,35 @@ export function facteurSurface(surfaceLogement: number | null, typologie: Typolo
   return Math.min(FACTEUR_SURFACE_MAX, Math.max(FACTEUR_SURFACE_MIN, brut));
 }
 
+/**
+ * Seuil d'observations en dessous duquel la note méthodologique ANIL invite
+ * explicitement à la prudence (« les utilisateurs sont invités à considérer
+ * avec prudence les indicateurs […] où le nombre d'observations est
+ * inférieur à 30 »), quel que soit le niveau de maille.
+ */
+export const SEUIL_NB_OBS_FIABLE = 30;
+
+/**
+ * Une référence ANIL est de fiabilité réduite (Phase 3) quand la prédiction
+ * ne vient pas de la commune elle-même (niveau `epci`/`maille` — sur 85,4 %
+ * des communes) ou repose sur moins de `SEUIL_NB_OBS_FIABLE` observations.
+ * Ne signale PAS d'écarter la référence — c'est toujours la meilleure donnée
+ * disponible — seulement de la relativiser.
+ *
+ * Fonction PARTAGÉE (comme le reste de ce module) : calculée côté serveur au
+ * moment du calcul (`LoyerCalcul.referenceFiable`, persisté) ET recalculée
+ * ici côté client à partir de la référence fraîchement récupérée
+ * (`LoyerDetailPanel`) plutôt que de lire le champ persisté — qui peut être
+ * absent (aucune estimation IA encore lancée) ou obsolète (rafraîchissement
+ * annuel des données ANIL sans nouvelle estimation).
+ */
+export function estReferenceFiable(
+  niveauPrediction: "commune" | "epci" | "maille",
+  nbObs: number
+): boolean {
+  return niveauPrediction === "commune" && nbObs >= SEUIL_NB_OBS_FIABLE;
+}
+
 /** Référence de marché en €/m² CC meublé, corrigée de la surface. */
 export interface ReferenceCC {
   /** €/m²/mois, CC meublé, corrigé de la surface. */

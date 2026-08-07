@@ -7,6 +7,7 @@ import { lotsEffectifs } from "./estimates";
 import { deriveLoyerHC } from "./calculations";
 import {
   MAJORATION_MEUBLE,
+  estReferenceFiable,
   referenceCCMeuble,
   typologieAnil,
   type ReferenceCC,
@@ -90,6 +91,13 @@ export interface LoyerCalcul {
    * toujours la meilleure donnée disponible.
    */
   referenceFiable: boolean;
+  /**
+   * Facteurs déterministes (étage, état×travaux, DPE) réellement appliqués,
+   * décomposés pour affichage — voir `detailFacteursDeterministes`. Absent
+   * (`undefined`) sur les calculs enregistrés avant ce champ : le panneau
+   * retombe alors sur l'effet GLOBAL, qu'il déduit de `loyerDeterministe`.
+   */
+  facteursDeterministes?: FacteurDeterministe[];
   /**
    * Empreinte des données qui alimentent le résidu IA (voir
    * `calculerEmpreinteResidu`) — permet à l'appel SUIVANT de savoir s'il peut
@@ -347,6 +355,71 @@ const FACTEUR_DETERMINISTE_MAX = 1.20;
 function facteurDeterministeGlobal(input: RentEstimationInput, surface: number): number {
   const brut = facteurEtage(input) * facteurEtatTravaux(input, surface) * facteurDpe(input);
   return Math.min(FACTEUR_DETERMINISTE_MAX, Math.max(FACTEUR_DETERMINISTE_MIN, brut));
+}
+
+/**
+ * Décomposition LISIBLE des facteurs ci-dessus, persistée dans `LoyerCalcul`
+ * pour que le panneau de détail (Phase 4) puisse les afficher.
+ *
+ * ⚠️ Persistée, PAS recalculée côté client : les coefficients (`ETAT_COEF`,
+ * `DPE_ADJUST`, seuils d'étage) vivent ici et nulle part ailleurs. Les
+ * recopier dans un composant recréerait exactement la divergence
+ * serveur/client que `anilReference.ts` a été écrit pour supprimer. Le
+ * libellé est produit ICI, au même endroit que le coefficient qu'il décrit,
+ * pour qu'ils ne puissent pas se contredire.
+ *
+ * Ne rend QUE les facteurs non neutres : un bien sans étage renseigné, en bon
+ * état et sans DPE ne doit afficher aucun tag plutôt que trois tags « 0 % ».
+ *
+ * ⚠️ La somme des `pct` rendus ici ne reconstitue pas exactement l'écart
+ * final : les facteurs sont MULTIPLICATIFS, puis bornés
+ * (`FACTEUR_DETERMINISTE_MIN/MAX`), puis suivis du résidu IA et du
+ * plafonnement sur la fourchette ANIL. Le panneau les présente donc comme
+ * « ce qui a joué », jamais comme une addition à vérifier.
+ */
+export interface FacteurDeterministe {
+  /** Libellé court prêt à afficher (ex. « 3e étage avec ascenseur »). */
+  libelle: string;
+  /** Effet en %, signé et arrondi (ex. +5 pour un coefficient de 1,05). */
+  pct: number;
+}
+
+function detailFacteursDeterministes(
+  input: RentEstimationInput,
+  surface: number
+): FacteurDeterministe[] {
+  const facteurs: FacteurDeterministe[] = [];
+  const enPct = (coef: number) => Math.round((coef - 1) * 100);
+
+  const etage = input.etage ? parseInt(input.etage, 10) : null;
+  const pctEtage = enPct(facteurEtage(input));
+  if (pctEtage !== 0 && etage != null && !isNaN(etage)) {
+    const libelle =
+      etage === 0
+        ? "Rez-de-chaussée"
+        : `${etage}e étage ${input.ascenseur === true ? "avec" : "sans"} ascenseur`;
+    facteurs.push({ libelle, pct: pctEtage });
+  }
+
+  // État et travaux sont FUSIONNÉS en un seul coefficient (2.6) : les séparer
+  // ici recréerait visuellement le double comptage que la fusion a supprimé.
+  const pctEtat = enPct(facteurEtatTravaux(input, surface));
+  if (pctEtat !== 0) {
+    const travauxPrevus = input.travaux != null && input.travaux > 0;
+    const libelle = input.etat_bien
+      ? travauxPrevus
+        ? `${input.etat_bien} + travaux`
+        : input.etat_bien
+      : "Travaux prévus";
+    facteurs.push({ libelle, pct: pctEtat });
+  }
+
+  const pctDpe = enPct(facteurDpe(input));
+  if (pctDpe !== 0 && input.dpe) {
+    facteurs.push({ libelle: `DPE ${input.dpe.toUpperCase()}`, pct: pctDpe });
+  }
+
+  return facteurs;
 }
 
 /**
@@ -853,10 +926,8 @@ async function estimerAvecReference(
     typologie: refCC.typologie,
     loyerDeterministe: det,
     echecIa,
-    // 3.4 : seuil de 30 observations repris tel quel de la note méthodologique
-    // ANIL (« les utilisateurs sont invités à considérer avec prudence les
-    // indicateurs […] où le nombre d'observations est inférieur à 30 »).
-    referenceFiable: loyerRef.niveauPrediction === "commune" && loyerRef.nbObs >= 30,
+    referenceFiable: estReferenceFiable(loyerRef.niveauPrediction, loyerRef.nbObs),
+    facteursDeterministes: detailFacteursDeterministes(input, surface),
     empreinteResidu: empreinte,
     reutilise,
   };
