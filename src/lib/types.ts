@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AnalyseIA } from "./analyse/types";
 import type { SimulationInputs } from "./simulation";
+import type { LoyerCalcul } from "./rentEstimation";
 
 // Les quatre champs du profil emprunteur sont `.nullable().optional()` : `null`
 // comme l'absence de clé valent « hérité du Profil investisseur » (la migration
@@ -154,6 +155,14 @@ export interface Apartment {
   loyer_hc: number | null;
   loyer_justification: string;
 
+  // Détail structuré du calcul de loyer (résidu IA, critères, typologie ANIL
+  // utilisée) — voir `LoyerCalcul` dans `rentEstimation.ts`. Écrit UNIQUEMENT
+  // par `/api/estimate-rent`, jamais via les formulaires — même statut que
+  // `analyse_ia` ci-dessous, donc absent de `apartmentBaseFields`/des schémas
+  // Zod. `null` tant qu'aucune estimation IA n'a été lancée, ou sur les
+  // chemins sans résidu (immeuble, logement sans référence ANIL).
+  loyer_calcul: LoyerCalcul | null;
+
   // Financier — charges annuelles
   charges_copro_annuelles: number | null;
   charges_justification: string;
@@ -239,6 +248,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     loyer_retenu: null,
     loyer_hc: null,
     loyer_justification: "",
+    loyer_calcul: null,
     hypothese_gestion_pct: DEFAULT_HYPOTHESE_GESTION_PCT,
     quote_part_terrain_pct: null,
     notes: "",

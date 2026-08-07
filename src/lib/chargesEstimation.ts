@@ -1,5 +1,6 @@
 import { generateGeminiText, getGeminiApiKey } from "./gemini";
 import { isImmeuble } from "./types";
+import { formatSecteur } from "./adresse";
 import { estimateChargesCopro, TF_JUSTIF_COMMUNE_PREFIX } from "./estimates";
 import { estimateTaxeFonciereCommune, getTauxCommune } from "./taxeFonciereCommune";
 import { sanitizeJustification } from "./format";
@@ -37,8 +38,7 @@ function requireApiKey(): string {
 }
 
 function buildSecteur(input: ChargesEstimationInput): string {
-  const parts = [input.quartier, input.ville, input.code_postal].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : "secteur inconnu";
+  return formatSecteur(input) || "secteur inconnu";
 }
 
 function buildConsigneType(input: ChargesEstimationInput): string {

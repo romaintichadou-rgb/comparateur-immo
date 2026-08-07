@@ -1,11 +1,13 @@
-import type { Apartment, ApartmentWithComputed, PrecisionLocalisation } from "@/lib/types";
+import { isImmeuble, type Apartment, type ApartmentWithComputed, type PrecisionLocalisation } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { computeDerived } from "@/lib/calculations";
 import { capitalEffectif, resolveInputs, simulate } from "@/lib/simulation";
 import { buildVerdicts, computeScoreGlobal, type RendementSeuils } from "./scoring";
 import { computeDecision, ecartPrixMarche } from "./decision";
 import { buildBlocPrix } from "./blocs/prix";
-import { buildBlocLocation, MAJORATION_MEUBLE, provisionChargesM2 } from "./blocs/location";
+import { buildBlocLocation } from "./blocs/location";
+import { referenceCCMeuble, typologieAnil } from "@/lib/anilReference";
+import { lotsEffectifs } from "@/lib/estimates";
 import { buildBlocRisque } from "./blocs/risque";
 import { buildBlocSimulation } from "./blocs/simulation";
 import type { Argument, BlocAnalyse, BlocKey, Decision, Recommandation, Verdict } from "./types";
@@ -643,8 +645,16 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
   function buildLevierLoyer(): Recommandation | null {
     if (!ctx.loyerRef || apt.surface_m2 == null || apt.surface_m2 <= 0 || apt.loyer_retenu == null)
       return null;
-    const provM2 = provisionChargesM2(apt);
-    const maxCC_m2 = ctx.loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2;
+    // Même conversion que partout ailleurs (majoration meublé + correction de
+    // surface, sans provision) : le levier viserait sinon un haut de fourchette
+    // incohérent avec celui que l'analyse affiche.
+    const immeubleRef = isImmeuble(apt.type_bien);
+    const refCC = referenceCCMeuble(
+      ctx.loyerRef,
+      immeubleRef ? apt.surface_m2 / lotsEffectifs(apt.nb_lots, apt.surface_m2) : apt.surface_m2,
+      typologieAnil(apt.type_bien, apt.nb_pieces, immeubleRef, apt.surface_m2)
+    );
+    const maxCC_m2 = refCC.maxM2;
     const loyerMaxAnil = Math.round(maxCC_m2 * apt.surface_m2);
     // On vise le haut de fourchette ANIL, mais borné à une hausse réaliste.
     const plafondRealiste = Math.round(apt.loyer_retenu * (1 + LOYER_UPLIFT_MAX));
@@ -681,7 +691,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         const args: Argument[] = [];
         const surface = apt.surface_m2 ?? 0;
         const loyerActuel = apt.loyer_retenu ?? 0;
-        const minCC_m2 = ctx.loyerRef.min * (1 + MAJORATION_MEUBLE) + provM2;
+        const minCC_m2 = refCC.minM2;
         const loyerMinAnil = Math.round(minCC_m2 * surface);
         const gain = loyerCible - loyerActuel;
         const annee = ctx.loyerRef.annee ? ` ${ctx.loyerRef.annee}` : "";

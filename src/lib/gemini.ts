@@ -43,6 +43,26 @@ interface GeminiResponse {
   candidates?: { content?: { parts?: GeminiPart[] } }[];
 }
 
+/**
+ * Erreur HTTP de l'API Gemini, porteuse du code de statut — c'est ce qui
+ * permet à la boucle de retry ci-dessous de distinguer une panne PONCTUELLE
+ * (5xx, surcharge côté Google, retenter a du sens) d'une panne QUI SE
+ * REPRODUIRA À L'IDENTIQUE (4xx : clé invalide, requête malformée — retenter
+ * ne ferait que doubler la latence pour le même échec).
+ */
+class GeminiHttpError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+  }
+}
+
+// 55 s par tentative, 2 tentatives max (55 × 2 = 110 s) : reste largement
+// sous la limite d'exécution des fonctions Vercel (300 s), tout en évitant
+// qu'un appel Gemini bloqué indéfiniment (observé : ~3 sur 57 dans les tests
+// menés pour ce projet) ne consomme tout le budget de la requête HTTP entière.
+const TIMEOUT_MS = 55000;
+const MAX_TENTATIVES = 2;
+
 export async function generateGeminiText(params: {
   apiKey: string;
   model: string;
@@ -58,11 +78,22 @@ export async function generateGeminiText(params: {
    */
   thinkingBudget?: number;
   temperature?: number;
+  /**
+   * Force une réponse JSON conforme à ce schéma (sous-ensemble OpenAPI
+   * accepté par l'API Gemini). ⚠️ Incompatible avec `googleSearch` côté API —
+   * outils et sortie structurée ne peuvent pas être combinés sur un même
+   * appel. Ne jamais passer les deux à la fois.
+   */
+  responseSchema?: Record<string, unknown>;
 }): Promise<string> {
-  const { apiKey, model, prompt, googleSearch, thinkingBudget = 0, temperature } = params;
+  const { apiKey, model, prompt, googleSearch, thinkingBudget = 0, temperature, responseSchema } = params;
 
   const generationConfig: Record<string, unknown> = { thinkingConfig: { thinkingBudget } };
   if (temperature != null) generationConfig.temperature = temperature;
+  if (responseSchema) {
+    generationConfig.responseMimeType = "application/json";
+    generationConfig.responseSchema = responseSchema;
+  }
 
   const body: Record<string, unknown> = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -72,18 +103,39 @@ export async function generateGeminiText(params: {
     body.tools = [{ google_search: {} }];
   }
 
-  const res = await fetch(`${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let derniereErreur: Error = new Error("Appel Gemini échoué");
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gemini API error (${res.status}): ${errText}`);
+  for (let tentative = 1; tentative <= MAX_TENTATIVES; tentative++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetch(`${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new GeminiHttpError(`Gemini API error (${res.status}): ${errText}`, res.status);
+      }
+
+      const data = (await res.json()) as GeminiResponse;
+      const parts = data.candidates?.[0]?.content?.parts ?? [];
+      return parts.map((p) => p.text ?? "").join("");
+    } catch (err) {
+      clearTimeout(timer);
+      const nonRetenable = err instanceof GeminiHttpError && err.status < 500;
+      if (nonRetenable || tentative === MAX_TENTATIVES) {
+        throw err;
+      }
+      derniereErreur = err instanceof Error ? err : new Error(String(err));
+    }
   }
-
-  const data = (await res.json()) as GeminiResponse;
-  const parts = data.candidates?.[0]?.content?.parts ?? [];
-  return parts.map((p) => p.text ?? "").join("");
+  // Inatteignable (la boucle retourne ou lève à chaque itération) — ne sert
+  // qu'à satisfaire le typage d'une fonction qui doit toujours résoudre ou
+  // rejeter.
+  throw derniereErreur;
 }

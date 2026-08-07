@@ -7,8 +7,17 @@ import { LogOut, Settings, User } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
 import { deconnexion } from "@/app/(auth)/actions";
 
-const NAV_LINKS = [
-  { href: "/parametres", label: "Profil investisseur" },
+/**
+ * Liens de navigation, posés à GAUCHE juste après le wordmark : les deux
+ * forment un seul bloc de marque + navigation, et l'espace restant met le
+ * menu du compte franchement à l'autre bout de la barre.
+ *
+ * `match` plutôt qu'une égalité stricte sur `href` : « Mes biens » doit rester
+ * actif sur la fiche d'un bien (`/appartements/…`), qui est la même section.
+ */
+const NAV_LINKS: { href: string; label: string; match: (pathname: string) => boolean }[] = [
+  { href: "/", label: "Mes biens", match: (p) => p === "/" || p.startsWith("/appartements") },
+  { href: "/parametres", label: "Profil investisseur", match: (p) => p === "/parametres" },
 ];
 
 export function AppMark({ className }: { className?: string }) {
@@ -153,16 +162,19 @@ export default function Navbar({ email }: { email?: string }) {
   return (
     <header className="sticky top-0 z-40 border-b border-ink-100/70 bg-white/80 backdrop-blur-md">
       <div className="h-[3px] w-full bg-gradient-to-r from-accent-600 via-accent-400 to-accent-600" />
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+      {/* Pleine largeur, sans `max-w-*` : la barre est un bandeau d'application,
+          elle s'ancre aux bords de la fenêtre et non à la colonne de contenu. */}
+      <div className="flex h-16 items-center gap-3 px-4 sm:gap-6 sm:px-6">
         <Link href="/" className="transition-opacity hover:opacity-80" aria-label={`${APP_NAME} — accueil`}>
           <Wordmark />
         </Link>
+
         {surEcranAuth ? null : (
-          <div className="flex items-center gap-2 sm:gap-4">
+          <>
             {email && (
               <nav className="hidden items-center gap-1 text-sm sm:flex">
-                {NAV_LINKS.map(({ href, label }) => {
-                  const active = pathname === href;
+                {NAV_LINKS.map(({ href, label, match }) => {
+                  const active = match(pathname);
                   return (
                     <Link
                       key={href}
@@ -184,17 +196,19 @@ export default function Navbar({ email }: { email?: string }) {
               </nav>
             )}
 
-            {email ? (
-              <UserMenu email={email} />
-            ) : (
-              <Link
-                href="/login"
-                className="rounded-lg bg-accent-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-700"
-              >
-                Se connecter
-              </Link>
-            )}
-          </div>
+            <div className="ml-auto flex items-center">
+              {email ? (
+                <UserMenu email={email} />
+              ) : (
+                <Link
+                  href="/login"
+                  className="rounded-lg bg-accent-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-700"
+                >
+                  Se connecter
+                </Link>
+              )}
+            </div>
+          </>
         )}
       </div>
     </header>

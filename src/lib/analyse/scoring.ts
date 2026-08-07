@@ -161,6 +161,26 @@ export const DECISION_RING_STYLES: Record<DecisionTone, { stroke: string; text: 
 };
 
 /**
+ * Pastille compacte de décision — en-tête de la fiche bien (`ApartmentDetail`).
+ *
+ * Les libellés sont COURTS et donc distincts des titres longs de la carte
+ * verdict (`AnalyseIA` : « Achète — si tu négocies »), qui ne tiennent pas dans
+ * une pastille. Ce n'est pas une divergence : la décision reste calculée par
+ * `computeDecision` seul, seule sa mise en mots change avec la place
+ * disponible. Rangée ici avec `DECISION_RING_STYLES` pour que toute la
+ * présentation d'une décision vive au même endroit.
+ *
+ * Teintes en 700 sur fond 50, comme le veut la charte pour du texte sur fond
+ * teinté (voir « Intensité du rouge » dans AGENTS.md).
+ */
+export const DECISION_CHIP: Record<DecisionTone, { label: string; className: string }> = {
+  achete: { label: "À acheter", className: "border-emerald-100 bg-emerald-50 text-emerald-700" },
+  negocie: { label: "À négocier", className: "border-amber-100 bg-amber-50 text-amber-700" },
+  passe: { label: "À écarter", className: "border-red-100 bg-red-50 text-red-700" },
+  inconnu: { label: "Non analysé", className: "border-ink-100 bg-ink-50 text-ink-500" },
+};
+
+/**
  * Anneau de survol pour un rendement cliquable, dans la teinte de la tonalité
  * affichée (jamais une couleur fixe comme indigo, sans rapport avec la box).
  *

@@ -27,6 +27,12 @@ export default function Loading() {
         </nav>
       </div>
 
+      {/* En-tête d'onglet : titre + sous-titre (cf. `TabHeader`) */}
+      <div className="space-y-2">
+        <div className="h-6 w-32 animate-pulse rounded bg-ink-100" />
+        <div className="h-4 w-72 max-w-full animate-pulse rounded bg-ink-100" />
+      </div>
+
       {/* Verdict */}
       <div className="rounded-2xl border border-ink-100 bg-white p-6 sm:p-9">
         <div className="flex flex-col-reverse gap-8 sm:flex-row sm:items-start sm:justify-between">

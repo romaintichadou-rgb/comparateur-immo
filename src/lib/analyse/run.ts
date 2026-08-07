@@ -2,6 +2,8 @@ import { isImmeuble, type Apartment, type PrecisionLocalisation } from "@/lib/ty
 import { computeDerived } from "@/lib/calculations";
 import { lotsEffectifs } from "@/lib/estimates";
 import { geocodeApartmentLocation } from "@/lib/geocoding";
+import { aAdressePrecise } from "@/lib/adresse";
+import { typologieAnil } from "@/lib/anilReference";
 import { getSettings } from "@/lib/db";
 import { buildBlocRisque } from "./blocs/risque";
 import { buildBlocPrix } from "./blocs/prix";
@@ -62,8 +64,12 @@ export async function runAnalyse(
   // La jointure ADEME par identifiant BAN est exacte : sans adresse exacte
   // saisie, le banId désigne le centroïde du quartier (un autre bâtiment) —
   // on ne tente alors pas le DPE (voir buildBlocRisque).
-  const adresseExacte = apt.adresse.trim() !== "";
+  const adresseExacte = aAdressePrecise(apt);
   const parent = parentPLM(codeInsee);
+  // Ressource ANIL adaptée au bien — doit être la MÊME que celle utilisée par
+  // `/api/estimate-rent`, sinon l'analyse jugerait le loyer contre une autre
+  // référence que celle qui l'a produit.
+  const typologie = typologieAnil(apt.type_bien, apt.nb_pieces, isImmeuble(apt.type_bien), apt.surface_m2);
 
   const [dvf, osm, settings, loyerRefResult, dpeData, georisques, delinq, delinqVille, revenu, profilCommune] =
     await Promise.all([
@@ -71,8 +77,8 @@ export async function runAnalyse(
       hasCoords ? fetchOsmBundle(lat as number, lon as number) : null,
       getSettings(),
       adresseExacte && hasCoords
-        ? fetchLoyerReferenceLocal(lat as number, lon as number, codeInsee)
-        : fetchLoyerReference(codeInsee).then((ref) => (ref ? { ref, nbCommunes: 0 } : null)),
+        ? fetchLoyerReferenceLocal(lat as number, lon as number, codeInsee, typologie)
+        : fetchLoyerReference(codeInsee, typologie).then((ref) => (ref ? { ref, nbCommunes: 0 } : null)),
       banId && adresseExacte
         ? fetchDpe({ banId, surface: apt.surface_m2 })
         : { records: [], meilleurMatch: null },

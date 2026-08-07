@@ -1,6 +1,12 @@
 import { isImmeuble, type Apartment } from "@/lib/types";
 import { computeDerived } from "@/lib/calculations";
-import { isAiEstimated } from "@/lib/estimates";
+import { isAiEstimated, lotsEffectifs } from "@/lib/estimates";
+import {
+  MAJORATION_MEUBLE,
+  referenceCCMeuble,
+  typologieAnil,
+  type ReferenceCC,
+} from "@/lib/anilReference";
 import { formatPercent } from "@/lib/format";
 import type { LoyerReference } from "../sources/loyers";
 import {
@@ -13,12 +19,13 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fai
 
 /**
  * Bloc "Potentiel locatif" — données réelles :
- *  - Carte des loyers (ANIL) : loyer d'annonce médian réel de l'arrondissement
- *    (€/m² HC, majoritairement location nue). Pour comparer à un loyer meublé
- *    CC (LMNP), on applique une majoration meublé (+12 %) puis une provision
- *    de charges, afin de comparer sur des bases équivalentes.
+ *  - Carte des loyers (ANIL) : loyer d'annonce médian réel de l'arrondissement,
+ *    **déjà charges comprises**, pour un logement de référence non meublé. La
+ *    conversion vers un loyer meublé CC comparable (majoration meublé +
+ *    correction de surface, sans aucune provision) est centralisée dans
+ *    `anilReference.ts` — voir l'avertissement sur le double comptage.
  *  - Rendement net : calcul déterministe, affiché avec une fourchette dérivée
- *    de l'intervalle de confiance réel du loyer de marché (pas de fausse précision).
+ *    de l'intervalle de prédiction réel du loyer de marché (pas de fausse précision).
  *  - OpenStreetMap : commodités réelles (transports, éducation, commerces).
  */
 
@@ -27,26 +34,26 @@ const SRC_LOYERS: Source = {
   url: "https://www.data.gouv.fr/fr/datasets/6751be987c09f4be821c6934/",
 };
 
-// Fallback provision de charges locatives récupérables, en €/m²/mois, quand les
-// charges réelles du bien ne sont pas disponibles.
-export const PROVISION_CHARGES_M2_DEFAUT = 2.0;
-
-export function provisionChargesM2(apt: Apartment): number {
-  if (apt.charges_copro_annuelles != null && apt.charges_copro_annuelles > 0 && apt.surface_m2 != null && apt.surface_m2 > 0) {
-    return apt.charges_copro_annuelles / 12 / apt.surface_m2;
-  }
-  return PROVISION_CHARGES_M2_DEFAUT;
+/**
+ * Référence ANIL du bien en €/m² CC meublé, corrigée de la surface.
+ *
+ * ⚠️ Il n'y a **plus aucune provision de charges** ajoutée ici : `loypredm2`
+ * est déjà charges comprises (note méthodologique ANIL). L'ancien
+ * `provisionChargesM2` gonflait la référence de +5 à +12 %, ce qui rendait la
+ * détection « loyer optimiste » systématiquement trop indulgente.
+ */
+function referenceDuBien(apt: Apartment, ref: LoyerReference | null): ReferenceCC | null {
+  if (!ref) return null;
+  const immeuble = isImmeuble(apt.type_bien);
+  const typologie = typologieAnil(apt.type_bien, apt.nb_pieces, immeuble, apt.surface_m2);
+  const surfaceLogement =
+    immeuble && apt.surface_m2 != null && apt.surface_m2 > 0
+      ? apt.surface_m2 / lotsEffectifs(apt.nb_lots, apt.surface_m2)
+      : apt.surface_m2;
+  return referenceCCMeuble(ref, surfaceLogement, typologie);
 }
 
-/** @deprecated Use PROVISION_CHARGES_M2_DEFAUT */
-export const PROVISION_CHARGES_M2 = PROVISION_CHARGES_M2_DEFAUT;
-
-// Les données ANIL sont dominées par la location nue (~75 % du parc locatif
-// français). En LMNP, le bien est loué meublé : un logement meublé se loue
-// typiquement 10-15 % plus cher qu'un logement nu équivalent. On applique
-// cette majoration au loyer ANIL avant comparaison, pour ne pas déclencher
-// de faux positif "loyer optimiste" à chaque estimation meublée.
-export const MAJORATION_MEUBLE = 0.12;
+export { MAJORATION_MEUBLE };
 
 export function buildBlocLocation(
   apt: Apartment,
@@ -77,8 +84,8 @@ export function buildBlocLocation(
   // la location nue) est converti en CC meublé : majoration meublé sur le
   // loyer HC, puis ajout de la provision de charges.
   const loyerBienM2CC = apt.loyer_retenu != null && surface != null ? apt.loyer_retenu / surface : null;
-  const provM2 = provisionChargesM2(apt);
-  const marcheM2CC = loyerRef ? loyerRef.loyerM2 * (1 + MAJORATION_MEUBLE) + provM2 : null;
+  const refCC = referenceDuBien(apt, loyerRef);
+  const marcheM2CC = refCC ? refCC.medianM2 : null;
 
   const donneesManquantes: string[] = [];
   let loyerOptimiste = false;
@@ -96,12 +103,10 @@ export function buildBlocLocation(
     // médiane (pas seulement au-dessus du max) — un loyer IA modérément
     // optimiste ne doit pas passer inaperçu simplement parce qu'il reste
     // dans la fourchette.
-    if (loyerRef && loyerBienM2CC != null) {
+    if (refCC && loyerBienM2CC != null) {
       // Pour un immeuble, on relève les seuils : dépasser le max (ou la médiane)
       // d'un logement unique est attendu, pas un signal d'excès en soi.
-      const seuilMax = immeuble
-        ? (loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2) * 1.25
-        : loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2;
+      const seuilMax = immeuble ? refCC.maxM2 * 1.25 : refCC.maxM2;
       const seuilEcart = immeuble ? 0.3 : 0.1;
       const auDessusMax = loyerBienM2CC > seuilMax;
       const optimisteEtNonVerifie = loyerNonVerifie && ecart != null && ecart > seuilEcart;
@@ -135,11 +140,11 @@ export function buildBlocLocation(
   }
 
   // --- 2) Loyer de marché médian (CC), en valeur mensuelle réelle pour cette surface ---
-  if (loyerRef && surface != null && marcheM2CC != null) {
+  if (loyerRef && refCC && surface != null && marcheM2CC != null) {
     sources.push(SRC_LOYERS);
     const median = Math.round(marcheM2CC * surface);
-    const min = Math.round((loyerRef.min * (1 + MAJORATION_MEUBLE) + provM2) * surface);
-    const max = Math.round((loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2) * surface);
+    const min = Math.round(refCC.minM2 * surface);
+    const max = Math.round(refCC.maxM2 * surface);
     const perimetreLabel = perimetre === "rayon500" ? "rayon 500 m" : "arrondissement";
     faits.push({
       label: immeuble ? "Loyer de marché à surface équivalente" : "Loyer de marché médian",
@@ -154,7 +159,7 @@ export function buildBlocLocation(
       label: "Fourchette de loyer",
       value: `${min.toLocaleString("fr-FR")} – ${max.toLocaleString("fr-FR")}`,
       unit: "€/mois CC",
-      detail: `${(loyerRef.min * (1 + MAJORATION_MEUBLE) + provM2).toFixed(1)} – ${(loyerRef.max * (1 + MAJORATION_MEUBLE) + provM2).toFixed(1)} €/m² CC meublé · ${surface} m²`,
+      detail: `${refCC.minM2.toFixed(1)} – ${refCC.maxM2.toFixed(1)} €/m² CC meublé · ${surface} m²`,
       perimetre: perimetreLabel,
       source: SRC_LOYERS.label,
       gravite: "info",

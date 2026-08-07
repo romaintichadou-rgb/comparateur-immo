@@ -1,89 +1,134 @@
 /**
  * Source de faits réels : "Carte des loyers" (ANIL / ministère du Logement),
- * open data data.gouv.fr. Loyer d'annonce médian prédit au m² (hors charges)
- * par commune, avec intervalle de confiance et nombre d'observations. Marseille
- * est découpé par arrondissement avec le même code INSEE que celui renvoyé par
- * BAN (ex. 13207) → jointure directe.
+ * open data data.gouv.fr. Marseille est découpé par arrondissement avec le même
+ * code INSEE que celui renvoyé par BAN (ex. 13207) → jointure directe.
+ *
+ * ⚠️ **`loypredm2` est CHARGES COMPRISES**, pour un logement de référence NON
+ * MEUBLÉ. La note méthodologique officielle l'écrit noir sur blanc (« Les
+ * indicateurs de loyers proviennent de prédictions de loyers […] et sont
+ * charges comprises ») et précise que la base « ne permet pas de distinguer le
+ * loyer et les provisions pour charges locatives ». Le commentaire de ce
+ * fichier a longtemps annoncé « hors charges », ce qui a fait ajouter une
+ * provision par-dessus dans tout le calcul de loyer — un double comptage de
+ * +5 % à +12 %. Ne pas réintroduire de provision : voir `anilReference.ts`.
+ *
+ * ⚠️ `min`/`max` ne sont PAS un intervalle de confiance sur la moyenne mais un
+ * intervalle de PRÉDICTION à 95 % sur les logements individuels : sa largeur
+ * (~45 points, soit −20 %/+25 %) est constante quel que soit le nombre
+ * d'observations (vérifié sur les 34 960 communes). Il décrit donc bien la
+ * dispersion réelle du parc, et non l'incertitude statistique.
  *
  * L'édition est résolue AUTOMATIQUEMENT sur l'année N-1 (repli N-2 si pas encore
- * publiée) : on interroge l'API data.gouv pour retrouver la ressource
- * "appartement" de l'année voulue, sans id figé dans le code. Le fichier (~5 Mo,
- * France entière) est ensuite parcouru pour extraire la seule ligne de la
- * commune ; le résultat est mis en cache dans analyse_ia (téléchargement une
- * seule fois par analyse).
+ * publiée) : on interroge l'API data.gouv pour retrouver la ressource voulue,
+ * sans id figé dans le code. Chaque fichier (~5 Mo, France entière) est ensuite
+ * parcouru pour extraire la seule ligne de la commune.
  */
+
+import type { TypologieAnil } from "@/lib/anilReference";
 
 const DATAGOUV_API = "https://www.data.gouv.fr/api/1/datasets/";
 
 export interface LoyerReference {
-  /** Loyer d'annonce médian prédit, €/m² hors charges. */
+  /** Loyer d'annonce médian prédit, €/m² **charges comprises**, non meublé. */
   loyerM2: number;
-  /** Bornes de l'intervalle de confiance (€/m² HC). */
+  /** Bornes de l'intervalle de prédiction à 95 % (€/m² CC, non meublé). */
   min: number;
   max: number;
   /** Nombre d'observations ayant servi à la prédiction (fiabilité). */
   nbObs: number;
   annee: number;
+  /**
+   * Niveau de maille sur lequel la prédiction a réellement été faite —
+   * colonne `TYPPRED` du CSV, capturée ici (3.4) après avoir été jetée : sur
+   * 85,4 % des communes, la prédiction ne vient PAS de la commune elle-même
+   * mais d'un groupe de communes jugées similaires (`maille`, < 100 annonces
+   * communales). `commune` = prédite au niveau communal (≥ 100 annonces,
+   * ou par arrondissement pour Paris/Lyon/Marseille) ; `epci` = au niveau de
+   * l'intercommunalité. La note ANIL recommande explicitement la prudence en
+   * dessous de 30 observations, quel que soit le niveau.
+   */
+  niveauPrediction: "commune" | "epci" | "maille";
 }
+
+/**
+ * Motif de titre de chaque ressource publiée.
+ *
+ * ⚠️ Ancré sur la FIN du titre, jamais sur son début : l'ANIL alterne
+ * « Indicateurs de loyer … » et « Indicateur de loyer … » (singulier) d'une
+ * ressource à l'autre. Et « appartement » doit rester ancré en fin de chaîne,
+ * sans quoi il capterait aussi « appartement de 1 ou 2 pièces ».
+ */
+const MOTIF_RESSOURCE: Record<TypologieAnil, RegExp> = {
+  appartement: /appartement\s*$/i,
+  appartement_t1_t2: /1\s*ou\s*2\s*pi[eè]ces\s*$/i,
+  appartement_t3_plus: /3\s*pi[eè]ces\s*ou\s*plus\s*$/i,
+  maison: /maison\s*$/i,
+};
 
 interface ResolvedResource {
   rid: string;
   annee: number;
 }
 
-// Cache de résolution (par process) pour éviter de réinterroger data.gouv.
-let cachedResource: ResolvedResource | null = null;
+// Cache de résolution PAR TYPOLOGIE (par process) : quatre ressources
+// distinctes, chacune résolue et téléchargée au plus une fois.
+const cachedResources = new Map<TypologieAnil, ResolvedResource>();
 
 /**
- * Résout la ressource CSV "Indicateurs de loyer appartement" (toutes surfaces)
- * pour l'édition N-1, sinon N-2. Retourne null si aucune édition trouvée.
+ * Résout la ressource CSV d'une typologie pour l'édition N-1, sinon N-2.
+ * Retourne null si aucune édition trouvée.
  */
-async function resolveResource(): Promise<ResolvedResource | null> {
-  if (cachedResource) return cachedResource;
+async function resolveResource(typologie: TypologieAnil): Promise<ResolvedResource | null> {
+  const cached = cachedResources.get(typologie);
+  if (cached) return cached;
 
   const currentYear = new Date().getFullYear();
   for (const annee of [currentYear - 1, currentYear - 2]) {
-    const rid = await findAppartementResource(annee);
+    const rid = await findResource(annee, typologie);
     if (rid) {
-      cachedResource = { rid, annee };
-      return cachedResource;
+      const resolved = { rid, annee };
+      cachedResources.set(typologie, resolved);
+      return resolved;
     }
   }
   return null;
 }
 
-async function findAppartementResource(annee: number): Promise<string | null> {
+async function findResource(annee: number, typologie: TypologieAnil): Promise<string | null> {
   const raw = await fetchJson(`${DATAGOUV_API}?q=${encodeURIComponent(`carte des loyers ${annee}`)}&page_size=5`);
   const datasets = (raw?.data ?? []) as Array<{ title?: string; resources?: Array<{ id?: string; title?: string }> }>;
+  const motif = MOTIF_RESSOURCE[typologie];
   for (const ds of datasets) {
     if (!ds.title?.includes(String(annee))) continue;
-    // Ressource "toutes surfaces" : le titre finit par "appartement" (les
-    // déclinaisons se terminent par "1 ou 2 pièces" / "3 pièces ou plus").
-    const res = (ds.resources ?? []).find((r) => /appartement\s*$/i.test(r.title ?? ""));
+    const res = (ds.resources ?? []).find((r) => motif.test(r.title ?? ""));
     if (res?.id) return res.id;
   }
   return null;
 }
 
-// Le CSV fait ~5 Mo pour la France entière : on ne le télécharge et parse
-// qu'UNE fois par process, indexé par code INSEE — les analyses suivantes
-// (autre bien, relance) lisent la table en mémoire. La promesse est mise en
-// cache (et pas seulement le résultat) pour dédupliquer des analyses
-// concurrentes ; elle est invalidée en cas d'échec pour permettre un retry.
-let cachedTable: Promise<{ annee: number; parCommune: Map<string, LoyerReference> } | null> | null = null;
+type Table = { annee: number; parCommune: Map<string, LoyerReference> };
 
-function loadTable(): Promise<{ annee: number; parCommune: Map<string, LoyerReference> } | null> {
-  if (!cachedTable) {
-    cachedTable = doLoadTable().then((table) => {
-      if (!table) cachedTable = null; // échec → pas de cache, retry possible
-      return table;
-    });
-  }
-  return cachedTable;
+// Chaque CSV fait ~5 Mo pour la France entière : on ne le télécharge et parse
+// qu'UNE fois par process ET PAR TYPOLOGIE, indexé par code INSEE — les
+// analyses suivantes (autre bien, relance) lisent la table en mémoire. La
+// promesse est mise en cache (et pas seulement le résultat) pour dédupliquer
+// des analyses concurrentes ; elle est invalidée en cas d'échec pour permettre
+// un retry.
+const cachedTables = new Map<TypologieAnil, Promise<Table | null>>();
+
+function loadTable(typologie: TypologieAnil): Promise<Table | null> {
+  const existing = cachedTables.get(typologie);
+  if (existing) return existing;
+  const p = doLoadTable(typologie).then((table) => {
+    if (!table) cachedTables.delete(typologie); // échec → pas de cache, retry possible
+    return table;
+  });
+  cachedTables.set(typologie, p);
+  return p;
 }
 
-async function doLoadTable(): Promise<{ annee: number; parCommune: Map<string, LoyerReference> } | null> {
-  const resource = await resolveResource();
+async function doLoadTable(typologie: TypologieAnil): Promise<Table | null> {
+  const resource = await resolveResource(typologie);
   if (!resource) return null;
 
   const controller = new AbortController();
@@ -109,20 +154,25 @@ async function doLoadTable(): Promise<{ annee: number; parCommune: Map<string, L
     if (!insee) continue;
     const loyerM2 = num(cols[6]);
     if (loyerM2 == null) continue;
+    const typpred = cols[9];
     parCommune.set(insee, {
       loyerM2: round1(loyerM2),
       min: round1(num(cols[7]) ?? loyerM2),
       max: round1(num(cols[8]) ?? loyerM2),
       nbObs: Math.round(num(cols[10]) ?? 0),
       annee: resource.annee,
+      niveauPrediction: typpred === "commune" || typpred === "epci" ? typpred : "maille",
     });
   }
   return { annee: resource.annee, parCommune };
 }
 
-export async function fetchLoyerReference(codeInsee: string): Promise<LoyerReference | null> {
+export async function fetchLoyerReference(
+  codeInsee: string,
+  typologie: TypologieAnil
+): Promise<LoyerReference | null> {
   if (!codeInsee) return null;
-  const table = await loadTable();
+  const table = await loadTable(typologie);
   return table?.parCommune.get(codeInsee) ?? null;
 }
 
@@ -140,7 +190,8 @@ const RAYON_LOCAL = 500;
 export async function fetchLoyerReferenceLocal(
   lat: number,
   lon: number,
-  fallbackCodeInsee: string
+  fallbackCodeInsee: string,
+  typologie: TypologieAnil
 ): Promise<{ ref: LoyerReference; nbCommunes: number } | null> {
   const dLat = RAYON_LOCAL / 111000;
   const dLon = RAYON_LOCAL / (111000 * Math.cos((lat * Math.PI) / 180));
@@ -157,7 +208,7 @@ export async function fetchLoyerReferenceLocal(
   const uniqueCodes = [...new Set(codes.filter((c): c is string => c != null))];
   if (uniqueCodes.length === 0 && fallbackCodeInsee) uniqueCodes.push(fallbackCodeInsee);
 
-  const table = await loadTable();
+  const table = await loadTable(typologie);
   if (!table) return null;
 
   const refs = uniqueCodes
@@ -168,6 +219,14 @@ export async function fetchLoyerReferenceLocal(
   if (refs.length === 1) return { ref: refs[0], nbCommunes: 1 };
 
   const totalObs = refs.reduce((s, r) => s + r.nbObs, 0);
+  // Fiabilité de l'agrégat = la PIRE des communes combinées (conservateur) :
+  // mélanger une commune fiable avec une "maille" ne rend pas le résultat
+  // plus fiable que son maillon le plus faible.
+  const RANG_FIABILITE = { commune: 2, epci: 1, maille: 0 } as const;
+  const niveauPrediction = refs.reduce<LoyerReference["niveauPrediction"]>(
+    (pire, r) => (RANG_FIABILITE[r.niveauPrediction] < RANG_FIABILITE[pire] ? r.niveauPrediction : pire),
+    refs[0].niveauPrediction
+  );
   return {
     ref: {
       loyerM2: round1(refs.reduce((s, r) => s + r.loyerM2 * r.nbObs, 0) / totalObs),
@@ -175,6 +234,7 @@ export async function fetchLoyerReferenceLocal(
       max: round1(Math.max(...refs.map((r) => r.max))),
       nbObs: totalObs,
       annee: refs[0].annee,
+      niveauPrediction,
     },
     nbCommunes: refs.length,
   };

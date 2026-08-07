@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchLoyerReference } from "@/lib/analyse/sources/loyers";
+import type { TypologieAnil } from "@/lib/anilReference";
 import { getApiSession } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
@@ -16,6 +17,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "code_insee manquant" }, { status: 400 });
   }
 
-  const ref = await fetchLoyerReference(codeInsee);
-  return NextResponse.json({ ref });
+  // La typologie décide de la ressource ANIL lue (maison / T1-T2 / T3+ /
+  // générique). Validée contre la liste : un paramètre libre choisirait un
+  // fichier arbitraire côté source.
+  const brut = req.nextUrl.searchParams.get("typologie");
+  const typologie: TypologieAnil =
+    brut === "maison" || brut === "appartement_t1_t2" || brut === "appartement_t3_plus"
+      ? brut
+      : "appartement";
+
+  const ref = await fetchLoyerReference(codeInsee, typologie);
+  return NextResponse.json({ ref, typologie });
 }

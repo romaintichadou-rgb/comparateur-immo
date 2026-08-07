@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
  * |---------|----------------------------------------|-----------------------|
  * | Hero    | Écran plein : vide, erreur, upgrade    | `text-3xl sm:text-4xl`|
  * | H1      | Titre de page                          | `text-2xl sm:text-3xl`|
+ * | Onglet  | Titre d'un onglet de la fiche bien     | `text-xl`  (`TabHeader`) |
  * | H2      | Titre d'une carte de section           | `text-lg`  ← ici      |
  * | H3      | Groupe à l'intérieur d'une carte       | `text-base`           |
  *
@@ -82,6 +83,56 @@ export function SectionTitle({
   className?: string;
 }) {
   return <Tag className={`${TITRE_SECTION} ${className}`}>{children}</Tag>;
+}
+
+/**
+ * En-tête d'un ONGLET de la fiche bien : titre + sous-titre, action à droite.
+ *
+ * Les cinq onglets s'ouvraient directement sur leur contenu — une grille de
+ * cartes ou un verdict — sans jamais nommer ce qu'on regardait ni dire à quoi
+ * ça sert. Le seul repère était l'onglet actif dans la barre, un `text-sm` de
+ * 14 px qui défile hors champ sur mobile.
+ *
+ * ── Pourquoi un niveau à part, entre le H1 et les cartes ──────────────────
+ * Il lui faut être plus gros qu'un titre de carte (`text-lg`), sinon il ne
+ * domine pas les cartes qu'il coiffe, et plus petit que le titre de la fiche
+ * (`text-xl sm:text-2xl`), qui reste le nom du bien. `text-xl` fixe est le seul
+ * cran disponible entre les deux — d'où un palier de plus dans l'échelle,
+ * assumé, plutôt qu'un `text-lg` qui aurait fait doublon avec `SectionHeader`
+ * dès la première carte du panneau.
+ *
+ * ── `h2`, et les cartes en dessous restent des `h2` ───────────────────────
+ * Aucun niveau n'est sauté (le `h1` est celui de la fiche), donc la hiérarchie
+ * reste valide au sens WCAG : les cartes deviennent des SŒURS du titre
+ * d'onglet au lieu de ses filles. Le resserrement exact demanderait `as="h3"`
+ * sur chaque `SectionHeader` des cinq onglets — à faire d'un bloc si on le
+ * fait, jamais onglet par onglet, sous peine de laisser deux conventions.
+ */
+export function TabHeader({
+  title,
+  subtitle,
+  children,
+  className = "",
+}: {
+  title: string;
+  /** Une phrase : ce que l'onglet montre, ou son état actuel. */
+  subtitle: string;
+  /** Action de l'onglet, alignée à droite (« Modifier », « Enregistrer »…). */
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    // `flex-wrap` + `gap-y` obligatoires : sans eux l'action passe PAR-DESSUS
+    // le sous-titre dès que la colonne se resserre (cf. AGENTS.md, « les quatre
+    // pièges du mobile », cas n°1 — constaté sur la carte verdict).
+    <div className={`mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
+      <div className="min-w-0">
+        <h2 className="font-display text-xl font-semibold text-ink-900">{title}</h2>
+        <p className="mt-1 text-sm text-ink-500">{subtitle}</p>
+      </div>
+      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
+    </div>
+  );
 }
 
 /**

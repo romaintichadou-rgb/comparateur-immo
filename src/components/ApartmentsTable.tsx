@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
+import { formatLocalisationCourte } from "@/lib/adresse";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import {
   DECISION_RING_STYLES,
@@ -146,7 +147,7 @@ export default function ApartmentsTable({
                         {formatApartmentTitle(apt)}
                       </p>
                       <p className="truncate text-xs text-ink-500">
-                        {[apt.quartier, apt.ville].filter(Boolean).join(", ") || apt.adresse || apt.plateforme}
+                        {formatLocalisationCourte(apt) || apt.plateforme}
                       </p>
                     </div>
                   </div>

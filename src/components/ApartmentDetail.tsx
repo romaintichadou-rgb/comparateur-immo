@@ -24,6 +24,7 @@ import {
   isAiEstimated,
   TF_JUSTIF_COMMUNE_PREFIX,
 } from "@/lib/estimates";
+import { formatAdressePostale, lienGoogleMaps } from "@/lib/adresse";
 import { formatApartmentTitle, formatDate, formatEuros, formatPercent, sanitizeJustification } from "@/lib/format";
 import { redirectionQuota } from "@/lib/quota";
 import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
@@ -37,13 +38,14 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/form/Fields";
-import AnalyseIA from "@/components/AnalyseIA";
+import AnalyseIA, { formatNote } from "@/components/AnalyseIA";
 import OptimiserView from "@/components/OptimiserView";
 import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
 import FinancementSection from "@/components/FinancementSection";
-import { cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
+import { DECISION_CHIP, cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
+import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
 import { renderBoldInline } from "@/components/richText";
-import { SectionHeader, SectionTitle } from "@/components/SectionHeader";
+import { SectionHeader, TabHeader } from "@/components/SectionHeader";
 import { memeProfil, type AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
@@ -759,9 +761,51 @@ export default function ApartmentDetail({
   const finDirty = Object.keys(finPatch).length > 0;
   const rendementPending = rentPending || chargesPending;
   const recalcInFlight = rentPending || chargesPending || analysisPending || estimatingFields.size > 0;
-  const localisation = apt.adresse || [apt.quartier, apt.ville].filter(Boolean).join(", ");
+  // Adresse la plus complète dont on dispose — « 12 rue des Lilas, 75020 Paris ».
+  // L'ancien `apt.adresse || "quartier, ville"` faisait disparaître la ville dès
+  // qu'une rue était renseignée : le `||` emportait le repli en entier.
+  const localisation = formatAdressePostale(apt);
   const hasCoords = Number.isFinite(apt.latitude) && Number.isFinite(apt.longitude);
+  const urlMaps = lienGoogleMaps(apt, apt.latitude, apt.longitude);
   const localisationApproximative = apt.precision_localisation === "arrondissement";
+
+  // Pastille de décision de l'en-tête. Dérivée par `computeDecision`, la source
+  // UNIQUE du verdict — jamais recalculée à la main ici (cf. AGENTS.md). Tous
+  // les accès sont gardés : une analyse stockée dans un schéma antérieur peut
+  // n'avoir ni `blocs` ni `verdicts`, que le type promet pourtant obligatoires.
+  const scoreGlobal = apt.analyse_ia?.score_global ?? null;
+  const decisionEntete =
+    scoreGlobal == null
+      ? null
+      : computeDecision(
+          scoreGlobal,
+          apt.analyse_ia?.verdicts ?? [],
+          ecartPrixMarche(apt.analyse_ia?.blocs?.prix)
+        );
+
+  // Sous-titres des onglets. Les trois onglets de données décrivent ce qu'ils
+  // montrent (texte fixe) ; Analyse et Optimiser décrivent leur ÉTAT, seule
+  // information que l'utilisateur ne peut pas déduire de l'onglet lui-même.
+  // Tous les accès à `analyse_ia` sont gardés : une analyse stockée dans un
+  // schéma antérieur n'a pas forcément les champs que le type promet.
+  const sousTitreAnalyse = apt.analyse_ia?.genere_le
+    ? `Verdict d'achat, sous-scores et faits chiffrés · analysée le ${formatDate(apt.analyse_ia.genere_le)}`
+    : "Pas encore analysée — le verdict et les sous-scores apparaîtront ici.";
+
+  // ⚠️ Ne JAMAIS promettre un « Achète » que le moteur n'a pas trouvé : les
+  // recommandations portent `flipVersAchat`, on lit ce drapeau au lieu de
+  // supposer. Un bien déjà « Achète » n'a rien à faire basculer — ses leviers
+  // servent à gagner en rentabilité, pas à changer la décision.
+  const recosOptimiser = apt.analyse_ia?.recommandations ?? null;
+  const flipsOptimiser = recosOptimiser?.filter((r) => r.flipVersAchat).length ?? 0;
+  const sousTitreOptimiser =
+    recosOptimiser == null || recosOptimiser.length === 0
+      ? "Les leviers chiffrés qui amélioreraient la rentabilité de ce bien."
+      : decisionEntete === "achete"
+        ? "Ce bien est déjà un achat — voici comment en améliorer la rentabilité."
+        : flipsOptimiser > 0
+          ? `${flipsOptimiser} levier${flipsOptimiser > 1 ? "s" : ""} ${flipsOptimiser > 1 ? "font" : "fait"} basculer ce bien en « Achète ».`
+          : "Aucun levier ne fait basculer la décision — voici ce qui améliore quand même la rentabilité.";
 
   // Une analyse stockée est périmée pour DEUX raisons distinctes, et le message
   // doit dire laquelle : le code a changé (nouveaux blocs, nouveau scoring), ou
@@ -816,32 +860,64 @@ export default function ApartmentDetail({
         Retour à la liste
       </Link>
 
-      {/* En-tête compact : vignette photo · titre · mini carte */}
-      <div className="flex items-center gap-4">
-        {/* Photo vignette → ouvre l'annonce */}
+      {/* En-tête : photo 16:9 · titre / prix / méta · mini carte.
+          La photo est en 16:9 (et non plus carrée) parce que c'est le cadrage
+          des visuels d'annonce : un carré recadrait la façade au centre et
+          perdait les côtés. */}
+      <div className="flex items-center gap-4 sm:gap-5">
+        {/* Photo → ouvre l'annonce. Le lien porte un `aria-label` : il n'enveloppe
+            qu'une image décorative (`alt=""`), donc sans lui son nom accessible
+            serait vide et un lecteur d'écran annoncerait « lien » sans destination. */}
         {apt.photo_url ? (
           <a
             href={apt.url || "#"}
             target="_blank"
             rel="noreferrer"
-            className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400 sm:h-28 sm:w-28"
+            aria-label={apt.url ? `Voir l'annonce sur ${apt.plateforme}` : "Photo du bien"}
+            className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400 sm:w-52"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
           </a>
         ) : (
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-ink-50 ring-1 ring-ink-200 sm:h-28 sm:w-28">
+          <div className="flex aspect-video w-32 shrink-0 items-center justify-center rounded-xl bg-ink-50 ring-1 ring-ink-200 sm:w-52">
             <Home className="h-5 w-5 text-ink-300" />
           </div>
         )}
 
-        {/* Titre + adresse + quartier + meta */}
+        {/* Titre · adresse · prix + décision · meta */}
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-xl font-semibold text-ink-900 sm:text-2xl">
             {formatApartmentTitle(apt)}
           </h1>
           {localisation && <p className="truncate text-sm text-ink-500">{localisation}</p>}
-          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-400">
+
+          {/* Le prix manquait entièrement en tête de fiche — il ne vivait que
+              dans l'onglet « Détails de l'opération ». C'est le premier fait du
+              bien : il est ici, avec la décision qui le qualifie. */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {apt.prix != null && (
+              <span className="font-mono text-xl font-semibold tracking-tight text-ink-900">
+                {formatEuros(apt.prix)}
+              </span>
+            )}
+            {scoreGlobal != null && decisionEntete && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${DECISION_CHIP[decisionEntete].className}`}
+              >
+                {DECISION_CHIP[decisionEntete].label}
+                <b className="font-mono font-semibold">{formatNote(scoreGlobal)}</b>
+              </span>
+            )}
+          </div>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-400">
+            {apt.prix_m2 != null && (
+              <>
+                <span className="font-mono">{formatEuros(apt.prix_m2)}/m²</span>
+                <span>·</span>
+              </>
+            )}
             {/* Sans adresse précise, la sous-ligne `localisation` affiche déjà
                 « quartier, ville » — on n'affiche donc le quartier ici que
                 lorsqu'une adresse précise existe (la sous-ligne montre alors la
@@ -868,13 +944,11 @@ export default function ApartmentDetail({
                 </a>
               </>
             )}
-            {hasCoords && (
+            {urlMaps && (
               <>
                 <span className="sm:hidden">·</span>
                 <a
-                  href={apt.adresse
-                    ? `https://www.google.com/maps/search/${encodeURIComponent(apt.adresse + (apt.ville ? ", " + apt.ville : ""))}`
-                    : `https://www.google.com/maps/@${apt.latitude},${apt.longitude},17z`}
+                  href={urlMaps}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-0.5 text-accent-600 hover:text-accent-800 sm:hidden"
@@ -887,20 +961,19 @@ export default function ApartmentDetail({
             <button
               type="button"
               onClick={(e) => requestDelete(e, apt)}
-              className="text-ink-300 transition-colors hover:text-red-500"
+              className="-m-1.5 rounded p-1.5 text-ink-300 transition-colors hover:text-red-500"
+              aria-label="Supprimer ce bien"
               title="Supprimer ce bien"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
 
         {/* Mini carte → ouvre Google Maps à l'adresse exacte */}
-        {hasCoords ? (
+        {hasCoords && urlMaps ? (
           <a
-            href={apt.adresse
-              ? `https://www.google.com/maps/search/${encodeURIComponent(apt.adresse + (apt.ville ? ", " + apt.ville : ""))}`
-              : `https://www.google.com/maps/@${apt.latitude},${apt.longitude},17z`}
+            href={urlMaps}
             target="_blank"
             rel="noreferrer"
             className="relative isolate hidden h-28 w-72 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400 sm:block"
@@ -947,29 +1020,40 @@ export default function ApartmentDetail({
       </div>
 
       {activeTab === "ia" && (
-        analysisPending ? (
-          <AnalyseIASkeleton />
-        ) : (
-          <AnalyseIA apartment={apt} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
-        )
+        <>
+          <TabHeader title="Analyse" subtitle={sousTitreAnalyse} />
+          {analysisPending ? (
+            <AnalyseIASkeleton />
+          ) : (
+            <AnalyseIA apartment={apt} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
+          )}
+        </>
       )}
 
       {activeTab === "optimiser" && (
-        analysisPending ? (
-          <OptimiserSkeleton />
-        ) : (
-          <OptimiserView
-            apartment={apt}
-            settings={settings}
-            seuilsRendement={seuilsRendement}
-            cashflowSeuils={cashflowSeuils}
-            onRelancer={handleRelancerAnalyse}
-          />
-        )
+        <>
+          <TabHeader title="Optimiser" subtitle={sousTitreOptimiser} />
+          {analysisPending ? (
+            <OptimiserSkeleton />
+          ) : (
+            <OptimiserView
+              apartment={apt}
+              settings={settings}
+              seuilsRendement={seuilsRendement}
+              cashflowSeuils={cashflowSeuils}
+              onRelancer={handleRelancerAnalyse}
+            />
+          )}
+        </>
       )}
 
       {activeTab === "financiere" && (
-        <div className="space-y-6">
+        <>
+          <TabHeader
+            title="Détails de l'opération"
+            subtitle="Ce que coûte l'achat, ce que rapporte la location."
+          />
+          <div className="space-y-6">
           {/* Résultat principal : la rentabilité au premier coup d'œil */}
           {finDirty && (
             <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
@@ -1230,55 +1314,86 @@ export default function ApartmentDetail({
               </div>
             </div>
           </section>
-        </div>
+          </div>
+        </>
       )}
 
       {activeTab === "simulation" && (
-        <SimulationFinanciere
-          apartment={live}
-          settings={settings}
-          onSaved={setApt}
-        />
+        <>
+          <TabHeader
+            title="Simulation financière"
+            subtitle="Crédit, fiscalité LMNP au réel et cash-flow année par année."
+          />
+          <SimulationFinanciere
+            apartment={live}
+            settings={settings}
+            onSaved={setApt}
+          />
+        </>
       )}
 
       {activeTab === "donnees" && (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Colonne principale */}
-        <div className="min-w-0 space-y-6">
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <SectionTitle>Description du bien</SectionTitle>
-              {editingDesc ? (
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    onClick={handleCancelDesc}
-                    className="rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={handleSaveDesc}
-                    className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
-                  >
-                    Enregistrer
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setEditingDesc(true)}
-                  className="shrink-0 rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50"
-                >
-                  Modifier
-                </button>
-              )}
-            </div>
+      <>
+      {/* Le titre « Description du bien » vivait DANS la colonne principale,
+          donc décalé sous la grille et absent au-dessus de la colonne latérale.
+          Il est remonté en en-tête d'onglet, avec ses actions. */}
+      <TabHeader
+        title="Description du bien"
+        subtitle="Les données extraites de l'annonce, corrigeables à la main."
+      >
+        {editingDesc ? (
+          <>
+            <button
+              onClick={handleCancelDesc}
+              className="rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleSaveDesc}
+              className="rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
+            >
+              Enregistrer
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setEditingDesc(true)}
+            className="rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50"
+          >
+            Modifier
+          </button>
+        )}
+      </TabHeader>
 
-            {editingDesc ? (
-              <>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        {/* Colonne principale — quatre groupes de champs, un par carte, plus le
+            texte de l'annonce en pleine largeur. Chaque carte porte SES DEUX
+            modes côte à côte (lecture / édition) : c'est ce qui empêche un
+            champ d'exister d'un côté seulement, comme l'a fait `code_postal`. */}
+        <div className="min-w-0 space-y-3">
+          <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+            <FieldCard title="Localisation">
+              {editingDesc ? (
+                <EditStack>
                   <TextField label="Ville" value={value(descPatch, "ville")} onChange={(v) => setDescPatch((p) => ({ ...p, ville: v }))} />
                   <TextField label="Quartier" value={value(descPatch, "quartier")} onChange={(v) => setDescPatch((p) => ({ ...p, quartier: v }))} />
+                  <TextField label="Code postal" value={value(descPatch, "code_postal")} onChange={(v) => setDescPatch((p) => ({ ...p, code_postal: v }))} />
                   <TextField label="Adresse" value={value(descPatch, "adresse")} onChange={(v) => setDescPatch((p) => ({ ...p, adresse: v }))} />
+                </EditStack>
+              ) : (
+                <ReadStack>
+                  <FieldRow label="Ville" value={apt.ville} />
+                  <FieldRow label="Quartier" value={apt.quartier} />
+                  <FieldRow label="Code postal" value={apt.code_postal} mono />
+                  <FieldRow label="Adresse" value={apt.adresse} />
+                </ReadStack>
+              )}
+            </FieldCard>
+
+            <FieldCard title="Caractéristiques">
+              {editingDesc ? (
+                <EditStack>
                   <SelectField label="Type de bien" value={value(descPatch, "type_bien") as (typeof TYPES_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, type_bien: v }))} options={TYPES_BIEN} />
                   {immeuble && (
                     <NumberField label="Nombre de lots" value={value(descPatch, "nb_lots")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_lots: v }))} hint={<span className="text-xs font-normal text-ink-400">logements de l&apos;immeuble</span>} />
@@ -1286,45 +1401,99 @@ export default function ApartmentDetail({
                   <NumberField label={immeuble ? "Surface totale" : "Surface"} value={value(descPatch, "surface_m2")} onChange={(v) => setDescPatch((p) => ({ ...p, surface_m2: v }))} suffix="m²" />
                   <NumberField label="Nb pièces" value={value(descPatch, "nb_pieces")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_pieces: v }))} />
                   <NumberField label="Nb chambres" value={value(descPatch, "nb_chambres")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_chambres: v }))} />
+                </EditStack>
+              ) : (
+                <ReadStack>
+                  <FieldRow label="Type de bien" value={apt.type_bien} />
+                  {immeuble && (
+                    <FieldRow label="Nombre de lots" value={apt.nb_lots != null ? `${apt.nb_lots} logements` : ""} mono />
+                  )}
+                  <FieldRow label={immeuble ? "Surface totale" : "Surface"} value={apt.surface_m2 != null ? `${apt.surface_m2} m²` : ""} mono />
+                  <FieldRow label="Nb pièces" value={apt.nb_pieces != null ? String(apt.nb_pieces) : ""} mono />
+                  <FieldRow label="Nb chambres" value={apt.nb_chambres != null ? String(apt.nb_chambres) : ""} mono />
+                </ReadStack>
+              )}
+            </FieldCard>
+
+            <FieldCard title="Bâtiment">
+              {editingDesc ? (
+                <EditStack>
                   <TextField label="Étage" value={value(descPatch, "etage")} onChange={(v) => setDescPatch((p) => ({ ...p, etage: v }))} />
                   <BooleanField label="Ascenseur" value={value(descPatch, "ascenseur")} onChange={(v) => setDescPatch((p) => ({ ...p, ascenseur: v }))} />
                   <NumberField label="Année de construction" value={value(descPatch, "annee_construction")} onChange={(v) => setDescPatch((p) => ({ ...p, annee_construction: v }))} />
+                </EditStack>
+              ) : (
+                <ReadStack>
+                  <FieldRow label="Étage" value={apt.etage} mono />
+                  <FieldRow label="Ascenseur" value={apt.ascenseur == null ? "" : apt.ascenseur ? "Oui" : "Non"} />
+                  {/* Une année ne se groupe JAMAIS par milliers (cf. AGENTS.md)
+                      — d'où `String()` et pas `formatNombre`. */}
+                  <FieldRow label="Année de construction" value={apt.annee_construction != null ? String(apt.annee_construction) : ""} mono />
+                </ReadStack>
+              )}
+            </FieldCard>
+
+            <FieldCard title="État et diagnostics">
+              {editingDesc ? (
+                <EditStack>
                   <SelectField label="État du bien" value={value(descPatch, "etat_bien") as (typeof ETATS_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, etat_bien: v }))} options={ETATS_BIEN} />
                   <SelectField label="DPE" value={value(descPatch, "dpe") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, dpe: v }))} options={DPE_GES_VALEURS} />
                   <SelectField label="GES" value={value(descPatch, "ges") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, ges: v }))} options={DPE_GES_VALEURS} />
-                  <TextField label="Photo (URL)" value={value(descPatch, "photo_url")} onChange={(v) => setDescPatch((p) => ({ ...p, photo_url: v }))} />
-                </div>
+                </EditStack>
+              ) : (
+                <ReadStack>
+                  <FieldRow label="État du bien" value={apt.etat_bien} />
+                  <FieldRow label="DPE" value={apt.dpe} />
+                  <FieldRow label="GES" value={apt.ges} />
+                </ReadStack>
+              )}
+            </FieldCard>
+          </div>
+
+          {/* Le contenu brut de l'annonce — pleine largeur, c'est du texte long
+              et une URL, ni l'un ni l'autre ne tient dans une demi-colonne. */}
+          <FieldCard title="Annonce">
+            {editingDesc ? (
+              <EditStack>
+                <TextField label="Photo (URL)" value={value(descPatch, "photo_url")} onChange={(v) => setDescPatch((p) => ({ ...p, photo_url: v }))} />
                 <TextAreaField
                   label="Description"
                   value={value(descPatch, "description")}
                   onChange={(v) => setDescPatch((p) => ({ ...p, description: v }))}
-                  rows={16}
+                  rows={14}
                 />
-              </>
+              </EditStack>
             ) : (
-              <>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <ReadOnlyField label="Ville" value={apt.ville || "—"} />
-                  <ReadOnlyField label="Quartier" value={apt.quartier || "—"} />
-                  <ReadOnlyField label="Adresse" value={apt.adresse || "—"} />
-                  <ReadOnlyField label="Type de bien" value={apt.type_bien || "—"} />
-                  {immeuble && (
-                    <ReadOnlyField label="Nombre de lots" value={apt.nb_lots != null ? `${apt.nb_lots} logements` : "—"} />
-                  )}
-                  <ReadOnlyField label={immeuble ? "Surface totale" : "Surface"} value={apt.surface_m2 != null ? `${apt.surface_m2} m²` : "—"} />
-                  <ReadOnlyField label="Nb pièces" value={apt.nb_pieces != null ? String(apt.nb_pieces) : "—"} />
-                  <ReadOnlyField label="Nb chambres" value={apt.nb_chambres != null ? String(apt.nb_chambres) : "—"} />
-                  <ReadOnlyField label="Étage" value={apt.etage || "—"} />
-                  <ReadOnlyField label="Ascenseur" value={apt.ascenseur == null ? "—" : apt.ascenseur ? "Oui" : "Non"} />
-                  <ReadOnlyField label="Année de construction" value={apt.annee_construction != null ? String(apt.annee_construction) : "—"} />
-                  <ReadOnlyField label="État du bien" value={apt.etat_bien || "—"} />
-                  <ReadOnlyField label="DPE" value={apt.dpe || "—"} />
-                  <ReadOnlyField label="GES" value={apt.ges || "—"} />
+              <ReadStack>
+                <FieldRow
+                  label="Photo"
+                  value={
+                    apt.photo_url ? (
+                      <a
+                        href={apt.photo_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent-600 underline underline-offset-2 hover:text-accent-800"
+                      >
+                        Ouvrir
+                      </a>
+                    ) : (
+                      ""
+                    )
+                  }
+                />
+                <div className="py-2.5">
+                  <p className="mb-1.5 text-sm text-ink-500">Description</p>
+                  {/* `whitespace-pre-wrap` : le texte de l'annonce garde ses
+                      sauts de ligne. Rendu VERBATIM — aucun formatage de
+                      nombres, c'est la copie du vendeur (cf. AGENTS.md). */}
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-800">
+                    {apt.description || "—"}
+                  </p>
                 </div>
-                <ReadOnlyField label="Description" value={apt.description || "—"} multiline />
-              </>
+              </ReadStack>
             )}
-          </section>
+          </FieldCard>
         </div>
 
         {/* Colonne latérale */}
@@ -1430,6 +1599,7 @@ export default function ApartmentDetail({
           </div>
         </aside>
       </div>
+      </>
       )}
     </div>
     {deleteDialog}
@@ -1533,36 +1703,76 @@ function AchatEditRow({
   );
 }
 
-function ReadOnlyField({
+/**
+ * Carte d'un groupe de champs de l'onglet « Description du bien ».
+ *
+ * L'onglet reste une section SANS encadrement (cf. AGENTS.md, « Sections sans
+ * card ») : ce sont les GROUPES à l'intérieur qui sont encadrés, ce que cette
+ * même règle recommande explicitement. Les quinze champs vivaient auparavant
+ * dans une seule grille à deux colonnes, sans aucun regroupement : « GES »
+ * suivait « État du bien » qui suivait « Année de construction », et rien ne
+ * disait qu'on avait changé de sujet trois fois.
+ */
+function FieldCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-ink-100 bg-white p-5">
+      <SectionHeader title={title} className="mb-2" />
+      {children}
+    </section>
+  );
+}
+
+/** Pile de lignes en LECTURE — séparateurs à l'opacité conventionnelle. */
+function ReadStack({ children }: { children: React.ReactNode }) {
+  return <div className="divide-y divide-ink-100/50">{children}</div>;
+}
+
+/** Pile de champs en ÉDITION — une seule colonne, la carte est étroite. */
+function EditStack({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-4 pt-2">{children}</div>;
+}
+
+/**
+ * Ligne « libellé … valeur » d'une carte de description.
+ *
+ * ⚠️ **Le badge se colle au LIBELLÉ, jamais à la valeur.** Un badge qualifie la
+ * PROVENANCE du champ (détecté, estimé, saisi), pas le nombre affiché : posé à
+ * droite il se lit comme une unité ou un commentaire du chiffre, et il pousse
+ * la valeur hors de sa colonne, ce qui casse l'alignement d'une ligne à
+ * l'autre. C'est déjà la convention de `DisplayValue` (onglet Opération) —
+ * les deux ne doivent pas diverger.
+ *
+ * `value` vide rend « — » : un champ non renseigné se voit, il ne disparaît
+ * pas. `mono` aligne les chiffres d'une ligne à l'autre (`font-mono`, comme
+ * partout où l'app affiche un nombre).
+ */
+function FieldRow({
   label,
   value,
   badge,
   mono = false,
-  multiline = false,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   badge?: React.ReactNode;
-  /** `tabular-nums` sur un champ NUMÉRIQUE lu (prix, budget, prix/m²), pour
-   * que les chiffres s'alignent d'une ligne à l'autre. Plus de `font-mono` :
-   * une ligne de formulaire est une petite ligne, pas un résultat. Faux par
-   * défaut — un champ texte (ville, adresse) n'a rien à aligner. */
   mono?: boolean;
-  multiline?: boolean;
 }) {
+  const vide = value == null || value === "";
   return (
-    <div className="flex flex-col gap-1 text-sm">
-      <span className="flex items-center gap-2 font-medium text-ink-700">
-        {label}
+    // `gap-4` + `min-w-0` sur le libellé : c'est LUI qui se tronque quand la
+    // carte se resserre, jamais la valeur (cf. AGENTS.md, piège mobile n°4).
+    <div className="flex items-baseline justify-between gap-4 py-2.5">
+      <span className="flex min-w-0 items-center gap-1.5 text-sm text-ink-500">
+        <span className="truncate">{label}</span>
         {badge}
       </span>
-      <div
-        className={`rounded-md border border-dashed border-ink-300 bg-white px-3 py-2 text-ink-900${
-          mono ? " tabular-nums" : ""
-        }${multiline ? " whitespace-pre-wrap" : ""}`}
+      <span
+        className={`shrink-0 text-sm font-semibold ${mono ? "font-mono " : ""}${
+          vide ? "text-ink-300" : "text-ink-900"
+        }`}
       >
-        {value}
-      </div>
+        {vide ? "—" : value}
+      </span>
     </div>
   );
 }

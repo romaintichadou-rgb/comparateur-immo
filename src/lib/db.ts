@@ -5,6 +5,7 @@ import { Apartment, ApartmentInput, emptyApartment } from "./types";
 import { AppSettings, DEFAULT_SETTINGS, type FinancementMode } from "./settings";
 import { createClient } from "./supabase/server";
 import { requireUserId } from "./auth";
+import { roundSurface } from "./format";
 // Limites et plans : dans un module SANS `server-only`, pour que les écrans
 // qui les affichent lisent la même source que les gates qui les appliquent.
 import { LIMITE_ANALYSES_PRO, LIMITE_BIENS_FREE, type Plan } from "./plans";
@@ -130,6 +131,12 @@ export async function createApartment(input: Partial<Apartment>): Promise<Apartm
     user_id: userId,
   } as Apartment;
 
+  // Arrondir la surface à l'entier pour un affichage lisible. La vraie valeur
+  // en base est arrondie, pas juste l'affichage — 43.72 m² devient 44 m² partout.
+  if (apt.surface_m2 != null) {
+    apt.surface_m2 = roundSurface(apt.surface_m2) ?? apt.surface_m2;
+  }
+
   const { data, error } = await supabase.from("apartments").insert(apt).select().single();
   if (error) throw new Error(error.message);
 
@@ -147,6 +154,11 @@ export async function updateApartment(id: string, patch: Partial<Apartment>): Pr
   // `user_id` est retiré du patch : le propriétaire d'un bien ne se change pas
   // par une requête de mise à jour.
   const { user_id: _ignore, ...patchSansProprietaire } = patch;
+
+  // Arrondir la surface si elle est mise à jour
+  if (patchSansProprietaire.surface_m2 != null) {
+    patchSansProprietaire.surface_m2 = roundSurface(patchSansProprietaire.surface_m2) ?? patchSansProprietaire.surface_m2;
+  }
 
   const { data, error } = await supabase
     .from("apartments")

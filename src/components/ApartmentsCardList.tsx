@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
+import { formatLocalisationCourte } from "@/lib/adresse";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import { RENDEMENT_HOVER_RING, TONE_TEXT_CLASS, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
 import { ScoreRing, decisionToneOf, sortApartments, type SortKey } from "@/components/ApartmentsTable";
@@ -64,7 +65,7 @@ export default function ApartmentsCardList({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-ink-900">{formatApartmentTitle(apt)}</p>
                 <p className="truncate text-xs text-ink-500">
-                  {[apt.quartier, apt.ville].filter(Boolean).join(", ") || apt.adresse || apt.plateforme}
+                  {formatLocalisationCourte(apt) || apt.plateforme}
                 </p>
               </div>
               <div className="shrink-0">

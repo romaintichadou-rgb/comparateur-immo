@@ -1,3 +1,4 @@
+import { aAdressePrecise, formatAdressePostale, formatSecteur } from "./adresse";
 import type { PrecisionLocalisation } from "./types";
 
 /**
@@ -73,18 +74,12 @@ export async function geocodeApartmentLocation(input: {
   ville: string;
   code_postal: string;
 }): Promise<BanResult | null> {
-  if (input.adresse.trim()) {
-    const query = [input.adresse, input.code_postal, input.ville]
-      .filter(Boolean)
-      .join(", ");
-    const hit = await banSearch(query);
+  if (aAdressePrecise(input)) {
+    const hit = await banSearch(formatAdressePostale(input));
     if (hit) return hit;
   }
 
-  const approxQuery = [input.quartier, input.code_postal, input.ville]
-    .filter(Boolean)
-    .join(", ");
-  const hit = await banSearch(approxQuery);
+  const hit = await banSearch(formatSecteur(input));
   if (hit) {
     // On ne présente jamais un repli quartier/ville comme une adresse exacte.
     return { ...hit, precision_localisation: "arrondissement" };

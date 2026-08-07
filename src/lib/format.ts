@@ -58,13 +58,35 @@ export function formatPercent(value: number | null | undefined): string {
  * Titre court d'un bien (type + surface), sans la localisation — utilisé
  * là où l'adresse doit apparaître séparément, en sous-titre.
  */
+/**
+ * Arrondit une surface en m² à un entier. Règle simple : arrondi standard (0.5+ monte).
+ * Utilisé pour afficher des surfaces "lisibles" en titres et formulaires.
+ */
+export function roundSurface(surface: number | null | undefined): number | null {
+  if (surface == null || Number.isNaN(surface)) return null;
+  return Math.round(surface);
+}
+
 export function formatApartmentTitle(apt: {
   type_bien: string;
   surface_m2: number | null;
+  nb_pieces?: number | null;
 }): string {
   const type = apt.type_bien || "Bien";
-  const surface = apt.surface_m2 != null ? ` ${apt.surface_m2}m²` : "";
-  return `${type}${surface}`;
+  const parts = [type];
+
+  // Ajoute le T (nombre de pièces) si disponible
+  if (apt.nb_pieces != null && apt.nb_pieces > 0) {
+    parts.push(`T${apt.nb_pieces}`);
+  }
+
+  // Ajoute la surface arrondie si disponible
+  if (apt.surface_m2 != null) {
+    const rounded = roundSurface(apt.surface_m2);
+    parts.push(`${rounded}m²`);
+  }
+
+  return parts.join(" · ");
 }
 
 export function formatDate(iso: string | null | undefined): string {

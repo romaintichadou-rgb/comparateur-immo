@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { X, ArrowDown, Info, Sparkles, Database, SlidersHorizontal } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
@@ -9,11 +9,24 @@ import { isAiEstimated } from "@/lib/estimates";
 import { TONE_PANEL_STYLES, type RendementTone, type TonePanelStyle } from "@/lib/analyse/scoring";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderBoldInline } from "@/components/richText";
+import Skeleton from "@/components/Skeleton";
+import { lotsEffectifs } from "@/lib/estimates";
+import {
+  MAJORATION_MEUBLE,
+  referenceCCMeuble,
+  typologieAnil,
+  type TypologieAnil,
+} from "@/lib/anilReference";
 
 const TRANSITION_MS = 300;
 
-const MAJORATION_MEUBLE = 0.12;
-const PROVISION_CHARGES_M2_DEFAUT = 2.0;
+/** Libellé lisible de la ressource ANIL réellement lue. */
+const TYPOLOGIE_LABEL: Record<TypologieAnil, string> = {
+  appartement: "appartement, toutes typologies",
+  appartement_t1_t2: "appartement 1-2 pièces",
+  appartement_t3_plus: "appartement 3 pièces et +",
+  maison: "maison",
+};
 
 interface AnilData {
   loyerM2: number;
@@ -21,6 +34,7 @@ interface AnilData {
   max: number;
   nbObs: number;
   annee: number;
+  niveauPrediction: "commune" | "epci" | "maille";
 }
 
 export default function LoyerDetailPanel({
@@ -32,8 +46,18 @@ export default function LoyerDetailPanel({
 }) {
   const [displayed, setDisplayed] = useState<ApartmentWithComputed | null>(null);
   const [show, setShow] = useState(false);
-  const [anil, setAnil] = useState<AnilData | null>(null);
-  const [anilLoading, setAnilLoading] = useState(false);
+  // Résultat ANIL, gardé avec le `code_insee` qui l'a produit — pas un simple
+  // `anil` + `anilLoading` séparés. C'est ce qui permet de savoir, à tout
+  // instant, si la donnée AFFICHÉE correspond bien au bien AFFICHÉ : deux
+  // états séparés ne peuvent pas distinguer « pas encore chargé pour ce bien »
+  // de « chargé, et il n'y a rien » (les deux valent `anil === null`), ce qui
+  // laissait passer une frame avec les anciennes données d'un autre bien.
+  const [anilResult, setAnilResult] = useState<{ codeInsee: string; data: AnilData | null } | null>(null);
+  // Dernier `code_insee` effectivement (re)fetché — évite un aller-retour
+  // réseau inutile en réouvrant le panneau sur un bien de la même commune ;
+  // un `ref` plutôt que relire `anilResult` dans l'effet, pour ne pas avoir à
+  // l'ajouter aux dépendances (il change à cause de CET effet lui-même).
+  const anilFetchedForRef = useRef<string | null>(null);
 
   if (apartment && apartment !== displayed) {
     setDisplayed(apartment);
@@ -52,25 +76,31 @@ export default function LoyerDetailPanel({
   }, [apartment]);
 
   useEffect(() => {
-    if (!apartment?.code_insee) {
-      setAnil(null);
+    if (!apartment) return;
+    const codeInsee = apartment.code_insee;
+    if (!codeInsee) {
+      setAnilResult({ codeInsee: "", data: null });
       return;
     }
+    // La typologie fait partie de la clé : deux biens de la même commune mais
+    // de typologies différentes (T2 / T4 / maison) lisent des ressources ANIL
+    // distinctes. Sans elle dans la clé, le second réutiliserait la référence
+    // du premier — soit jusqu'à 19 % d'écart.
+    const typo = typologieAnil(apartment.type_bien, apartment.nb_pieces, isImmeuble(apartment.type_bien), apartment.surface_m2);
+    const cle = `${codeInsee}|${typo}`;
+    if (anilFetchedForRef.current === cle) return;
+    anilFetchedForRef.current = cle;
     let cancelled = false;
-    setAnilLoading(true);
-    fetch(`/api/loyer-reference?code_insee=${encodeURIComponent(apartment.code_insee)}`)
+    fetch(`/api/loyer-reference?code_insee=${encodeURIComponent(codeInsee)}&typologie=${typo}`)
       .then((r) => r.json())
       .then((data) => {
-        if (!cancelled) setAnil(data.ref ?? null);
+        if (!cancelled) setAnilResult({ codeInsee, data: data.ref ?? null });
       })
       .catch(() => {
-        if (!cancelled) setAnil(null);
-      })
-      .finally(() => {
-        if (!cancelled) setAnilLoading(false);
+        if (!cancelled) setAnilResult({ codeInsee, data: null });
       });
     return () => { cancelled = true; };
-  }, [apartment?.code_insee]);
+  }, [apartment?.code_insee, apartment?.type_bien, apartment?.nb_pieces]);
 
   useEffect(() => {
     if (!displayed) return;
@@ -100,19 +130,37 @@ export default function LoyerDetailPanel({
   const hasSurface = surface != null && surface > 0;
   const hasLoyer = loyer != null && loyer > 0;
 
+  // `contentReady` gate : l'Étape 1 dépend d'un fetch réseau (référence ANIL),
+  // les étapes 2 et 3 ne dépendent que de données déjà en mémoire
+  // (`loyer_justification`, `loyer_retenu`) — donc synchrones. Sans ce garde
+  // commun, 2 et 3 s'affichaient IMMÉDIATEMENT tandis que 1 restait en
+  // "Chargement…" une fraction de seconde : un panneau à moitié rempli, qui se
+  // complète après coup. Les trois étapes apparaissent maintenant D'UN SEUL
+  // BLOC, une fois que TOUT est prêt — jamais l'une avant les autres.
+  // Quand le bien n'a pas de `code_insee`, il n'y a rien à charger : prêt
+  // immédiatement, aucun spinner ne doit apparaître pour rien.
+  const contentReady = apt.code_insee === "" || anilResult?.codeInsee === apt.code_insee;
+  const anil = contentReady ? (anilResult?.data ?? null) : null;
+
   const loyerM2 = hasLoyer && hasSurface ? loyer / surface : null;
   const loyerAnnuel = hasLoyer ? loyer * 12 : null;
   const aiEstimated = isAiEstimated(apt, "loyer_retenu");
 
-  const provM2 = apt.charges_copro_annuelles != null && apt.charges_copro_annuelles > 0 && hasSurface
-    ? apt.charges_copro_annuelles / 12 / surface!
-    : PROVISION_CHARGES_M2_DEFAUT;
-  const anilCCm2 = anil ? anil.loyerM2 * (1 + MAJORATION_MEUBLE) + provM2 : null;
-  const anilMinCC = anil ? anil.min * (1 + MAJORATION_MEUBLE) + provM2 : null;
-  const anilMaxCC = anil ? anil.max * (1 + MAJORATION_MEUBLE) + provM2 : null;
-  const anilMedian = anilCCm2 != null && hasSurface ? Math.round(anilCCm2 * surface) : null;
-  const anilMinTotal = anilMinCC != null && hasSurface ? Math.round(anilMinCC * surface) : null;
-  const anilMaxTotal = anilMaxCC != null && hasSurface ? Math.round(anilMaxCC * surface) : null;
+  // Conversion ANIL → CC meublé : passe par `anilReference.ts`, la même
+  // fonction que le serveur. Le panneau recopiait ses propres constantes, ce
+  // qui laissait les deux dériver — c'est ce qui affichait une provision de
+  // charges déjà comprise dans le chiffre ANIL.
+  const surfaceLogement = hasSurface
+    ? immeuble
+      ? surface! / lotsEffectifs(apt.nb_lots, surface)
+      : surface!
+    : null;
+  const refCC = anil
+    ? referenceCCMeuble(anil, surfaceLogement, typologieAnil(apt.type_bien, apt.nb_pieces, immeuble, apt.surface_m2))
+    : null;
+  const anilMedian = refCC != null && hasSurface ? Math.round(refCC.medianM2 * surface) : null;
+  const anilMinTotal = refCC != null && hasSurface ? Math.round(refCC.minM2 * surface) : null;
+  const anilMaxTotal = refCC != null && hasSurface ? Math.round(refCC.maxM2 * surface) : null;
 
   const ecartPct =
     hasLoyer && anilMedian != null && anilMedian > 0
@@ -164,18 +212,14 @@ export default function LoyerDetailPanel({
             <p className="text-sm text-ink-500">
               Aucun loyer renseigné — remplis le champ loyer pour voir le détail.
             </p>
+          ) : !contentReady ? (
+            <LoyerDetailSkeleton />
           ) : (
             <div className="space-y-5">
 
               {/* ── ÉTAPE 1 : Ancre ANIL ── */}
-              {anilLoading && (
-                <div className="rounded-lg bg-ink-50 p-4 text-sm text-ink-400">
-                  Chargement des données de marché…
-                </div>
-              )}
-              {anil && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface && (() => {
-                const hcMeubleTotal = Math.round(anil.loyerM2 * (1 + MAJORATION_MEUBLE) * surface);
-                const chargesMensuelles = Math.round(provM2 * surface!);
+              {anil && refCC && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface && (() => {
+                const anilBrutTotal = Math.round(anil.loyerM2 * surface);
                 return (
                 <section className="space-y-1.5">
                   <div className="flex items-center gap-2">
@@ -188,16 +232,25 @@ export default function LoyerDetailPanel({
                   </div>
                   <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
                     <p className="text-sm text-ink-600">
-                      Loyer médian meublé dans la commune (source ANIL {anil.annee}, {anil.nbObs.toLocaleString("fr-FR")} annonces), majoré de {Math.round(MAJORATION_MEUBLE * 100)} % par rapport au nu.
+                      Loyer médian <strong>charges comprises</strong> pour ce type de bien (source ANIL {anil.annee}, {anil.nbObs.toLocaleString("fr-FR")} annonces), majoré de {Math.round(MAJORATION_MEUBLE * 100)} % pour le meublé et ajusté à la surface réelle.
                     </p>
                     <ul className="divide-y divide-ink-100/50 text-sm">
-                      <Row label="Loyer HC meublé" value={hcMeubleTotal} suffix="/mois" />
+                      <Row label={`Loyer ANIL non meublé (${TYPOLOGIE_LABEL[refCC.typologie]})`} value={anilBrutTotal} suffix="/mois" />
                       <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
-                        <span>+ Provision charges</span>
-                        <span className="font-medium text-ink-800">
-                          {formatEuros(chargesMensuelles)}<span className="text-ink-400 text-xs ml-0.5">/mois</span>
-                        </span>
+                        <span>× Majoration meublé</span>
+                        <span className="font-medium text-ink-800">+{Math.round(MAJORATION_MEUBLE * 100)} %</span>
                       </li>
+                      {/* Le loyer/m² décroît avec la surface (élasticité −0,485
+                          mesurée sur les données ANIL) : un studio se loue bien
+                          plus cher au m² que la surface de référence. */}
+                      {Math.abs(refCC.facteurSurface - 1) > 0.005 && (
+                        <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
+                          <span>× Ajustement surface <span className="text-ink-400">({surface} m² vs {refCC.surfaceReference} m² de référence)</span></span>
+                          <span className="font-medium text-ink-800">
+                            {refCC.facteurSurface > 1 ? "+" : "−"}{Math.abs(Math.round((refCC.facteurSurface - 1) * 100))} %
+                          </span>
+                        </li>
+                      )}
                       <Row label="Loyer CC meublé (référence)" value={anilMedian} suffix="/mois" bold />
                       <li className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-600">
                         <span>Fourchette CC</span>
@@ -210,7 +263,7 @@ export default function LoyerDetailPanel({
                   <div className="flex items-start gap-1.5">
                     <Info className="h-3 w-3 text-ink-300 mt-0.5 shrink-0" />
                     <p className="text-[11px] text-ink-400">
-                      Source : Carte des loyers ANIL {anil.annee} (loyers HC nu) · majoration meublé +{Math.round(MAJORATION_MEUBLE * 100)} % · {surface} m².
+                      Source : Carte des loyers ANIL {anil.annee}, ressource « {TYPOLOGIE_LABEL[refCC.typologie]} » (loyers charges comprises, non meublé) · majoration meublé +{Math.round(MAJORATION_MEUBLE * 100)} % · {surface} m².
                     </p>
                   </div>
                 </section>
@@ -322,6 +375,31 @@ function ecartTone(pct: number, slot: keyof TonePanelStyle): string {
   return TONE_PANEL_STYLES[tone][slot];
 }
 
+
+/**
+ * Squelette du temps où l'Étape 1 (référence ANIL) charge encore. Fidèle à la
+ * structure réelle (icône + titre + carte bordée), comme les autres skeletons
+ * de l'app (cf. AGENTS.md, section « Skeletons ») — pas une simple barre
+ * générique, pour que l'apparition du vrai contenu ne « saute » pas de forme.
+ */
+function LoyerDetailSkeleton() {
+  return (
+    <div className="space-y-5" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <section key={i} className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-6 w-6 rounded-lg" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+          <div className="space-y-3 rounded-lg border border-ink-100 bg-white p-4">
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-4/5" />
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 function Row({
   label,

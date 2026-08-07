@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import Link from "next/link";
 import type { ApartmentWithComputed } from "@/lib/types";
+import { formatLocalisationCourte } from "@/lib/adresse";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import {
   RENDEMENT_HOVER_RING,
@@ -122,9 +123,13 @@ export default function ApartmentsMap({
                   <p className="text-sm font-semibold text-ink-900">
                     {formatApartmentTitle(apt)}
                   </p>
-                  {(apt.adresse || apt.quartier || apt.ville) && (
+                  {/* Le pin dit déjà OÙ ; le libellé nomme le secteur. Il
+                      affichait la rue seule (« 12 rue des Lilas »), qui ne
+                      situe rien sur une carte nationale — et jamais la ville
+                      quand une rue était connue. */}
+                  {formatLocalisationCourte(apt) && (
                     <p className="truncate text-xs text-ink-500">
-                      {apt.adresse || [apt.quartier, apt.ville].filter(Boolean).join(", ")}
+                      {formatLocalisationCourte(apt)}
                     </p>
                   )}
                 </div>

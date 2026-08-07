@@ -497,6 +497,8 @@ export default function AddApartmentFlow() {
                     suffix="m²"
                     hint={extrait("surface_m2") && <ExtractedBadge />}
                   />
+                  <TextField label="Adresse (si connue)" value={form.adresse} onChange={(v) => set("adresse", v)} hint={extrait("adresse") && <ExtractedBadge />} />
+                  <TextField label="Code postal" value={form.code_postal} onChange={(v) => set("code_postal", v)} hint={extrait("code_postal") && <ExtractedBadge />} />
                   <NumberField label="Nb pièces" value={form.nb_pieces} onChange={(v) => set("nb_pieces", v)} hint={extrait("nb_pieces") && <ExtractedBadge />} />
                   <NumberField label="Nb chambres" value={form.nb_chambres} onChange={(v) => set("nb_chambres", v)} hint={extrait("nb_chambres") && <ExtractedBadge />} />
                 </div>
@@ -513,8 +515,6 @@ export default function AddApartmentFlow() {
                 {/* Champs avancés — repliables sur mobile, toujours visibles sur desktop */}
                 {(expandedSections.has("advanced") || typeof window === "undefined" || window.innerWidth >= 1024) && (
                   <div className="mt-6 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 border-t border-ink-100 pt-6 lg:border-0 lg:pt-0">
-                    <TextField label="Adresse (si connue)" value={form.adresse} onChange={(v) => set("adresse", v)} hint={extrait("adresse") && <ExtractedBadge />} />
-                    <TextField label="Code postal" value={form.code_postal} onChange={(v) => set("code_postal", v)} hint={extrait("code_postal") && <ExtractedBadge />} />
                     <SelectField
                       label="Type de bien"
                       value={form.type_bien as (typeof TYPES_BIEN)[number] | ""}
