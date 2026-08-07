@@ -5,9 +5,9 @@ import { getApiSession } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   // Comme `/api/parse` : pas d'appel à `db.ts`, donc pas de protection
-  // héritée. Les données ANIL sont publiques, mais l'endpoint interroge une
-  // source externe à chaque appel — le laisser ouvert offrirait à un tiers un
-  // relais gratuit vers cette source, au débit de ce serveur.
+  // héritée. Les données ANIL sont publiques et lues localement (figées au
+  // build, voir sources/loyers.ts), mais l'endpoint reste réservé aux
+  // utilisateurs connectés comme le reste de l'API.
   if (!(await getApiSession())) {
     return NextResponse.json({ error: "Authentification requise" }, { status: 401 });
   }

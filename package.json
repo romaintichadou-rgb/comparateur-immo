@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:bookmarklet": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-bookmarklet.mjs"
+    "check:bookmarklet": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-bookmarklet.mjs",
+    "generate:anil-loyers": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/generate-anil-loyers.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

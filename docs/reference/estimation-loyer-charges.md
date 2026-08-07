@@ -332,6 +332,34 @@ marge » : les plafonds internes (déterministe × résidu IA) atteignent déjà
 ±38 %, soit plus que la fourchette. `RentEstimationResult.plafonne` signale
 que le clamp a mordu, plutôt que de l'appliquer en silence.
 
+### Données figées au build — rafraîchissement annuel
+
+`src/lib/anil_loyers.json` (les 4 typologies, ~35 000 communes chacune) est
+généré une fois pour toutes par `scripts/generate-anil-loyers.mjs` et
+committé — même pattern que `taux_tfpb_communes.json` (DGFiP). Plus aucun
+téléchargement ni résolution de ressource data.gouv au runtime :
+`sources/loyers.ts` ne fait plus qu'un accès objet synchrone dans ce JSON.
+Raison de ce choix plutôt qu'un rafraîchissement automatique : l'app tourne
+sur des fonctions serverless (Vercel) dont la mémoire ne survit pas aux
+redémarrages fréquents, et l'ANIL ne publie qu'une édition par an — un
+rafraîchissement qui marcherait vraiment demanderait un cron + un stockage
+persistant, de la nouvelle infrastructure pour un événement annuel.
+
+**Procédure, une fois par an** (après la publication de la nouvelle édition,
+généralement au 2nd semestre) :
+1. `npm run generate:anil-loyers` — résout les 4 ressources sur
+   data.gouv (édition N-1, repli N-2 si pas encore publiée — le même filet de
+   sécurité qu'avant ce chantier : aucune régression si personne n'y pense
+   pendant quelques mois), télécharge et réécrit `src/lib/anil_loyers.json`.
+2. Vérifier le diff (`git diff --stat src/lib/anil_loyers.json` — l'année
+   dans les logs du script doit avoir avancé, les tailles rester du même
+   ordre de grandeur).
+3. Committer et déployer.
+
+Le script porte lui-même toute la logique de résolution de ressource
+(`MOTIF_RESSOURCE`, recherche par titre) et de parsing CSV — elle n'existe
+plus dans le code d'application, pour ne pas la dupliquer aux deux endroits.
+
 ## Ajustements déterministes
 
 ⚠️ **Pour le LOYER**, les facteurs (étage/ascenseur, état×travaux, DPE) sont
