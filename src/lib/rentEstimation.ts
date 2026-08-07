@@ -807,7 +807,13 @@ async function estimerAvecReference(
         apiKey: requireApiKey(),
         model,
         prompt,
-        thinkingBudget: 512,
+        // 0, pas 512 (plan-optimisation-loyer.md §7 — mesuré, voir
+        // docs/reference/estimation-loyer-charges.md) : plus rapide (~1 s vs
+        // ~2,8 s), et surtout plus FIABLE sous le timeout réduit à 25 s
+        // (§4) — 512 y échouait ~27 % du temps sur l'échantillon mesuré,
+        // contre 0 % à 0. Ne s'applique QU'à ce prompt (résidu) — le seul
+        // mesuré ; `estimerImmeuble`/`estimerSansReference` gardent 512.
+        thinkingBudget: 0,
         temperature: 0,
         responseSchema: SCHEMA_RESIDU,
       });

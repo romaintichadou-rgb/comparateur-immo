@@ -239,6 +239,56 @@ Conclusions retenues :
 seule fois). Taux d'échec et étendue estimés avec une précision faible ; à
 réévaluer avant tout changement de modèle.
 
+## `thinkingBudget` du résidu — mesuré, pas supposé
+
+Plan d'optimisation §7 : le budget de "thinking" (tokens de raisonnement
+interne Gemini, facturés comme de l'output) du prompt résidu était fixé à
+512. Mesuré sur 5 biens (`gemini-2.5-flash`, `temperature: 0`, 3 appels
+répétés par configuration), dont 2 marchés délibérément atypiques — un
+marché touristique/montagne (Chamonix, forte saisonnalité) et un marché
+rural très peu documenté (11 observations ANIL, niveau `maille`) :
+
+| Bien | Marché | budget=512 : latence moy. | budget=512 : échecs (timeout 25 s) | budget=0 : latence moy. | budget=0 : échecs | Étendue du résidu (budget=0, 3 appels) |
+|---|---|---|---|---|---|---|
+| Paris 11e | normal, dense | 17,8 s* | 2 / 3 | 1,1 s | 0 / 3 | 0 pt (3, 3, 3) |
+| Lyon 3e | normal | 2,9 s | 0 / 3 | 0,9 s | 0 / 3 | 0 pt (0, 0, 0) |
+| Bordeaux (maison) | normal | 2,6 s | 0 / 3 | 0,6 s | 0 / 3 | 0 pt (0, 0, 0) |
+| Chamonix-Mont-Blanc | **atypique** (touristique) | 17,6 s* | 2 / 3 | 1,0 s | 0 / 3 | 0 pt (5, 5, 5) |
+| Allanche (Cantal) | **atypique** (rural, 11 obs.) | 2,7 s | 0 / 3 | 0,7 s | 0 / 3 | 0 pt (−5, −5, −5) |
+
+\* Moyenne tirée vers le haut par les appels qui ont buté sur le timeout de
+25 s (§4) et compté pour 25 s chacun ; les appels réussis à 512 restent dans
+la même fourchette que ceux à 0 (~2,5-3,4 s).
+
+Conclusions retenues :
+
+1. **`thinkingBudget: 0` est net partout mesuré** : ~2 à 4× plus rapide sur
+   les appels réussis, et surtout **0 échec sur 15 appels** contre **4/15
+   (27 %) à 512** — les biens les plus lents à raisonner (Paris, Chamonix)
+   ont buté deux fois sur trois sur le timeout réduit à 25 s (§4). Garder 512
+   ne serait plus seulement plus lent : ce serait désormais moins FIABLE,
+   par interaction avec le changement du §4.
+2. **Reproductibilité parfaite à budget=0** sur cet échantillon : étendue
+   nulle sur les 3 répétitions de chacun des 5 biens (cohérent avec la table
+   de reproductibilité ci-dessus, qui attribuait déjà l'essentiel de la
+   variance historique à l'ambiguïté du prompt, pas au thinking).
+3. **Critères qualitatifs globalement équivalents** — à une nuance près sur
+   le marché rural (Allanche, le cas le plus atypique de l'échantillon) : à
+   512, l'IA rendait systématiquement "conforme au secteur" (0 %) ; à 0, elle
+   rendait un ajustement (−5 %) en citant des critères qui varient légèrement
+   d'un appel à l'autre ("maison de bourg" négatif vs "dépendance" positif
+   pour un même écart final). Un jugement plus tranché sur données ANIL très
+   clairsemées (11 observations), pas une dégradation claire — mais un point
+   à garder en tête si un marché rural produit un résultat surprenant.
+
+**Décision** : `thinkingBudget` passé de 512 à **0**, mais UNIQUEMENT sur le
+prompt résidu (`estimerAvecReference`) — le seul mesuré ici.
+`estimerImmeuble`/`estimerSansReference` (prompt plus simple : un montant +
+une justification, pas de résidu qualitatif) gardent 512, faute de mesure.
+
+⚠️ Même réserve que la table de reproductibilité : échantillon limité (5
+biens, 3 répétitions), à réévaluer avant tout changement de modèle Gemini.
+
 ## Loyer — compléments du résidu IA
 
 ### Position approximative : caveat plutôt que donnée mesurée

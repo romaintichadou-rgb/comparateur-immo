@@ -33,7 +33,7 @@ ne doit pas changer (hormis l'absence du signal OSM, retiré volontairement).
 | 4 | Retry / timeout Gemini | **Réduits** |
 | 5 | Données ANIL (le CSV lui-même) | **Option A** : figées au build |
 | 6 | Rappeler Gemini même si rien n'a changé | **Supprimé** — cache par empreinte |
-| 7 | `thinkingBudget` de Gemini | **À mesurer** avant de trancher |
+| 7 | `thinkingBudget` de Gemini | **Mesuré → passé à 0** (prompt résidu uniquement) |
 
 ---
 
@@ -157,26 +157,25 @@ identique.
   résidu réutilisable) — les chemins immeuble / sans référence continuent
   d'appeler Gemini à chaque fois (ils n'ont pas de déterministe de repli).
 
-## 7. `thinkingBudget` — à mesurer avant de trancher
+## 7. `thinkingBudget` — mesuré, passé à 0 (résidu uniquement)
 
 **Ce que c'est** : les tokens de raisonnement interne que Gemini peut générer
-avant de répondre — invisibles, mais facturés comme de la sortie. Aujourd'hui
-fixé à 512 ; passer à 0 supprimerait cette étape et réduirait latence et coût,
-**si** la qualité du résidu ne s'en trouve pas dégradée.
+avant de répondre — invisibles, mais facturés comme de la sortie. Était fixé
+à 512 sur les 3 appels Gemini de `rentEstimation.ts`.
 
-**À faire avant tout changement de code** :
-- Reprendre les 5 biens variés déjà utilisés pour les précédents audits (au
-  moins un marché atypique inclus).
-- Pour chacun, comparer `thinkingBudget: 512` (actuel) vs `0` : latence,
-  variation du résidu sur plusieurs appels (même protocole que la mesure de
-  reproductibilité déjà documentée dans `AGENTS.md`), et **pertinence
-  qualitative des critères remontés** — pas seulement le chiffre final, il
-  faut que les critères cités restent sensés.
-- Décider seulement après ces mesures : passer à 0 si aucune dégradation
-  notable ; sinon garder 512 ou chercher un palier intermédiaire (128, 256).
-- Documenter le résultat de la mesure dans `AGENTS.md`, dans le même esprit
-  que la table « Reproductibilité de l'estimation IA — mesurée, pas
-  supposée » déjà présente.
+**Mesuré** sur 5 biens (dont 2 marchés atypiques : Chamonix — touristique, et
+Allanche/Cantal — rural, 11 observations ANIL), 3 appels répétés par
+configuration, sur le prompt résidu uniquement : `thinkingBudget: 0` est
+2 à 4× plus rapide, **0 échec sur 15 appels contre 4/15 (27 %) à 512** (les
+biens les plus lents à raisonner butaient sur le timeout réduit à 25 s du
+§4), et une reproductibilité parfaite (étendue nulle sur les 3 répétitions
+de chaque bien). Nuance qualitative mineure sur le marché rural le plus
+atypique : critères moins stables qu'à 512, mais pas de dégradation nette.
+Détail complet : `docs/reference/estimation-loyer-charges.md`.
+
+**Décision appliquée** : `thinkingBudget: 0` sur le prompt résidu
+(`estimerAvecReference`) uniquement — le seul mesuré.
+`estimerImmeuble`/`estimerSansReference` gardent 512, faute de mesure.
 
 ---
 
