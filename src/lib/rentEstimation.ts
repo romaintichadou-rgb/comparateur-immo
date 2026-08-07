@@ -12,7 +12,6 @@ import {
   type TypologieAnil,
 } from "./anilReference";
 import type { LoyerReference } from "./analyse/sources/loyers";
-import type { OsmBundle } from "./analyse/sources/osm";
 
 export interface RentEstimationInput {
   ville: string;
@@ -33,15 +32,13 @@ export interface RentEstimationInput {
   travaux: number | null;
   description: string;
   /**
-   * Précision de la géolocalisation du bien (3.1). `"exacte"` = adresse
-   * géocodée jusqu'au numéro de rue ; `"arrondissement"` (ou `null`) =
-   * position connue seulement au niveau du quartier/de la commune — dans ce
-   * second cas, les coordonnées désignent un CENTROÏDE, pas le bâtiment
-   * réel. Une donnée OSM calculée sur ce centroïde décrirait alors
-   * l'environnement d'un point arbitraire du quartier, pas celui du bien.
-   * D'où la garde de `estimerAvecReference` : OSM n'est injecté QUE si
-   * `"exacte"` — même principe que le DPE ADEME (jointure par `banId`) dans
-   * `run.ts`, qui applique déjà cette règle pour la même raison.
+   * Précision de la géolocalisation du bien. `"exacte"` = adresse géocodée
+   * jusqu'au numéro de rue ; `"arrondissement"` (ou `null`) = position connue
+   * seulement au niveau du quartier/de la commune. Sert à `buildPromptResidu`
+   * pour décider si l'IA a le droit de juger la rue, le vis-à-vis ou
+   * l'exposition précise (voir `CAVEAT_LOCALISATION_APPROX`) — même principe
+   * que le DPE ADEME (jointure par `banId`) dans `run.ts`, qui applique déjà
+   * cette règle pour la même raison.
    */
   precisionLocalisation: PrecisionLocalisation | null;
 }
@@ -397,28 +394,9 @@ function buildDescriptionResidu(input: RentEstimationInput): string {
 }
 
 /**
- * Bloc de faits OSM (3.2) — injecté UNIQUEMENT quand la position du bien est
- * exacte (voir `RentEstimationInput.precisionLocalisation`). Des chiffres
- * mesurés plutôt qu'un jugement, pour donner à l'IA un ancrage factuel sur
- * l'attractivité du quartier au lieu de la laisser deviner depuis le nom de
- * la rue ou de l'arrondissement seul.
- */
-function buildEnvironnementOsm(osm: OsmBundle): string {
-  const { commodites, vieQuartier, gare } = osm;
-  const lignes = [
-    `${commodites.transports} arrêt(s) de transport, ${commodites.commerces} commerce(s), ${commodites.education} établissement(s) scolaire(s) dans un rayon de ${commodites.rayonM} m`,
-    `${vieQuartier.restaurants} restaurant(s), ${vieQuartier.barsEtCafes} bar(s)/café(s), ${vieQuartier.parcs} parc(s)/jardin(s) à proximité`,
-  ];
-  if (gare) lignes.push(`gare la plus proche : ${gare.nom}, à ${gare.distanceKm} km`);
-  return `ENVIRONNEMENT MESURÉ (OpenStreetMap, données réelles autour du bien) :
-- ${lignes.join("\n- ")}
-Ce sont des FAITS, pas une opinion — préfère-les à toute affirmation générale du type "quartier recherché" si le texte de l'annonce ne donne rien de plus précis.`;
-}
-
-/**
  * Sans adresse exacte, `latitude`/`longitude` désignent le CENTROÏDE du
  * quartier, pas le bâtiment (voir `precisionLocalisation`). L'IA n'a alors
- * ni OSM ni le droit de deviner un niveau de précision qu'elle n'a pas.
+ * pas le droit de deviner un niveau de précision qu'elle n'a pas.
  */
 const CAVEAT_LOCALISATION_APPROX =
   "⚠️ La localisation de ce bien n'est connue qu'au niveau du quartier ou de la commune (pas l'adresse exacte) : ne fais AUCUNE affirmation sur la rue, le vis-à-vis, l'exposition précise ou les nuisances de voisinage immédiat — tu ne peux pas les connaître à cette précision.";
@@ -441,17 +419,13 @@ const CAVEAT_LOCALISATION_APPROX =
  *   que l'annonce valorise et ne renvoie jamais de résidu négatif — mesuré
  *   sur 10 biens attractifs : 0 résidu négatif).
  *
- * `osm` (3.2) n'est utilisé que si `input.precisionLocalisation === "exacte"`
- * — la garde est appliquée ICI, pas par l'appelant, pour que la même règle
- * s'applique quel que soit l'endroit d'où `osm` est fourni.
  */
 function buildPromptResidu(
   input: RentEstimationInput,
   secteur: string,
   ancre: number,
   refCC: ReferenceCC,
-  loyerRef: LoyerReference,
-  osm: OsmBundle | null
+  loyerRef: LoyerReference
 ): string {
   const surface = input.surface_m2 as number;
   const mn = Math.round(refCC.minM2 * surface);
@@ -459,7 +433,6 @@ function buildPromptResidu(
   const carac = buildCaracteristiques(input);
   const desc = buildDescriptionResidu(input);
   const positionExacte = input.precisionLocalisation === "exacte";
-  const environnement = positionExacte && osm ? buildEnvironnementOsm(osm) : "";
   const caveatLocalisation = positionExacte ? "" : CAVEAT_LOCALISATION_APPROX;
 
   return `Tu estimes l'écart entre le loyer réel d'un logement et le loyer déjà calculé pour lui.
@@ -477,8 +450,6 @@ Ce montant TIENT DÉJÀ COMPTE de :
 Ne recompte AUCUN de ces éléments, ni en positif ni en négatif. Ta seule question : ce logement précis est-il meilleur ou moins bon que les logements VOISINS, à surface et état comparables ?
 
 LOGEMENT : ${carac} — ${secteur}.
-
-${environnement}
 
 ${caveatLocalisation}
 
@@ -620,15 +591,7 @@ function extractJson<T>(text: string): T | null {
 
 export async function estimateRent(
   input: RentEstimationInput,
-  loyerRef?: LoyerReference | null,
-  /**
-   * Bundle OSM (3.2) déjà récupéré par l'appelant — ce module ne fait aucun
-   * géocodage ni fetch Overpass lui-même, même convention que `loyerRef`.
-   * Sans effet sur l'immeuble ou le chemin sans référence : seul le résidu
-   * (`estimerAvecReference`) en tient compte, et seulement si la position du
-   * bien est exacte (voir `buildPromptResidu`).
-   */
-  osm?: OsmBundle | null
+  loyerRef?: LoyerReference | null
 ): Promise<RentEstimationResult> {
   const secteur = buildSecteur(input);
   const model = process.env.GEMINI_RENT_MODEL || "gemini-2.5-flash";
@@ -644,7 +607,7 @@ export async function estimateRent(
   if (!refCC || !loyerRef || input.surface_m2 == null || input.surface_m2 <= 0) {
     return estimerSansReference(input, secteur, model);
   }
-  return estimerAvecReference(input, secteur, model, loyerRef, refCC, osm ?? null);
+  return estimerAvecReference(input, secteur, model, loyerRef, refCC);
 }
 
 async function estimerImmeuble(
@@ -725,12 +688,11 @@ async function estimerAvecReference(
   secteur: string,
   model: string,
   loyerRef: LoyerReference,
-  refCC: ReferenceCC,
-  osm: OsmBundle | null
+  refCC: ReferenceCC
 ): Promise<RentEstimationResult> {
   const surface = input.surface_m2 as number;
   const det = computeDeterministicRent(input, refCC);
-  const prompt = buildPromptResidu(input, secteur, det, refCC, loyerRef, osm);
+  const prompt = buildPromptResidu(input, secteur, det, refCC, loyerRef);
 
   let pct = 0;
   let criteres: CritereResidu[] = [];

@@ -5,7 +5,6 @@ import { getApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { estimateRent } from "@/lib/rentEstimation";
 import { fetchLoyerReference } from "@/lib/analyse/sources/loyers";
-import { fetchOsmBundle } from "@/lib/analyse/sources/osm";
 import { typologieAnil } from "@/lib/anilReference";
 import { isImmeuble, type ChampEstimable } from "@/lib/types";
 
@@ -38,17 +37,6 @@ export async function POST(req: NextRequest) {
         )
       : null;
 
-    // 3.2 : OSM n'est utile que si le lat/lon désigne le BÂTIMENT réel, pas le
-    // centroïde d'un quartier — même garde que la jointure DPE/ADEME par
-    // `banId` dans `run.ts`, pour la même raison. On réutilise les
-    // coordonnées déjà stockées sur le bien (dernier géocodage connu) plutôt
-    // que de regéocoder à chaque estimation de loyer.
-    const positionExacte = apartment.precision_localisation === "exacte";
-    const osm =
-      positionExacte && apartment.latitude != null && apartment.longitude != null
-        ? await fetchOsmBundle(apartment.latitude, apartment.longitude)
-        : null;
-
     const { loyer, loyerHC, justification, calcul } = await estimateRent({
       ville: apartment.ville,
       quartier: apartment.quartier,
@@ -68,7 +56,7 @@ export async function POST(req: NextRequest) {
       travaux: apartment.travaux,
       description: apartment.description,
       precisionLocalisation: apartment.precision_localisation,
-    }, loyerRef, osm);
+    }, loyerRef);
 
     // Ceci est l'action explicite "réestimer" : on écrase loyer_retenu même
     // s'il avait été marqué manuel, et on le (re)marque comme estimé par IA

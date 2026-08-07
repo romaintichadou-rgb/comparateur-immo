@@ -200,24 +200,25 @@ Conclusions retenues :
 seule fois). Taux d'échec et étendue estimés avec une précision faible ; à
 réévaluer avant tout changement de modèle.
 
-## Loyer — Phase 3 (enrichissement du résidu)
+## Loyer — compléments du résidu IA
 
-### OSM injecté UNIQUEMENT si l'adresse est exacte
+### Position approximative : caveat plutôt que donnée mesurée
 
 `RentEstimationInput.precisionLocalisation` porte la précision de la
 géolocalisation du bien. Sans adresse exacte, `latitude`/`longitude`
-désignent le CENTROÏDE du quartier, pas le bâtiment réel — un `OsmBundle`
-calculé dessus décrirait l'environnement d'un point arbitraire. Même principe
-que la jointure DPE/ADEME par `banId` dans `run.ts`.
+désignent le CENTROÏDE du quartier, pas le bâtiment réel — l'IA n'a alors pas
+le droit de juger la rue, le vis-à-vis ou l'exposition précise à cette
+échelle (même principe que la jointure DPE/ADEME par `banId` dans `run.ts`).
+`buildPromptResidu` injecte à la place un caveat explicite
+(`CAVEAT_LOCALISATION_APPROX`) : « ne fais AUCUNE affirmation sur la rue, le
+vis-à-vis, l'exposition précise ou les nuisances de voisinage immédiat ».
 
-La garde est posée à DEUX endroits, volontairement redondants : l'appelant
-(`estimate-rent/route.ts`) ne fetch même pas Overpass si la position n'est
-pas exacte, ET `buildPromptResidu` ignore un `osm` non-null si
-`precisionLocalisation !== "exacte"`.
-
-Sans adresse exacte, un caveat explicite est injecté à la place : « ne fais
-AUCUNE affirmation sur la rue, le vis-à-vis, l'exposition précise ou les
-nuisances de voisinage immédiat ».
+⚠️ Le calcul du loyer n'utilise plus OSM (retiré — voir
+`docs/plan-optimisation-loyer.md` §1 : effet mesuré faible sur le résidu,
+0 à 3 points, contre ~3 s de latence et un risque de faux zéro silencieux
+si Overpass répond vide). Ce module (`analyse/sources/osm.ts`) reste utilisé
+ailleurs, par les blocs Potentiel et Quartier de l'Analyse IA — ne pas le
+supprimer en pensant qu'il est mort.
 
 ### Description : troncature relevée de 800 à 1 500 caractères
 
