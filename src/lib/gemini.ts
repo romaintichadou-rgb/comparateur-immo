@@ -56,12 +56,16 @@ class GeminiHttpError extends Error {
   }
 }
 
-// 55 s par tentative, 2 tentatives max (55 × 2 = 110 s) : reste largement
-// sous la limite d'exécution des fonctions Vercel (300 s), tout en évitant
-// qu'un appel Gemini bloqué indéfiniment (observé : ~3 sur 57 dans les tests
-// menés pour ce projet) ne consomme tout le budget de la requête HTTP entière.
-const TIMEOUT_MS = 55000;
-const MAX_TENTATIVES = 2;
+// 25 s, 1 seule tentative (plan-optimisation-loyer.md §4) : ce qui compte
+// est l'EXPÉRIENCE UTILISATEUR, pas la marge Vercel (300 s par fonction, très
+// large même à 25 s). Un appel bloqué (observé : ~3 sur 57 dans les tests
+// menés pour ce projet) ne doit pas faire attendre l'utilisateur près d'une
+// minute (ex-55 s × 2) avant l'échec — la dégradation gracieuse (résidu → 0,
+// déterministe seul) prend le relais, et le bouton "Estimer avec IA" permet
+// de relancer manuellement si besoin, sans faire attendre tout le monde deux
+// fois la durée d'un timeout par défaut.
+const TIMEOUT_MS = 25000;
+const MAX_TENTATIVES = 1;
 
 export async function generateGeminiText(params: {
   apiKey: string;
