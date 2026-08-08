@@ -5,6 +5,7 @@ import {
   champsExtraits,
   extractFromFreeText,
   extractFromPageMeta,
+  extractFullDescription,
   extractOpenGraphBase,
   fillMissing,
 } from "./common";
@@ -37,6 +38,11 @@ export const selogerParser: DomainParser = {
     let data = extractOpenGraphBase($);
     data = fillMissing(data, extractFromPageMeta($));
     data = fillMissing(data, extractFromFreeText($("body").text()));
+
+    const fullDesc = extractFullDescription($);
+    if (fullDesc && (!data.description || fullDesc.length > data.description.length)) {
+      data.description = fullDesc;
+    }
 
     return { ok: true, blocked: false, data, champsExtraits: champsExtraits(data) };
   },

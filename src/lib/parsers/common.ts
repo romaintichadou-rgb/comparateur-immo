@@ -39,8 +39,11 @@ function mergeJsonLdCandidate(data: ParsedListing, item: unknown): void {
   if (!item || typeof item !== "object") return;
   const obj = item as Record<string, unknown>;
 
-  if (typeof obj.description === "string" && !data.description) {
-    data.description = cleanText(obj.description);
+  if (typeof obj.description === "string") {
+    const cleaned = cleanText(obj.description);
+    if (!data.description || cleaned.length > data.description.length) {
+      data.description = cleaned;
+    }
   }
 
   const offers = obj.offers as Record<string, unknown> | undefined;
@@ -192,6 +195,18 @@ function extractVilleFromTitle(text: string, data: ParsedListing): void {
     if (!NOT_CITY_RE.test(first) && candidate.length > 1) {
       data.ville = candidate;
       if (!data.code_postal) data.code_postal = plain[2];
+      return;
+    }
+  }
+
+  // Pattern 3: "... Ville | Site Name" — common real estate title format
+  const beforePipe = text.split(/\s*[|–—]\s*/)[0];
+  if (beforePipe) {
+    const lastWord = beforePipe.match(
+      /([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[-\s][A-ZÀ-Ÿa-zà-ÿ][\wà-ÿ'-]*){0,3})\s*$/,
+    );
+    if (lastWord && !NOT_CITY_RE.test(lastWord[1].split(/[\s-]/)[0])) {
+      data.ville = lastWord[1].trim();
     }
   }
 }
@@ -242,6 +257,35 @@ function applyKV(key: string, value: string, data: ParsedListing): void {
   }
 }
 
+const DESC_SELECTORS = [
+  '[itemprop="description"]',
+  '[data-qa-id*="description"]',
+  '[data-testid*="description"]',
+  '[class*="description-content"]',
+  '[class*="Description_text"]',
+  '[class*="DescriptionTexts"]',
+  '[class*="offerDescription"]',
+  '[class*="detail-description"]',
+  ".item-description",
+  "section#details p",
+  "div.s-cms",
+];
+
+export function extractFullDescription($: cheerio.CheerioAPI): string | undefined {
+  let best = "";
+  for (const sel of DESC_SELECTORS) {
+    $(sel).each((_, el) => {
+      const txt = $(el).text()?.trim();
+      if (txt && txt.length > best.length) best = txt;
+    });
+  }
+  $("p").each((_, el) => {
+    const txt = $(el).text()?.trim();
+    if (txt && txt.length > 300 && txt.length > best.length) best = txt;
+  });
+  return best.length > 100 ? cleanText(best) : undefined;
+}
+
 /**
  * Extraction depuis le titre, les balises h1 et les structures clé/valeur du
  * DOM (dt/dd, th/td) — presque tous les sites y exposent ville, quartier et
@@ -277,21 +321,8 @@ export function extractFromPageMeta($: cheerio.CheerioAPI): ParsedListing {
     if (kvMatch) applyKV(kvMatch[1], kvMatch[2], data);
   });
 
-  const descSels = [
-    '[itemprop="description"]',
-    '[class*="description-content"]',
-    '[class*="Description_text"]',
-    '[class*="DescriptionTexts"]',
-    ".item-description",
-    '[data-testid*="description"]',
-  ];
-  for (const sel of descSels) {
-    const txt = $(sel).first().text()?.trim();
-    if (txt && txt.length > 80 && (!data.description || txt.length > data.description.length)) {
-      data.description = cleanText(txt);
-      break;
-    }
-  }
+  const fullDesc = extractFullDescription($);
+  if (fullDesc) data.description = fullDesc;
 
   return data;
 }
@@ -425,7 +456,7 @@ export function extractFromFreeText(text: string): ParsedListing {
   if (!data.quartier) {
     const quartier = firstMatch(
       text,
-      /quartier\s+(?:de\s+|du\s+|des\s+|d[''])?([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[-\s/][a-zà-ÿA-ZÀ-Ÿ][\wà-ÿ'-]*){0,3})/i,
+      /quartier\s+(?:de\s+|du\s+|des\s+|d[''])?([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[-\s/][a-zà-ÿA-ZÀ-Ÿ][\wà-ÿ'-]*){0,3})/,
     );
     if (quartier) data.quartier = quartier;
   }

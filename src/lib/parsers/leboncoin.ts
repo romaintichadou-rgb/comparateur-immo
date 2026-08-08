@@ -5,6 +5,7 @@ import {
   champsExtraits,
   extractFromFreeText,
   extractFromPageMeta,
+  extractFullDescription,
   extractOpenGraphBase,
   fillMissing,
   toNumber,
@@ -46,6 +47,11 @@ export const leboncoinParser: DomainParser = {
 
     data = fillMissing(data, extractFromPageMeta($));
     data = fillMissing(data, extractFromFreeText($("body").text()));
+
+    const fullDesc = extractFullDescription($);
+    if (fullDesc && (!data.description || fullDesc.length > data.description.length)) {
+      data.description = fullDesc;
+    }
 
     return { ok: true, blocked: false, data, champsExtraits: champsExtraits(data) };
   },
@@ -114,6 +120,9 @@ function enrichFromNextData($: cheerio.CheerioAPI, data: ParsedListing): void {
       data.type_bien = tbMap[tbMatch[1].toLowerCase()];
     }
   }
+
+  const buildingYear = toNumber(attr("building_year")?.value);
+  if (buildingYear) data.annee_construction = buildingYear;
 
   const images: string[] = ad.images?.urls ?? [];
   if (images[0]) data.photo_url = images[0];
