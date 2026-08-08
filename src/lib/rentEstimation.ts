@@ -589,13 +589,25 @@ Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères OR
  * `charges_copro_annuelles` et `nb_lots` sont volontairement ABSENTS : ni
  * l'un ni l'autre n'entre dans `buildPromptResidu` (la conversion HC→CC ne
  * concerne que les chemins sans résidu) ni dans `computeDeterministicRent`.
+ *
+ * ⚠️ **`PROMPT_RESIDU_VERSION` DOIT être incrémenté à chaque changement du
+ * TEXTE ou du SCHÉMA du prompt résidu** (`buildPromptResidu`, `SCHEMA_RESIDU`),
+ * même si aucun champ ci-dessous n'a bougé. Bug réel rencontré : l'ajout du
+ * sens `"neutre"` (schéma + RÈGLE DE CALIBRAGE) a été déployé SANS bump —
+ * les biens dont le résultat était déjà en cache ont continué de servir
+ * indéfiniment l'ancien résultat (`sens: "positif"`, tag vert trompeur),
+ * puisque l'empreinte ne dépendait que des DONNÉES du bien, jamais de la
+ * version du prompt qui les interprète.
  */
+const PROMPT_RESIDU_VERSION = 2;
+
 function calculerEmpreinteResidu(
   input: RentEstimationInput,
   loyerRef: LoyerReference,
   typologie: TypologieAnil
 ): string {
   const cle = JSON.stringify([
+    PROMPT_RESIDU_VERSION,
     input.ville,
     input.quartier,
     input.code_postal,
