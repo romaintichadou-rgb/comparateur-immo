@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Home,
   Info,
+  Link2,
   Loader2,
   Plus,
   Sparkles,
@@ -89,8 +90,15 @@ function emptyInput(): ApartmentInput {
   };
 }
 
-type Step = "url" | "review" | "processing";
+type Step = "url" | "scraping" | "review" | "processing";
 type Banner = { tone: "info" | "warning" | "success"; text: string } | null;
+
+type ScrapingPhase = "connecting" | "bypassing" | "extracting";
+const SCRAPING_STEPS: { key: ScrapingPhase; label: string; detail: string }[] = [
+  { key: "connecting", label: "Connexion au site", detail: "Récupération de la page d'annonce." },
+  { key: "bypassing", label: "Contournement de la protection", detail: "Le site est protégé — passage par un navigateur distant." },
+  { key: "extracting", label: "Extraction des données", detail: "Lecture du prix, surface, DPE, localisation, description…" },
+];
 
 // Étapes du traitement post-création, jouées en séquence sur l'écran de
 // transition (l'estimation du loyer et des charges doit précéder l'analyse :
@@ -214,6 +222,7 @@ export default function AddApartmentFlow() {
   const [urlInput, setUrlInput] = useState(() => searchParams.get("url") ?? "");
   const autoAnalyseTriggered = useRef(false);
   const [analysing, setAnalysing] = useState(false);
+  const [scrapingPhase, setScrapingPhase] = useState<ScrapingPhase>("connecting");
   const [saving, setSaving] = useState(false);
   const [procPhase, setProcPhase] = useState<ProcPhase>("creating");
   const [banner, setBanner] = useState<Banner>(initial.banner);
@@ -255,6 +264,12 @@ export default function AddApartmentFlow() {
     }
     setAnalysing(true);
     setBanner(null);
+    setScrapingPhase("connecting");
+    setStep("scraping");
+
+    const t1 = setTimeout(() => setScrapingPhase("bypassing"), 3_000);
+    const t2 = setTimeout(() => setScrapingPhase("extracting"), 10_000);
+
     try {
       const res = await fetch("/api/parse", {
         method: "POST",
@@ -289,6 +304,8 @@ export default function AddApartmentFlow() {
         text: "Erreur réseau pendant l'analyse. Complète les champs manuellement.",
       });
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setAnalysing(false);
       setStep("review");
     }
@@ -399,6 +416,10 @@ export default function AddApartmentFlow() {
   }
 
   const extrait = (key: string) => champsExtraits.has(key);
+
+  if (step === "scraping") {
+    return <ScrapingScreen scrapingPhase={scrapingPhase} />;
+  }
 
   if (step === "processing") {
     return <ProcessingScreen procPhase={procPhase} />;
@@ -794,6 +815,40 @@ function Subsection({
         {title}
       </h3>
       {children}
+    </div>
+  );
+}
+
+function ScrapingScreen({ scrapingPhase }: { scrapingPhase: ScrapingPhase }) {
+  return (
+    <div className="flex min-h-[calc(100vh-120px)] items-center justify-center px-4 py-10">
+      <div className="w-full max-w-lg text-center">
+        <div className="relative mx-auto mb-8 h-40 w-40">
+          <span className="absolute inset-0 animate-ping rounded-full bg-accent-100 opacity-60" />
+          <span className="absolute inset-2 rounded-full bg-accent-50" />
+          <svg viewBox="0 0 120 120" className="relative h-full w-full" aria-hidden="true">
+            <circle cx="60" cy="54" r="26" className="fill-none stroke-accent-600" strokeWidth="3.5" />
+            <circle cx="60" cy="54" r="26" className="fill-white/70" />
+            <line x1="79" y1="73" x2="94" y2="88" className="stroke-ink-900" strokeWidth="5" strokeLinecap="round" />
+            <rect x="42" y="46" width="12" height="2.5" rx="1" className="fill-accent-400" />
+            <rect x="42" y="52" width="18" height="2.5" rx="1" className="fill-accent-600" />
+            <rect x="42" y="58" width="14" height="2.5" rx="1" className="fill-accent-400" />
+          </svg>
+        </div>
+
+        <h1 className="font-display flex items-center justify-center gap-2 text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+          <Link2 className="h-5 w-5 text-accent-500" />
+          Récupération de l&apos;annonce
+        </h1>
+        <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
+          Nous récupérons les informations de l&apos;annonce pour pré-remplir
+          le formulaire. Quelques secondes, aucune action requise.
+        </p>
+
+        <div className="mt-8">
+          <ProcessingStepsList steps={SCRAPING_STEPS} currentKey={scrapingPhase} />
+        </div>
+      </div>
     </div>
   );
 }
