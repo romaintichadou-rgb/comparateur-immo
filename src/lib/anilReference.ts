@@ -58,7 +58,7 @@ export const SURFACE_REFERENCE: Record<TypologieAnil, number> = {
 export const MAJORATION_MEUBLE = 0.12;
 
 /**
- * Élasticité du loyer/m² à la surface : `loyer_m2 ∝ surface ^ ELASTICITE`.
+ * Élasticité NATIONALE du loyer/m² à la surface : `loyer_m2 ∝ surface ^ ELASTICITE`.
  *
  * **Dérivée des données**, pas choisie : régression log-log sur les trois
  * ressources appartement (surfaces de référence 37 / 52 / 72 m²) pour chacune
@@ -67,6 +67,20 @@ export const MAJORATION_MEUBLE = 0.12;
  * Concrètement, à référence 52 m² : 20 m² → ×1,59 · 40 m² → ×1,14 ·
  * 80 m² → ×0,81 · 120 m² → ×0,67. Les petits logements se louent nettement
  * plus cher au m², ce que l'ancien calcul linéaire ignorait complètement.
+ *
+ * ⚠️ **Repli, plus la valeur par défaut pour les appartements.** Bug audité
+ * après un signalement utilisateur (loyer réel très supérieur à l'estimation
+ * sur un T2 parisien) : cette médiane nationale est tirée par ~35 000
+ * communes très majoritairement rurales, et surestimait fortement la décote
+ * de surface dans les grandes villes — Paris 10e a une élasticité réelle de
+ * −0,119, pas −0,485. `referenceCCMeuble` utilise désormais
+ * `LoyerReference.elasticiteLocale` (mesurée par commune dans
+ * `generate-anil-loyers.mjs`, avec repli automatique sur CETTE constante
+ * quand la mesure locale n'est pas fiable — moins de 30 observations d'un
+ * côté ou de l'autre, ou valeur hors bornes). Cette constante reste la seule
+ * utilisée pour les MAISONS (une seule ressource, aucune paire de points à
+ * comparer) et sert de repli ultime si `elasticiteLocale` est absent (calculs
+ * très anciens, avant l'ajout du champ).
  */
 export const ELASTICITE_SURFACE = -0.485;
 
@@ -119,10 +133,20 @@ export function typologieAnil(
  * surface par lot, jamais la surface totale du bâtiment : appliquer
  * l'élasticité à 400 m² produirait une décote massive alors que l'immeuble est
  * composé de logements de taille normale.
+ *
+ * `elasticite` : `LoyerReference.elasticiteLocale` du bien quand disponible
+ * (défaut `ELASTICITE_SURFACE`, la constante nationale — voir son ⚠️
+ * ci-dessus). Paramètre explicite plutôt que lu en interne : ce module reste
+ * PUR, et un appelant qui n'a pas encore de `LoyerReference` (tests, valeurs
+ * par défaut) garde un comportement sensé sans rien fournir.
  */
-export function facteurSurface(surfaceLogement: number | null, typologie: TypologieAnil): number {
+export function facteurSurface(
+  surfaceLogement: number | null,
+  typologie: TypologieAnil,
+  elasticite: number = ELASTICITE_SURFACE
+): number {
   if (surfaceLogement == null || surfaceLogement <= 0) return 1;
-  const brut = Math.pow(surfaceLogement / SURFACE_REFERENCE[typologie], ELASTICITE_SURFACE);
+  const brut = Math.pow(surfaceLogement / SURFACE_REFERENCE[typologie], elasticite);
   return Math.min(FACTEUR_SURFACE_MAX, Math.max(FACTEUR_SURFACE_MIN, brut));
 }
 
@@ -181,7 +205,11 @@ export function referenceCCMeuble(
   surfaceLogement: number | null,
   typologie: TypologieAnil
 ): ReferenceCC {
-  const f = facteurSurface(surfaceLogement, typologie);
+  // `?? ELASTICITE_SURFACE` : filet pour un `LoyerReference` construit avant
+  // l'ajout du champ (calculs très anciens dont le JSON persisté ne l'a
+  // jamais eu) — `sources/loyers.ts` le peuple systématiquement pour toute
+  // référence fraîchement lue.
+  const f = facteurSurface(surfaceLogement, typologie, ref.elasticiteLocale ?? ELASTICITE_SURFACE);
   const conv = (m2: number) => m2 * (1 + MAJORATION_MEUBLE) * f;
   return {
     medianM2: conv(ref.loyerM2),

@@ -13,7 +13,10 @@
  * Ce script porte TOUTE la logique de résolution de ressource retirée du
  * runtime applicatif (`MOTIF_RESSOURCE`, `resolveResource`, le parsing CSV) —
  * elle n'a plus sa place dans `src/lib/analyse/sources/loyers.ts`, qui se
- * contente désormais de lire le JSON produit ici.
+ * contente désormais de lire le JSON produit ici. Il porte aussi le calcul de
+ * `elasticiteLocale` (voir plus bas) : dérivé des DEUX ressources appartement
+ * (T1-T2 et T3+) déjà téléchargées ici, calculer ça côté application aurait
+ * dupliqué un accès aux deux tables qui n'existe autrement que dans ce script.
  *
  * Usage : `node scripts/generate-anil-loyers.mjs`
  * Procédure de rafraîchissement annuel : voir
@@ -126,15 +129,82 @@ async function downloadAndParse(typologie) {
   return { annee: resource.annee, parCommune };
 }
 
+// Repli national — médiane des pentes log-log mesurée sur les 34 960
+// communes lors de l'audit initial (voir anilReference.ts). Utilisé pour
+// TOUTE commune où l'élasticité locale n'est pas mesurable avec confiance :
+// c'est la valeur par défaut historique, pas une approximation nouvelle.
+const ELASTICITE_NATIONALE = -0.485;
+
+// En dessous de ce nombre d'observations (d'UN COTÉ ou de l'autre), la pente
+// mesurée entre les deux ressources est du bruit statistique, pas un signal
+// de marché — même seuil que la note méthodologique ANIL pour la fiabilité
+// d'une prédiction (voir SEUIL_NB_OBS_FIABLE, anilReference.ts).
+const SEUIL_OBS_ELASTICITE = 30;
+
+// Bornes de plausibilité économique. Une pente positive ou proche de zéro
+// impliquerait qu'un logement plus grand ne coûte pas moins cher au m² que
+// la référence — jamais observé sur un marché sain, donc traité comme un
+// signal de mesure non fiable (petit échantillon d'un côté malgré le seuil
+// d'observations) plutôt que comme une élasticité "réelle mais extrême".
+const BORNES_ELASTICITE = [-1.2, -0.05];
+
+/**
+ * Élasticité de surface PROPRE À CHAQUE COMMUNE — bug corrigé après un audit
+ * utilisateur (loyer réel très supérieur à l'estimation sur un T2 parisien) :
+ * la constante nationale (-0,485, médiane sur 34 960 communes très
+ * majoritairement rurales) surestimait fortement la décote de surface dans
+ * les grandes villes. Mesuré sur les données ANIL elles-mêmes : Paris 10e
+ * -0,119, Paris 11e -0,137, quand la constante nationale appliquait -0,485 —
+ * un studio de 48 m² au lieu de la référence 37 m² perdait ~12 % de trop.
+ *
+ * Dérivée de la SEULE paire de points dont on dispose par commune : les
+ * loyers/m² des ressources "appartement 1-2 pièces" (37 m² réf.) et
+ * "appartement 3 pièces et +" (72 m² réf.) donnent une pente log-log —
+ * exactement la même méthode que celle qui a produit la constante nationale,
+ * appliquée commune par commune plutôt qu'agrégée.
+ *
+ * Ne s'applique QU'aux typologies appartement (`appartement`,
+ * `appartement_t1_t2`, `appartement_t3_plus`) : une seule ressource "maison"
+ * existe, aucune paire de points n'est mesurable pour ce marché, qui reste
+ * sur la constante nationale (voir `sources/loyers.ts`, `depuisLigneBrute`).
+ *
+ * Mesuré à l'échelle nationale : ce correctif ne biaise PAS le calcul en
+ * moyenne (effet net +0,0 % à +0,5 % selon la surface, sur les 34 900
+ * communes) — il corrige les marchés où la pente locale diverge de la
+ * médiane nationale, dans les deux sens, sans déplacer la médiane elle-même.
+ */
+function calculerElasticiteLocale(t12, t3) {
+  const elasticite = {};
+  for (const insee of Object.keys(t12)) {
+    const a = t12[insee];
+    const b = t3[insee];
+    let e = ELASTICITE_NATIONALE;
+    if (a && b && a[3] >= SEUIL_OBS_ELASTICITE && b[3] >= SEUIL_OBS_ELASTICITE && a[0] > 0 && b[0] > 0) {
+      const brut = Math.log(b[0] / a[0]) / Math.log(72 / 37);
+      if (brut >= BORNES_ELASTICITE[0] && brut <= BORNES_ELASTICITE[1]) e = brut;
+    }
+    elasticite[insee] = Math.round(e * 1000) / 1000;
+  }
+  return elasticite;
+}
+
 async function main() {
   console.log("Résolution et téléchargement des 4 ressources ANIL (data.gouv.fr)…");
   const annee = {};
   const out = { annee };
+  const tables = {};
   for (const typologie of TYPOLOGIES) {
     const table = await downloadAndParse(typologie);
     annee[typologie] = table.annee;
     out[typologie] = table.parCommune;
+    tables[typologie] = table.parCommune;
   }
+
+  console.log("Calcul de l'élasticité de surface locale (par commune)…");
+  const elasticiteLocale = calculerElasticiteLocale(tables.appartement_t1_t2, tables.appartement_t3_plus);
+  const nbLocale = Object.values(elasticiteLocale).filter((e) => e !== ELASTICITE_NATIONALE).length;
+  console.log(`  ${nbLocale} communes avec élasticité mesurée localement, ${Object.keys(elasticiteLocale).length - nbLocale} en repli national (${ELASTICITE_NATIONALE})`);
+  out.elasticiteLocale = elasticiteLocale;
 
   const dest = new URL("../src/lib/anil_loyers.json", import.meta.url);
   await writeFile(dest, JSON.stringify(out));

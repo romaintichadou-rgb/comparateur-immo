@@ -150,10 +150,16 @@ chemins sans résidu (immeuble, logement sans référence ANIL).
 Gemini : `ville`/`quartier`/`code_postal`/`surface_m2`/`nb_pieces`/
 `nb_chambres`/`type_bien`/`etage`/`ascenseur`/`annee_construction`/
 `etat_bien`/`dpe`/`travaux`/`description`/`precisionLocalisation`, PLUS la
-typologie et la référence ANIL utilisées (`loyerRef`) — ce dernier point
-couvre aussi bien un changement de typologie qu'un rafraîchissement annuel
-des données ANIL (§3/§5), qui changent `ancre` sans qu'aucun champ du bien
-n'ait bougé.
+typologie et la référence ANIL utilisées (`loyerRef`, `elasticiteLocale`
+incluse) — ce dernier point couvre aussi bien un changement de typologie
+qu'un rafraîchissement annuel des données ANIL (§3/§5), qui changent `ancre`
+sans qu'aucun champ du bien n'ait bougé.
+
+`PROMPT_RESIDU_VERSION` (constante en tête de `calculerEmpreinteResidu`)
+complète ce filet : à incrémenter à chaque changement du TEXTE ou du SCHÉMA
+du prompt résidu, même quand aucun champ ci-dessus n'a bougé — un changement
+de logique d'interprétation, pas de donnée. Oublié une fois (ajout du sens
+`"neutre"`, v2), corrigé depuis : voir l'historique du fichier.
 
 `estimerAvecReference()` compare cette empreinte à celle du
 `loyer_calcul` déjà enregistré (passé par `estimate-rent/route.ts` comme
@@ -477,12 +483,56 @@ l'ANIL alterne « Indicateur**s** de loyer … » et « Indicateur de loyer … 
 logements de tailles mixtes. La correction de surface s'applique alors à la
 surface **par lot** (`lotsEffectifs`), jamais à la surface totale du bâtiment.
 
-### `ELASTICITE_SURFACE = −0,485` — le seul coefficient dérivé des données
+### Élasticité de surface — LOCALE par commune, plus une constante nationale
 
-Régression log-log sur les trois ressources appartement × 34 960 communes ;
-médiane des pentes −0,485. Le loyer/m² **n'est pas linéaire** : à référence
-52 m², 20 m² → ×1,59 · 40 m² → ×1,14 · 80 m² → ×0,81 · 120 m² → ×0,67. Borné à
-`[0,75 ; 1,45]` (la loi puissance diverge sous 15 m²).
+⚠️ **Bug corrigé après un signalement utilisateur** (loyer réel très
+supérieur à l'estimation sur un T2 parisien) : `ELASTICITE_SURFACE = −0,485`
+(régression log-log sur les trois ressources appartement × 34 960 communes,
+médiane des pentes) est une médiane **nationale**, tirée par ~35 000 communes
+très majoritairement rurales — elle surestimait fortement la décote de
+surface dans les grandes villes. Mesuré sur les données ANIL elles-mêmes :
+Paris 10e −0,119, Paris 11e −0,137, Bordeaux −0,356, quand la constante
+appliquait −0,485 partout. Sur le cas signalé (48 m², 10e arrondissement),
+appliquer −0,485 au lieu de −0,119 sous-estimait le loyer de ~10 %.
+
+**`LoyerReference.elasticiteLocale`** (calculée dans
+`scripts/generate-anil-loyers.mjs`, `calculerElasticiteLocale`) remplace
+`ELASTICITE_SURFACE` commune par commune, à partir de la SEULE paire de
+points mesurable par commune : les loyers/m² des ressources T1-T2 (37 m² réf.)
+et T3+ (72 m² réf.) donnent une pente log-log locale — même méthode que celle
+qui a produit la constante nationale, appliquée commune par commune plutôt
+qu'agrégée sur 34 960 valeurs.
+
+Repli sur `ELASTICITE_SURFACE` (la constante nationale) dans trois cas :
+- moins de 30 observations d'un côté ou de l'autre (`SEUIL_OBS_ELASTICITE`,
+  même seuil que `SEUIL_NB_OBS_FIABLE`) — sous ce seuil la pente mesurée est
+  du bruit, pas un signal de marché ;
+- valeur hors bornes `[−1,2 ; −0,05]` (`BORNES_ELASTICITE`) — une pente
+  positive ou quasi nulle est économiquement implausible (jamais observée sur
+  un marché sain), donc traitée comme une mesure non fiable plutôt qu'une
+  élasticité « réelle mais extrême » ;
+- typologie `maison` — une seule ressource maison est publiée, aucune paire
+  de points n'est mesurable ; ce marché reste sur la constante nationale
+  (voir `elasticitePour`, `sources/loyers.ts`).
+
+Sur les 34 900 communes de l'édition 2025 : **5 278 ont une élasticité
+mesurée localement** (dont toutes les grandes villes testées), les 29 622
+autres (petites communes, peu d'annonces) retombent sur la constante. **Effet
+national mesuré neutre** : +0,0 % à +0,5 % en moyenne selon la surface — le
+correctif ne déplace pas la médiane nationale, il corrige les marchés où la
+pente locale diverge, dans les deux sens.
+
+`facteurSurface(surfaceLogement, typologie, elasticite)` accepte désormais
+cette valeur en paramètre (défaut `ELASTICITE_SURFACE` si omis — filet pour
+un appelant sans `LoyerReference`, ou une référence persistée avant l'ajout
+du champ). Borné à `[0,75 ; 1,45]` dans tous les cas (la loi puissance
+diverge sous 15 m²).
+
+⚠️ Ce changement modifie l'ANCRE déterministe sans changer aucun champ du
+bien : `PROMPT_RESIDU_VERSION` (cache par empreinte, §6) a été bumpé en même
+temps — sans ça, tous les biens déjà en cache auraient continué de servir
+l'ancienne estimation indéfiniment (déjà rencontré une fois avec l'ajout du
+sens `"neutre"`, voir plus bas).
 
 Tous les autres coefficients du calcul de loyer sont **conventionnels** — à
 traiter comme des hypothèses révisables, pas comme des mesures.

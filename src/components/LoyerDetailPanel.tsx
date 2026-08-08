@@ -38,6 +38,7 @@ interface AnilData {
   nbObs: number;
   annee: number;
   niveauPrediction: "commune" | "epci" | "maille";
+  elasticiteLocale: number;
 }
 
 export default function LoyerDetailPanel({

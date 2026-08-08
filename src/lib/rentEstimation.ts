@@ -598,8 +598,15 @@ Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères OR
  * indéfiniment l'ancien résultat (`sens: "positif"`, tag vert trompeur),
  * puisque l'empreinte ne dépendait que des DONNÉES du bien, jamais de la
  * version du prompt qui les interprète.
+ *
+ * v3 : `loyerRef.elasticiteLocale` ajouté ci-dessous — l'élasticité de
+ * surface locale change l'ANCRE déterministe (`computeDeterministicRent`)
+ * sans changer aucun autre champ du bien. Ce champ suffirait normalement à
+ * lui seul (une nouvelle clé dans le tableau produit un hash différent, donc
+ * invalide déjà tout cache existant) ; le bump documente l'intention pour un
+ * futur lecteur du diff, comme convenu depuis le bug ci-dessus.
  */
-const PROMPT_RESIDU_VERSION = 2;
+const PROMPT_RESIDU_VERSION = 3;
 
 function calculerEmpreinteResidu(
   input: RentEstimationInput,
@@ -629,6 +636,7 @@ function calculerEmpreinteResidu(
     loyerRef.max,
     loyerRef.annee,
     loyerRef.niveauPrediction,
+    loyerRef.elasticiteLocale,
   ]);
   return createHash("sha256").update(cle).digest("hex");
 }

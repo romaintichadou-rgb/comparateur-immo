@@ -26,7 +26,7 @@
  * rafraîchissement annuel : voir docs/reference/estimation-loyer-charges.md.
  */
 
-import type { TypologieAnil } from "@/lib/anilReference";
+import { ELASTICITE_SURFACE, type TypologieAnil } from "@/lib/anilReference";
 import anilLoyersRaw from "../../anil_loyers.json";
 
 export interface LoyerReference {
@@ -49,6 +49,15 @@ export interface LoyerReference {
    * quel que soit le niveau.
    */
   niveauPrediction: "commune" | "epci" | "maille";
+  /**
+   * Élasticité de surface PROPRE à cette commune (voir `anilReference.ts`,
+   * `ELASTICITE_SURFACE`) — mesurée dans `generate-anil-loyers.mjs` à partir
+   * des ressources T1-T2/T3+, avec repli automatique sur la constante
+   * nationale quand la mesure locale n'est pas fiable. Pour la typologie
+   * `maison` (une seule ressource, rien à mesurer), c'est toujours la
+   * constante nationale — voir `depuisLigneBrute` plus bas.
+   */
+  elasticiteLocale: number;
 }
 
 /**
@@ -61,6 +70,11 @@ type LigneBrute = [number, number, number, number, string];
 
 type AnilLoyersData = {
   annee: Record<TypologieAnil, number>;
+  /** Élasticité par commune, calculée dans generate-anil-loyers.mjs — voir
+   * `LoyerReference.elasticiteLocale`. Une seule table, PAS par typologie :
+   * dérivée des ressources appartement, réutilisée pour toutes les
+   * typologies appartement (`maison` s'en écarte, voir `depuisLigneBrute`). */
+  elasticiteLocale: Record<string, number>;
 } & Record<TypologieAnil, Record<string, LigneBrute>>;
 
 // `as unknown as` : le type inféré depuis le JSON (35 000+ propriétés
@@ -68,7 +82,18 @@ type AnilLoyersData = {
 // de suite sur un type de travail léger (Record<string, LigneBrute>).
 const anilLoyers = anilLoyersRaw as unknown as AnilLoyersData;
 
-function depuisLigneBrute(ligne: LigneBrute, annee: number): LoyerReference {
+/**
+ * ⚠️ `maison` garde TOUJOURS `ELASTICITE_SURFACE` (la constante nationale) :
+ * une seule ressource maison est publiée (pas de paire T1-T2/T3+ à comparer),
+ * donc aucune élasticité locale n'est mesurable pour ce marché — voir
+ * `calculerElasticiteLocale` dans generate-anil-loyers.mjs.
+ */
+function elasticitePour(codeInsee: string, typologie: TypologieAnil): number {
+  if (typologie === "maison") return ELASTICITE_SURFACE;
+  return anilLoyers.elasticiteLocale[codeInsee] ?? ELASTICITE_SURFACE;
+}
+
+function depuisLigneBrute(ligne: LigneBrute, annee: number, elasticiteLocale: number): LoyerReference {
   const [loyerM2, min, max, nbObs, niveau] = ligne;
   return {
     loyerM2,
@@ -77,6 +102,7 @@ function depuisLigneBrute(ligne: LigneBrute, annee: number): LoyerReference {
     nbObs,
     annee,
     niveauPrediction: niveau === "c" ? "commune" : niveau === "e" ? "epci" : "maille",
+    elasticiteLocale,
   };
 }
 
@@ -87,7 +113,7 @@ export async function fetchLoyerReference(
   if (!codeInsee) return null;
   const ligne = anilLoyers[typologie][codeInsee];
   if (!ligne) return null;
-  return depuisLigneBrute(ligne, anilLoyers.annee[typologie]);
+  return depuisLigneBrute(ligne, anilLoyers.annee[typologie], elasticitePour(codeInsee, typologie));
 }
 
 const RAYON_LOCAL = 500;
@@ -125,9 +151,8 @@ export async function fetchLoyerReferenceLocal(
   const table = anilLoyers[typologie];
   const annee = anilLoyers.annee[typologie];
   const refs = uniqueCodes
-    .map((code) => table[code])
-    .filter((r): r is LigneBrute => r != null)
-    .map((ligne) => depuisLigneBrute(ligne, annee));
+    .filter((code) => table[code] != null)
+    .map((code) => depuisLigneBrute(table[code], annee, elasticitePour(code, typologie)));
 
   if (refs.length === 0) return null;
   if (refs.length === 1) return { ref: refs[0], nbCommunes: 1 };
@@ -146,6 +171,10 @@ export async function fetchLoyerReferenceLocal(
       loyerM2: round1(refs.reduce((s, r) => s + r.loyerM2 * r.nbObs, 0) / totalObs),
       min: round1(Math.min(...refs.map((r) => r.min))),
       max: round1(Math.max(...refs.map((r) => r.max))),
+      // Pondérée par nbObs comme loyerM2 : cohérent avec le reste de
+      // l'agrégat, plutôt qu'une moyenne simple qui donnerait autant de poids
+      // à une commune limitrophe anecdotique qu'à la commune principale.
+      elasticiteLocale: refs.reduce((s, r) => s + r.elasticiteLocale * r.nbObs, 0) / totalObs,
       nbObs: totalObs,
       annee: refs[0].annee,
       niveauPrediction,
