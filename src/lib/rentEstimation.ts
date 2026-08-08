@@ -307,11 +307,29 @@ function buildConsigneDescription(input: RentEstimationInput): string {
 // dans `anilReference.ts`).
 // ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * Révisé après un aller-retour : la v1 de ce correctif faisait basculer un
+ * 5e+ sans ascenseur en PRIME (1,08) directement depuis un malus au 4e
+ * (0,97) — un saut de +11 points pour UN étage de plus, économiquement
+ * incohérent (grimper une volée d'escalier de plus ne rend pas un logement
+ * subitement plus désirable). Cette version reste MONOTONE : plus on monte
+ * sans ascenseur, plus la décote se creuse (0,97 puis 0,95), au lieu de
+ * s'inverser brutalement. Le "cachet haussmannien" qui justifiait la prime
+ * reste une caractéristique du BÂTIMENT, pas de l'étage — il appartient au
+ * résidu IA (si la description le mentionne), pas à ce coefficient
+ * déterministe qui s'applique à tout logement de France, cachet ou non.
+ *
+ * ⚠️ Ordre des conditions volontaire : "≥5 sans ascenseur" DOIT être testé
+ * AVANT "≥3 sans ascenseur" — sinon cette dernière (qui matche aussi les
+ * étages ≥5) absorbe tous les cas avant que la règle plus spécifique
+ * s'exécute, la rendant morte.
+ */
 function facteurEtage(input: RentEstimationInput): number {
   const etage = input.etage ? parseInt(input.etage, 10) : null;
   if (etage == null || isNaN(etage)) return 1;
-  if (etage === 0) return 0.95;
-  if (etage >= 3 && input.ascenseur === true) return 1.05;
+  if (etage === 0) return 0.92;
+  if (etage >= 5 && input.ascenseur === false) return 0.95;
+  if (etage >= 3 && input.ascenseur === true) return 1.04;
   if (etage >= 3 && input.ascenseur === false) return 0.97;
   return 1; // étages 1-2 : pas d'impact, ascenseur ou non
 }
@@ -321,10 +339,17 @@ function facteurEtage(input: RentEstimationInput): number {
  * `facteurEtatTravaux`). Clés strictement alignées sur `ETATS_BIEN`
  * (`types.ts`) ; toute autre valeur (champ vide compris) retombe sur 1,0.
  */
+// ⚠️ Neuf/Très bon état à ÉGALITÉ (1,10) et Bon état relevé à 1,03 (au lieu
+// de 1,00 neutre) — choix utilisateur (audit "booster les critères
+// positifs"), CONVENTIONNEL, pas mesuré. Effet de bord assumé : "Bon état"
+// n'est plus le pivot neutre de l'échelle — un `etat_bien` VIDE (donnée
+// manquante) reste 1,0 via le repli `?? 1.0` de `facteurEtatTravaux`, ce
+// qui place désormais "connu, bon état" légèrement AU-DESSUS de "état
+// inconnu", plutôt qu'à égalité. Négatifs inchangés (0,96 / 0,92).
 const ETAT_COEF: Record<string, number> = {
-  "Neuf": 1.06,
-  "Très bon état": 1.03,
-  "Bon état": 1.00,
+  "Neuf": 1.10,
+  "Très bon état": 1.10,
+  "Bon état": 1.03,
   "À rafraîchir": 0.96,
   "À rénover": 0.92,
 };
@@ -370,8 +395,11 @@ function facteurDpe(input: RentEstimationInput): number {
 }
 
 // Les facteurs sont multiplicatifs : ils composent. Sans ce plafond, le pire
-// cas cumulé (Neuf × 3e étage avec ascenseur) dépasserait déjà +11 % avant
-// même le résidu IA. Borne posée EN PLUS de la fourchette ANIL (2.8).
+// cas cumulé côté positif (Neuf/Très bon état × ≥3e avec ascenseur,
+// 1,10 × 1,04 = 1,144) dépasserait déjà +14,4 % avant même le résidu IA ;
+// côté négatif (À rénover × RDC × DPE G, 0,92 × 0,92 × 0,95 ≈ 0,804) MORD
+// déjà sur ce plancher — ce garde-fou n'est pas symbolique, il s'applique
+// réellement des deux côtés. Borne posée EN PLUS de la fourchette ANIL (2.8).
 const FACTEUR_DETERMINISTE_MIN = 0.85;
 const FACTEUR_DETERMINISTE_MAX = 1.20;
 
@@ -477,6 +505,26 @@ function computeDeterministicRent(input: RentEstimationInput, refCC: ReferenceCC
  */
 const RESIDU_MIN = -20;
 const RESIDU_MAX = 20;
+
+/**
+ * Amplificateur des résidus POSITIFS uniquement (audit "booster les critères
+ * positifs" — le plafond `RESIDU_MAX` n'était pas le facteur limitant :
+ * mesuré sur ~30 appels réels, le résidu ne dépassait jamais 10 points même
+ * avec plusieurs critères factuels cumulés, très en dessous des ±20
+ * disponibles). Le goulot n'est pas le clamp mais le poids que le modèle
+ * accorde lui-même à chaque critère — ce facteur le corrige a posteriori.
+ *
+ * ⚠️ Asymétrique PAR CHOIX : aucun facteur équivalent côté négatif. Justifié
+ * par l'audit (biais mesuré unidirectionnel — sous-estimation sur des biens
+ * moyens à bons, jamais l'inverse), pas par un principe général comme quoi
+ * le positif devrait toujours peser plus. Aucune preuve que les critères
+ * négatifs soient mal calibrés : les laisser inchangés n'est pas un oubli.
+ *
+ * CONVENTIONNEL, pas mesuré — comme `SEUIL_SURFACE_MICRO_LOGEMENT`. Appliqué
+ * au résidu BRUT avant clamp, donc toujours borné par `RESIDU_MAX` au final :
+ * pas de dérive possible au-delà du plafond déjà en place.
+ */
+const RESIDU_POSITIF_BOOST = 1.4;
 
 const SCHEMA_RESIDU = {
   type: "OBJECT",
@@ -767,8 +815,16 @@ Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères OR
  * sous-estimés de −24 % à −41 % malgré v6, cause identifiée : aucune
  * ressource ANIL n'a de pivot sous 37 m², et le résidu était jusqu'ici
  * explicitement empêché de compenser cette extrapolation.
+ *
+ * v8 : `RESIDU_POSITIF_BOOST` (×1,4 sur le résidu positif uniquement) —
+ * AUCUN changement du TEXTE du prompt, seulement de l'INTERPRÉTATION du
+ * nombre renvoyé par Gemini. Bumpé quand même, par précaution : même cas de
+ * figure que l'ajout du sens "neutre" en v2 (voir plus haut) — un calcul
+ * déjà en cache resterait sinon indéfiniment servi avec l'ancien résidu non
+ * amplifié, puisque l'empreinte ne dépend que des DONNÉES du bien, jamais de
+ * la façon dont le résultat est ensuite interprété.
  */
-const PROMPT_RESIDU_VERSION = 7;
+const PROMPT_RESIDU_VERSION = 8;
 
 function calculerEmpreinteResidu(
   input: RentEstimationInput,
@@ -1089,7 +1145,10 @@ async function estimerAvecReference(
       if (pctBrut == null) {
         echecIa = true;
       } else {
-        pct = Math.max(RESIDU_MIN, Math.min(RESIDU_MAX, pctBrut));
+        // Amplifie UNIQUEMENT le résidu positif (RESIDU_POSITIF_BOOST) avant
+        // le clamp final — un résidu négatif traverse inchangé.
+        const pctAmplifie = pctBrut > 0 ? pctBrut * RESIDU_POSITIF_BOOST : pctBrut;
+        pct = Math.max(RESIDU_MIN, Math.min(RESIDU_MAX, pctAmplifie));
         criteres = filtrerCriteresDejaComptes(Array.isArray(parsed?.criteres) ? parsed.criteres : []);
       }
     } catch {

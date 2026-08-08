@@ -66,14 +66,30 @@ DISJOINTS (voir ci-dessous), le blend n'apportait plus rien qu'une dilution.
 
 | Facteur | Fonction | Détail |
 |---|---|---|
-| Étage/ascenseur | `facteurEtage` | 0,95 RDC · 1,05 (≥3ᵉ+asc.) · 0,97 (≥3ᵉ sans asc.) · 1,00 sinon |
+| Étage/ascenseur | `facteurEtage` | 0,92 RDC · 1,04 (≥3ᵉ+asc.) · 0,97 (3ᵉ-4ᵉ sans asc.) · 0,95 (≥5ᵉ sans asc.) · 1,00 sinon |
 | **État × travaux** (fusionnés) | `facteurEtatTravaux` | voir plus bas |
 | DPE | `facteurDpe` | A-D neutres (1,00), E 0,99, F 0,97, G 0,95 |
 
 Le produit des trois est borné à **`[0,85 ; 1,20]`** (`FACTEUR_DETERMINISTE_MIN/MAX`)
 avant d'être appliqué à la médiane ANIL — les facteurs sont multiplicatifs,
-ils composent, et sans ce plafond le pire cumul dépassait déjà +11 % avant
-même le résidu IA.
+ils composent, et sans ce plafond le pire cumul côté positif (Neuf/Très bon
+état × ≥3ᵉ avec ascenseur, 1,10 × 1,04 = 1,144) dépasserait déjà +14,4 %
+avant même le résidu IA ; côté négatif (À rénover × RDC × DPE G,
+0,92 × 0,92 × 0,95 ≈ 0,804) mord déjà sur ce plancher.
+
+⚠️ **`facteurEtage` MONOTONE, corrigé après un premier essai incohérent** :
+une v1 de ce lot faisait basculer un ≥5ᵉ sans ascenseur en PRIME (1,08)
+directement depuis un malus au 4ᵉ (0,97) — un saut de +11 points pour un
+seul étage de plus, économiquement injustifiable. Version retenue :
+0,97 (3ᵉ-4ᵉ sans ascenseur) puis 0,95 (≥5ᵉ sans ascenseur) — la décote se
+creuse progressivement en montant sans ascenseur, elle ne s'inverse plus.
+Le "cachet haussmannien" qui motivait la prime reste une caractéristique du
+BÂTIMENT, pas de l'étage : à faire remonter par le résidu IA (si la
+description le mentionne explicitement), pas par ce coefficient qui
+s'applique à tout logement de France, cachet ou non. **Ordre des `if`
+volontaire dans le code** : "≥5 sans ascenseur" DOIT être testé avant "≥3
+sans ascenseur", sinon cette dernière (qui matche aussi ≥5) rend la
+première inatteignable.
 
 ⚠️ **GES retiré du prompt** (colinéaire au DPE, aucune information propre) et
 **DPE fortement réduit** : son vrai poids est RÉGLEMENTAIRE (gel des loyers
@@ -87,13 +103,23 @@ compter séparément revenait à compter deux fois le même effet. Les travaux
 FONT PROGRESSER l'état actuel vers « Neuf », de façon saturante :
 
 ```
-facteur = ETAT_COEF[etat_bien] + progression × (1,06 − ETAT_COEF[etat_bien])
+facteur = ETAT_COEF[etat_bien] + progression × (ETAT_COEF["Neuf"] − ETAT_COEF[etat_bien])
 progression = min(1, travaux_par_m2 / 900)   ← TRAVAUX_SATURATION_M2, conventionnel
 ```
 
-`ETAT_COEF` : Neuf 1,06 · Très bon état 1,03 · Bon état 1,00 · À rafraîchir
+`ETAT_COEF` : Neuf 1,10 · Très bon état 1,10 · Bon état 1,03 · À rafraîchir
 0,96 · À rénover 0,92. `etat_bien` vide → 1,0 neutre (donnée manquante = pas
 d'effet, jamais une pénalité implicite).
+
+⚠️ **Neuf et Très bon état à ÉGALITÉ (1,10), Bon état relevé à 1,03**
+(au lieu de 1,00) — choix utilisateur (« booster les critères positifs »,
+pas tous), CONVENTIONNEL, pas mesuré. Négatifs inchangés : gonfler
+uniquement le positif est un biais ASSUMÉ, justifié par l'audit (biens
+réels majoritairement sous-estimés, jamais l'inverse — voir « Calibrage du
+résidu » plus bas), pas par un principe général. Effet de bord à connaître :
+"Bon état" n'est plus le pivot neutre de l'échelle (1,00) — un `etat_bien`
+VIDE reste 1,0 par le repli `?? 1.0`, donc "connu, bon état" (1,03) se
+retrouve légèrement AU-DESSUS d'un état simplement inconnu.
 
 ⚠️ **« Très bon état » ajouté après un audit** (biens réels sous-estimés de
 −26 % à −41 % : deux studios "très bon état" dont la nuance n'avait nulle part
@@ -215,6 +241,38 @@ même limite que celle déjà notée pour P2. Comme pour le reste de cet audit,
 la variabilité du jugement "quartier"/"micro-logement" d'un appel à l'autre
 (±5 points typiquement, voir « Reproductibilité ») fait qu'un seul run ne
 suffit pas à conclure — à réévaluer sur des descriptions réelles complètes.
+
+### Amplification du résidu positif — `RESIDU_POSITIF_BOOST` (v8)
+
+Après P1-P3, mesure faite sur ~30 appels réels : le résidu ne dépassait
+**jamais** 10 points, très en dessous des ±20 disponibles (`RESIDU_MAX`) —
+même sur des biens avec 2-3 critères factuels cumulés (ex. terrasse + garage
++ quartier → 10 % net, pas plus). **Le clamp n'était donc plus le facteur
+limitant** : le vrai goulot est le poids que le modèle accorde lui-même à
+chaque critère (il semble ancrer sur des valeurs rondes ~3-5 points/critère,
+indépendamment de la consigne "peut approcher la borne haute" ajoutée en v6).
+
+`RESIDU_POSITIF_BOOST = 1.4` (`rentEstimation.ts`) multiplie le résidu BRUT
+**uniquement quand il est positif**, avant le clamp final à `RESIDU_MAX` —
+un résidu négatif traverse inchangé.
+
+⚠️ **Asymétrique par choix, pas par oubli** — même logique que P3 : aucune
+preuve que les critères NÉGATIFS soient mal calibrés (l'audit n'a mesuré que
+des biens moyens à bons), alors que le biais mesuré sur ces 8 biens est
+unidirectionnel (sous-estimation, jamais l'inverse). Gonfler symétriquement
+les deux sens aurait été un principe arbitraire ("le positif compte plus"),
+pas une correction d'un biais mesuré.
+
+CONVENTIONNEL (comme `SEUIL_SURFACE_MICRO_LOGEMENT`) : `1,4` n'est pas
+dérivé d'une mesure, c'est un point de départ à ajuster si les prochains
+audits montrent qu'il en faut plus ou moins.
+
+`PROMPT_RESIDU_VERSION` bumpé v7 → v8 **alors que le TEXTE du prompt ne
+change pas** — seule l'interprétation du nombre renvoyé par Gemini change.
+Bump quand même nécessaire (même cas que le bug de la v2, sens "neutre") :
+sans lui, un calcul déjà en cache continuerait de servir indéfiniment
+l'ancien résidu non amplifié, l'empreinte ne dépendant que des données du
+bien, jamais de la façon dont le résultat est ensuite interprété.
 
 ### Filtre du double comptage — appliqué au CODE (`filtrerCriteresDejaComptes`)
 
