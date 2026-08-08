@@ -197,6 +197,23 @@ export default function LoyerDetailPanel({
     return pct === 0 ? [] : [{ libelle: "Étage · état · DPE", pct }];
   })();
 
+  // Contexte du bien — TOUTES les caractéristiques, y compris celles sans
+  // effet (un étage neutre, un DPE D neutre…). Distinct des tags colorés
+  // ci-dessus : ceux-ci ne montrent QUE ce qui a un effet chiffrable, celui-ci
+  // montre ce qui a été CONSIDÉRÉ, effet ou non — c'est la seule vue qui
+  // répond à "quels sont les éléments neutres du calcul", puisque le
+  // déterministe (contrairement au résidu IA) connaît la valeur de chaque
+  // champ qu'il ait joué ou non.
+  const caracteristiquesBien: string[] = [];
+  if (apt.type_bien) caracteristiquesBien.push(apt.type_bien);
+  if (hasSurface) caracteristiquesBien.push(`${surface} m²`);
+  if (apt.nb_pieces != null) caracteristiquesBien.push(`${apt.nb_pieces} pièce(s)`);
+  if (apt.etage) caracteristiquesBien.push(`étage ${apt.etage}`);
+  if (apt.ascenseur === true) caracteristiquesBien.push("ascenseur");
+  if (apt.etat_bien) caracteristiquesBien.push(apt.etat_bien);
+  if (apt.dpe) caracteristiquesBien.push(`DPE ${apt.dpe}`);
+  if (apt.travaux != null && apt.travaux > 0) caracteristiquesBien.push("travaux prévus");
+
   return (
     <div className="fixed inset-0 z-[2000]">
       <div
@@ -239,12 +256,27 @@ export default function LoyerDetailPanel({
 
               {/* ── ÉTAPE 1 : Ancre ANIL ── */}
               {anil && refCC && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface && (() => {
-                const anilBrutTotal = Math.round(anil.loyerM2 * surface);
-                // Intermédiaire calculé à partir des €/m² NON arrondis : le
-                // recomposer depuis `anilBrutTotal` déjà arrondi ferait dériver
-                // la chaîne de quelques euros, et la dernière ligne ne
-                // retomberait plus sur `anilMedian`.
+                // ⚠️ Bug réel corrigé après coup, relevé par un utilisateur sur
+                // un bien de 43,72 m² (réf. 37 m²) : `anilBrutTotal` multipliait
+                // le €/m² DE RÉFÉRENCE (mesuré pour un logement de
+                // `surfaceReference` m²) par la surface RÉELLE — un total sans
+                // signification, ni pour le logement de référence ni pour ce
+                // bien. Pire, le pourcentage affiché juste après ne portait que
+                // sur le TAUX (€/m²), jamais sur la surface elle-même : un
+                // logement plus grand que la référence affichait un pourcentage
+                // NÉGATIF alors que son loyer total, lui, est bien PLUS élevé
+                // (plus de m², même si chaque m² individuel coûte un peu moins).
+                //
+                // Fix : la ligne 1 est le total pour le logement de RÉFÉRENCE
+                // (`surfaceReference` m², un nombre qui a un sens : "un
+                // {typologie} type de {X} m² dans ce secteur se loue Y €"). La
+                // ligne 2 passe directement de CE total à celui de la surface
+                // RÉELLE — son pourcentage capture donc l'effet NET (plus de
+                // surface ET taux/m² plus bas), qui va dans le sens attendu :
+                // un logement plus grand que la référence a un total plus élevé.
+                const anilRefTotal = Math.round(anil.loyerM2 * refCC.surfaceReference);
                 const anilSurfaceTotal = Math.round(anil.loyerM2 * refCC.facteurSurface * surface);
+                const pctSurface = anilRefTotal > 0 ? Math.round((anilSurfaceTotal / anilRefTotal - 1) * 100) : 0;
                 return (
                 <section className="space-y-1.5">
                   <div className="flex items-center gap-2">
@@ -276,32 +308,28 @@ export default function LoyerDetailPanel({
                       +12 %, voir anilReference.ts. */}
                   <div className="rounded-lg border border-ink-100 bg-white px-4 py-3">
                     <ul className="divide-y divide-ink-100/50">
-                      {/* ⚠️ Ligne 1 = €/m² de référence (mesuré pour un logement
-                          de ${surfaceReference} m², PAS pour ce bien) DÉJÀ
-                          multiplié par la surface réelle — un montant encore
-                          sans signification pour ce bien précis. C'est la ligne
-                          SUIVANTE qui corrige le €/m² pour sa vraie taille (loi
-                          d'élasticité). Le hint ne doit donc jamais prétendre
-                          que la surface réelle est déjà prise en compte ici :
-                          exactement l'inverse de ce que dit "Ajusté à la
-                          surface réelle" juste en dessous — contradiction
-                          relevée après coup, à ne pas réintroduire. */}
+                      {/* Ligne 1 = loyer total pour le logement DE RÉFÉRENCE
+                          ANIL (`surfaceReference` m²) — un nombre qui se lit
+                          seul : "un {typologie} type de X m² se loue Y € dans
+                          ce secteur". PAS encore le total de CE bien. */}
                       <StepRow
                         label={`Loyer moyen du secteur — ${TYPOLOGIE_LABEL[refCC.typologie]}`}
                         hint={`pour un logement type de ${refCC.surfaceReference} m²`}
-                        value={anilBrutTotal}
+                        value={anilRefTotal}
                       />
-                      {/* Le loyer/m² décroît avec la surface (élasticité −0,485
-                          mesurée sur les données ANIL) : un studio se loue plus
-                          cher au m² que la surface de référence, un grand
-                          logement moins — d'où l'ajustement, dans un sens ou
-                          l'autre selon que ce bien est plus grand ou plus petit
-                          que la référence. */}
-                      {Math.abs(refCC.facteurSurface - 1) > 0.005 && (
+                      {/* Passe DIRECTEMENT du total de référence au total réel :
+                          le pourcentage est donc l'effet NET (surface + taux/m²
+                          combinés), jamais le taux seul — voir le commentaire
+                          plus haut sur le bug corrigé. Le loyer/m² décroît avec
+                          la surface (élasticité −0,485 mesurée sur les données
+                          ANIL), mais un bien PLUS GRAND que la référence garde
+                          un total PLUS ÉLEVÉ : plus de m² compense largement le
+                          taux/m² plus bas. */}
+                      {anilSurfaceTotal !== anilRefTotal && (
                         <StepRow
                           label="Ajusté à la surface réelle"
                           hint={`${surface} m² au lieu de ${refCC.surfaceReference} m² type`}
-                          pct={Math.round((refCC.facteurSurface - 1) * 100)}
+                          pct={pctSurface}
                           value={anilSurfaceTotal}
                         />
                       )}
@@ -357,6 +385,25 @@ export default function LoyerDetailPanel({
                       annoncer OÙ on a atterri. */}
                   <h3 className={TITRE_SECTION}>Étape 2 — Ce qui fait varier ce loyer</h3>
                   <div className="space-y-4 rounded-lg border border-ink-100 bg-white p-4">
+                    {/* ── Contexte : TOUTES les caractéristiques du bien, effet
+                        ou non — demande explicite : l'ancien panneau montrait
+                        cette liste grise et elle a été retirée à tort en Phase
+                        4 (seuls les tags COLORÉS ci-dessous sont apparus).
+                        Distincte des tags colorés : ceux-ci ne montrent que ce
+                        qui a un effet chiffrable, celle-ci montre tout ce qui a
+                        été considéré — c'est la seule vue qui répond à "quels
+                        sont les éléments neutres du calcul" côté déterministe
+                        (le résidu IA, lui, ne remonte jamais les critères
+                        neutres — voir plus bas). */}
+                    {caracteristiquesBien.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {caracteristiquesBien.map((c) => (
+                          <span key={c} className="rounded-full bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {!calcul ? (
                       // Chemins sans résidu structuré (immeuble, logement sans
                       // référence ANIL) : rien à décomposer, on retombe sur la
@@ -368,11 +415,15 @@ export default function LoyerDetailPanel({
                       )
                     ) : (
                       <>
-                        {/* ── Famille 1 : caractéristiques objectives du bien ── */}
+                        {/* ── Famille 1 : EFFET des caractéristiques déterministes ──
+                            Distincte du bloc "contexte" ci-dessus (qui liste TOUT),
+                            celle-ci ne montre QUE ce qui a un effet chiffrable —
+                            d'où un titre différent ("Ajustement", pas
+                            "Caractéristiques", déjà pris par le contexte). */}
                         {facteursBareme.length > 0 && (
                           <FamilleFacteurs
-                            titre="Caractéristiques du bien"
-                            aide="effet automatique selon le bien"
+                            titre="Ajustement automatique"
+                            aide="selon étage, état, DPE"
                           >
                             {facteursBareme.map((f) => (
                               <FacteurTag key={f.libelle} label={f.libelle} pct={f.pct} />
@@ -384,58 +435,70 @@ export default function LoyerDetailPanel({
                             Nom volontairement sans "IA" (demande explicite) :
                             l'utilisateur n'a pas besoin de savoir QUEL
                             sous-système a produit l'info, seulement CE QUI joue
-                            sur le loyer. */}
-                        <FamilleFacteurs
-                          titre="Autres particularités"
-                          aide="en plus des caractéristiques ci-dessus"
-                          badge={
-                            !calcul.echecIa ? (
-                              <span
-                                className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold ${pctToneClasses(calcul.ajustementPct)}`}
-                              >
-                                {calcul.ajustementPct > 0 ? "+" : ""}{calcul.ajustementPct} %
-                              </span>
-                            ) : undefined
+                            sur le loyer.
+                            ⚠️ Le placeholder "neutre" (logement ordinaire, voir
+                            CritereResidu) est exclu de `critNotables` : sans ce
+                            filtre, le titre "Autres particularités" s'affichait
+                            au-dessus d'un unique tag disant "rien de notable" —
+                            un titre qui promet une particularité, suivi d'un
+                            contenu qui dit le contraire. Quand il ne reste RIEN
+                            de notable, pas de famille du tout : une phrase
+                            simple, sans l'habillage "particularités". */}
+                        {(() => {
+                          const critNotables = calcul.criteres.filter((c) => c.sens !== "neutre");
+                          if (calcul.echecIa) {
+                            return <p className="text-xs text-ink-500">Indisponible pour ce calcul.</p>;
                           }
-                        >
-                          {calcul.echecIa ? (
-                            <p className="text-xs text-ink-500">Indisponible pour ce calcul.</p>
-                          ) : calcul.criteres.length === 0 ? (
-                            <p className="text-xs text-ink-500">
-                              Rien à signaler — loyer aligné sur la référence de marché.
-                            </p>
-                          ) : (
-                            grouperCriteresParCategorie(calcul.criteres).map((groupe, _, groupes) => (
-                              <div key={groupe.key} className="contents">
-                                {/* Le libellé de catégorie n'apparaît que s'il
-                                    DISCRIMINE : avec une seule catégorie il
-                                    répète le titre de famille pour rien (cas le
-                                    plus fréquent — 3 critères, 1 catégorie). */}
-                                {groupes.length > 1 && (
-                                  <span className="mt-0.5 w-full text-[10px] font-medium uppercase tracking-wide text-ink-400">
-                                    {groupe.label}
-                                  </span>
-                                )}
-                                {groupe.items.map((c, i) => (
-                                  <CritereTag key={i} critere={c} />
-                                ))}
-                              </div>
-                            ))
-                          )}
-                        </FamilleFacteurs>
-
-                        {/* Phase 4 (3) : sans ce texte, un clic sur "Estimer
-                            avec IA" qui réutilise le résultat précédent (cache
-                            par empreinte, §6) semblerait n'avoir rien fait — un
-                            bouton qui ne répond pas plutôt qu'un calcul jugé
-                            toujours valide. "Résidu" (jargon interne) évité :
-                            l'utilisateur n'a pas besoin de savoir que c'est un
-                            résidu de calcul qui a été réutilisé. */}
-                        {calcul.reutilise && (
-                          <p className="border-t border-ink-100/50 pt-2.5 text-[11px] italic text-ink-400">
-                            Pas de changement depuis la dernière estimation.
-                          </p>
-                        )}
+                          if (critNotables.length === 0) {
+                            return (
+                              <p className="text-xs text-ink-500">
+                                Rien de particulier ne joue sur ce loyer — aligné sur la référence de marché.
+                              </p>
+                            );
+                          }
+                          return (
+                            <FamilleFacteurs
+                              titre="Autres particularités"
+                              aide="en plus de l'ajustement ci-dessus"
+                              badge={
+                                <span
+                                  className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold ${pctToneClasses(calcul.ajustementPct)}`}
+                                >
+                                  {calcul.ajustementPct > 0 ? "+" : ""}{calcul.ajustementPct} %
+                                </span>
+                              }
+                              // Résumé en PROSE, demandé en plus des tags : les
+                              // pastilles disent QUOI, la prose dit POURQUOI et
+                              // met les critères en relation ("le quartier est
+                              // recherché, ce qui justifie...") — une nuance
+                              // qu'une liste de tags ne porte pas seule.
+                              // `loyer_justification` est généré server-side à
+                              // partir de CES MÊMES critères (synthetiserJustification),
+                              // jamais d'un texte séparé qui pourrait diverger.
+                              intro={
+                                apt.loyer_justification &&
+                                renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))
+                              }
+                            >
+                              {grouperCriteresParCategorie(critNotables).map((groupe, _, groupes) => (
+                                <div key={groupe.key} className="contents">
+                                  {/* Le libellé de catégorie n'apparaît que s'il
+                                      DISCRIMINE : avec une seule catégorie il
+                                      répète le titre de famille pour rien (cas
+                                      le plus fréquent — 3 critères, 1 catégorie). */}
+                                  {groupes.length > 1 && (
+                                    <span className="mt-0.5 w-full text-[10px] font-medium uppercase tracking-wide text-ink-400">
+                                      {groupe.label}
+                                    </span>
+                                  )}
+                                  {groupe.items.map((c, i) => (
+                                    <CritereTag key={i} critere={c} />
+                                  ))}
+                                </div>
+                              ))}
+                            </FamilleFacteurs>
+                          );
+                        })()}
                       </>
                     )}
                   </div>
@@ -699,11 +762,16 @@ function FamilleFacteurs({
   titre,
   aide,
   badge,
+  intro,
   children,
 }: {
   titre: string;
   aide: string;
   badge?: ReactNode;
+  /** Explication en prose, affichée AU-DESSUS des tags — le résumé narratif
+   * ("le quartier est recherché, ce qui justifie...") que des pastilles seules
+   * ne peuvent pas porter (nuance, mise en relation des critères entre eux). */
+  intro?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -713,6 +781,9 @@ function FamilleFacteurs({
         {badge}
         <span className="min-w-0 flex-1 truncate text-[11px] text-ink-400">{aide}</span>
       </div>
+      {intro && (
+        <div className="mb-2 rounded-lg bg-ink-50 p-3 text-sm text-ink-600 whitespace-pre-line">{intro}</div>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">{children}</div>
     </div>
   );
