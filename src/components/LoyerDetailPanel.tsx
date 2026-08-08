@@ -548,7 +548,11 @@ export default function LoyerDetailPanel({
  */
 function ecartTone(pct: number, slot: keyof TonePanelStyle): string {
   let tone: RendementTone;
-  if (pct > 15) tone = "alerte";
+  // Seuil aligné sur RESIDU_MAX (rentEstimation.ts, ±20 depuis l'audit
+  // post-déploiement) : un clamp élargi à 20 % pour laisser passer des
+  // estimations légitimement au-dessus du marché ne doit pas être repeint en
+  // rouge "trop optimiste" par un seuil resté sur l'ancien ±15.
+  if (pct > 20) tone = "alerte";
   else if (pct >= 0) tone = "positif";
   else if (pct >= -10) tone = "attention";
   else tone = "alerte";

@@ -49,7 +49,7 @@ devient :
 ```
 loyer = ANIL(typologie, surface)                         ← Phase 1
       × facteur déterministe global                      ← étage · état+travaux · DPE
-      × (1 + résidu_IA / 100)                             ← ±15 %, PAS de blend
+      × (1 + résidu_IA / 100)                             ← ±20 %, PAS de blend
       → clampé à la fourchette ANIL (drapeau `plafonne`)
 ```
 
@@ -91,9 +91,18 @@ facteur = ETAT_COEF[etat_bien] + progression × (1,06 − ETAT_COEF[etat_bien])
 progression = min(1, travaux_par_m2 / 900)   ← TRAVAUX_SATURATION_M2, conventionnel
 ```
 
-`ETAT_COEF` : Neuf 1,06 · Bon état 1,00 · À rafraîchir 0,96 · À rénover 0,92.
-`etat_bien` vide → 1,0 neutre (donnée manquante = pas d'effet, jamais une
-pénalité implicite).
+`ETAT_COEF` : Neuf 1,06 · Très bon état 1,03 · Bon état 1,00 · À rafraîchir
+0,96 · À rénover 0,92. `etat_bien` vide → 1,0 neutre (donnée manquante = pas
+d'effet, jamais une pénalité implicite).
+
+⚠️ **« Très bon état » ajouté après un audit** (biens réels sous-estimés de
+−26 % à −41 % : deux studios "très bon état" dont la nuance n'avait nulle part
+où atterrir — ni dans `ETAT_COEF` faute de palier dédié, ni dans le résidu IA,
+qui a pour consigne de NE PAS recompter l'état, déjà déclaré appliqué). Le
+palier est désormais câblé aux extracteurs (`parsers/common.ts`,
+`bookmarklet.ts`) : "très bon état"/"excellent état"/"parfait état" routent
+vers ce palier, testés AVANT le motif générique "bon état" (qui matcherait
+sinon "très bon état" comme sous-chaîne).
 
 ### Le prompt résidu (`buildPromptResidu`) — deux règles nécessaires
 
@@ -111,6 +120,101 @@ correctif quartier (voir plus bas) — il l'était par erreur.
    surcorrige et pénalise l'absence de balcon/parking sur TOUS les biens. La
    règle finale : « l'absence d'un équipement est la norme, ne compte un
    négatif que si un problème ACTIF est décrit ».
+
+### Calibrage du résidu — élargi après audit (v6)
+
+**Audité après signalement utilisateur** : l'algorithme rejoué sur 8 biens
+réels (l'appartement de l'utilisateur + 7 annonces LeBonCoin, loyers réels
+connus) sous-estimait 6 biens sur 8, biais moyen ≈ −15 %, jusqu'à −41 % sur
+deux petits studios. Deux causes identifiées dans le prompt lui-même (pas
+seulement dans les coefficients déterministes ci-dessus) :
+
+- **Clamp `RESIDU_MIN`/`RESIDU_MAX` trop serré** — ±15 laissait peu de place
+  même quand plusieurs critères factuels légitimes s'accumulaient. Élargi à
+  **±20**. Ce n'est qu'un GARDE-FOU contre l'hallucination — il ne pousse rien
+  à la hausse par lui-même, il autorise seulement le résidu à aller plus loin
+  quand le cas le justifie.
+- **RÈGLE DE CALIBRAGE trop conservatrice** — l'ancienne consigne (« réserve
+  un écart de plus de 8 points aux cas vraiment marquants ») écrasait
+  systématiquement un cumul de 2-3 critères factuels vérifiés sous un total
+  proche de 0 (mesuré : terrasse + garage cités mais seulement +5 % net).
+  Reformulée pour que chaque critère retenu pèse pour lui-même — seule la
+  borne globale limite désormais le total, plus une habitude de rester bas
+  par prudence. « Ordinaire = 0 » reste inchangé comme cas par défaut : ce
+  n'est pas un biais à la hausse généralisé, seulement la fin d'un
+  sous-comptage des cas réellement au-dessus de la moyenne.
+
+⚠️ **Choix délibéré de ne PAS gonfler l'estimation par défaut** (ex. viser
+systématiquement le haut de la fourchette ANIL pour un LMNP meublé) : biaiser
+l'outil vers l'optimisme fausserait les simulations de rendement/cash-flow qui
+en dépendent. Le correctif ne fait que laisser le résidu représenter fidèlement
+un bien réellement au-dessus de la moyenne — un bien ordinaire continue de
+recevoir 0.
+
+`PROMPT_RESIDU_VERSION` bumpé v5 → v6 (texte du prompt changé, tous les
+calculs en cache invalidés au prochain appel — voir « Cache par empreinte »
+plus bas). Seuil de couleur `ecartTone` (`LoyerDetailPanel.tsx`) aligné en
+même temps, de +15 à +20 — voir `docs/reference/couleurs-scoring.md`.
+
+⚠️ Échantillon limité (8 biens, dont 7 avec des descriptions reconstituées à
+partir du seul titre de l'annonce, pas le texte complet) — à réévaluer sur un
+échantillon plus large et des descriptions complètes avant d'aller plus loin.
+
+### Micro-logements — exception ciblée du résidu (P3, v7)
+
+Malgré P1/P2, deux studios réels (18-19 m²) de l'échantillon d'audit
+restaient sous-estimés de −24 % à −41 %. Cause identifiée, distincte de P2 :
+`facteurSurface` (`anilReference.ts`) corrige la référence ANIL par une loi
+de puissance calibrée sur les DEUX SEULES ressources publiées (37 m² et
+72 m² de référence — voir « Référence ANIL » plus bas). Aucune ressource
+n'a de pivot sous 37 m² (vérifié sur le dataset data.gouv.fr, 4 ressources
+seulement : `appartement`, `1 ou 2 pièces`, `3 pièces et plus`, `maison`) —
+un logement de 18-19 m² est donc TOUJOURS extrapolé, jamais interpolé.
+
+**Problème conceptuel, pas seulement un manque de données** : `elasticiteLocale`
+est mesurée comme la pente ENTRE deux populations d'annonces différentes
+(annonces 1-2 pièces vs annonces 3 pièces et +), puis appliquée comme si
+c'était la pente AU SEIN de la population des petits logements lorsqu'on
+extrapole vers 18 m². Rien ne garantit que ces deux pentes coïncident — et
+l'audit suggère qu'elles divergent nettement pour les micro-logements
+(marché à part : forte demande locative, souvent proche gare/université/
+centre, faible offre).
+
+**Décision : pas de coefficient déterministe inventé.** Le seuil sous lequel
+`elasticiteLocale` mesurée entre 37 et 72 m² devient trop hasardeuse à
+extrapoler ne peut PAS être mesuré avec les données ANIL disponibles (aucune
+ressource pivotée sous 37 m²) — contrairement à `elasticiteLocale` elle-même,
+qui EST mesurée. Fabriquer un coefficient non mesuré aurait été le genre
+d'"approximation qui a l'air rigoureuse" que ce projet évite ailleurs. Le
+correctif retenu **débloque le résidu IA** au lieu de toucher au déterministe :
+
+- `SEUIL_SURFACE_MICRO_LOGEMENT = 25` (m², CONVENTIONNEL — ni mesuré ni
+  dérivé d'une source, un jugement documenté comme tel) : sous ce seuil,
+  `buildConsigneMicroLogement` ajoute une EXCEPTION explicite à la consigne
+  "ne recompte pas la surface" du prompt résidu — la SEULE exception à cette
+  règle. Le résidu peut alors, à sa discrétion (jamais automatique), ajouter
+  UN critère "prestations" s'il juge que ce micro-logement précis bénéficie
+  d'une prime de marché que l'extrapolation ANIL ne capture pas.
+- Exclue pour les maisons (une seule ressource ANIL, rien à extrapoler de la
+  même façon) et les immeubles (la correction de surface y porte sur la
+  surface PAR LOT, pas sur un logement recherché par un locataire).
+- Pas de filtre `MOTIFS_DEJA_COMPTES` ajouté pour ce critère : contrairement
+  à étage/état/DPE (qui ont montré une fuite mesurée nécessitant un filtre
+  code), aucune fuite n'a encore été observée pour la surface — à surveiller,
+  pas à corriger par anticipation.
+
+`PROMPT_RESIDU_VERSION` bumpé v6 → v7.
+
+⚠️ **Effet mesuré modeste sur l'échantillon d'audit** (mécanisme vérifié
+actif — un studio a reçu le critère "Micro-logement bien situé", +5 % — mais
+l'autre non, sur une description trop pauvre pour que l'IA ait matière à
+juger). Le biais moyen sur les 8 biens ne bouge pratiquement pas (~−14 %
+avant et après P3) : la limite n'est pas le mécanisme mais la richesse des
+descriptions testées (titres d'annonce seuls, pas le texte complet réel) —
+même limite que celle déjà notée pour P2. Comme pour le reste de cet audit,
+la variabilité du jugement "quartier"/"micro-logement" d'un appel à l'autre
+(±5 points typiquement, voir « Reproductibilité ») fait qu'un seul run ne
+suffit pas à conclure — à réévaluer sur des descriptions réelles complètes.
 
 ### Filtre du double comptage — appliqué au CODE (`filtrerCriteresDejaComptes`)
 
@@ -225,6 +329,13 @@ varier de plus de 5 %.** Mesuré sur appels Gemini réels (`gemini-2.5-flash`,
 | Prompt résidu v1-v2, **sans** search | 10,4 % | 0 / 25 |
 | **Prompt résidu final** (v4, étage/état/DPE déclarés déjà appliqués), **avec** search | 2,8 % | — |
 | **Prompt résidu final, sans search** (implémenté) | **1,9 %** | **0** |
+
+⚠️ Mesures faites sur le prompt v4/v5 (« Le prompt résidu ») — **pas encore
+refaites depuis le calibrage élargi en v6** (« Calibrage du résidu — élargi
+après audit »). La reformulation ne touche pas au mécanisme qui garantissait
+la reproductibilité (température 0, `responseSchema`, pas de recherche), donc
+aucune régression attendue, mais à confirmer sur des appels réels avant de
+s'y fier.
 
 Conclusions retenues :
 
@@ -660,6 +771,86 @@ généralement au 2nd semestre) :
 Le script porte lui-même toute la logique de résolution de ressource
 (`MOTIF_RESSOURCE`, recherche par titre) et de parsing CSV — elle n'existe
 plus dans le code d'application, pour ne pas la dupliquer aux deux endroits.
+
+## Plafond légal — encadrement des loyers à Paris (P1, `encadrementLoyers.ts`)
+
+Ajouté suite à l'audit qui a aussi motivé P2 (biens réels sous-estimés) :
+l'app SAVAIT déjà que Paris/Lille/Lyon/Montpellier plafonnent les loyers
+(`recommandations.ts`, argument « Vérifie l'encadrement ») mais ne l'utilisait
+jamais comme donnée de calcul, seulement comme phrase de conseil dans
+l'onglet Optimiser.
+
+**Portée de ce premier lot : Paris uniquement.** Source : opendata.paris.fr,
+dataset `logement-encadrement-des-loyers` (Direction du Logement et de
+l'Habitat), figé au build dans `src/lib/encadrement_paris.json` par
+`scripts/generate-encadrement-paris.mjs` — même pattern que
+`anil_loyers.json`. 80 quartiers administratifs × 4 tranches de pièces (1 à
+4+) × 4 époques de construction × meublé/non meublé, publiés annuellement.
+Rafraîchissement annuel : `npm run generate:encadrement-paris` (le script
+tente l'année courante puis recule jusqu'à trouver une édition publiée),
+committer le diff — même procédure que `anil_loyers.json` ci-dessus.
+
+### Agrégation à l'arrondissement, pas au quartier administratif
+
+`input.quartier` est un nom INFORMEL ("Canal Saint-Martin"), pas l'un des 80
+noms OFFICIELS du dataset ("Hôpital-Saint-Louis"...) — les faire correspondre
+demanderait une résolution géographique (point dans polygone via le
+`geo_shape` publié par quartier), hors périmètre de ce lot. Le script agrège
+donc au niveau de l'ARRONDISSEMENT (`code_postal`, déjà connu précisément) :
+pour chaque combinaison pièces × époque, il retient le MAX des maximums (et
+le MIN des minimums) parmi les quartiers administratifs de l'arrondissement —
+le plafond le plus PERMISSIF disponible sans connaître le quartier exact, pour
+ne jamais signaler à tort un loyer légal comme hors plafond.
+
+`code_grand_quartier` (ex. `7510311`) encode l'arrondissement en position
+3-4 : format `"75" + "1" + arrondissement(2) + quartier_local(2)`. Vérifié
+sur plusieurs quartiers connus avant d'écrire le script — une erreur d'offset
+ici regroupe les 80 quartiers dans de mauvais arrondissements silencieusement
+(pas d'erreur, juste des chiffres qui ne correspondent à rien : c'est arrivé
+une fois en écrivant ce lot, détecté seulement parce que le JSON généré
+n'avait que 3 clés au lieu de 20).
+
+### Pièces/époque manquantes → repli le plus large, jamais un pari
+
+Mêmes principes que `typologieAnil`/`ETAT_COEF` : `nb_pieces` ou
+`annee_construction` inconnus ne doivent pencher le plafond dans AUCUN sens.
+`nb_pieces` inconnu → les 4 tranches (1 à 4+) sont interrogées et le MAX est
+retenu ; `annee_construction` inconnue → les 4 époques sont interrogées, même
+règle. `nb_pieces` connu → clampé à `[1,4]` (au-delà de 4, la tranche "4 et
+plus" s'applique).
+
+### INFORMATIF — ne clampe jamais `loyer_retenu`
+
+⚠️ **Décision volontaire, à ne pas "corriger" en clamp dur sans relire ceci** :
+`plafondEncadrementParis` ne fait QUE renseigner
+`LoyerCalcul.plafondLegal` et, si `loyer` le dépasse, ajouter une phrase
+d'avertissement à la justification — il ne réduit JAMAIS le loyer estimé.
+
+Raison, découverte en testant ce lot sur l'appartement réel qui a motivé
+l'audit (48 m², Paris 10e, loyer réel 1 950 €) : le plafond légal calculé
+pour un T2 quelconque du 10e (toute époque confondue) est d'environ 1 820 €
+— **le loyer RÉEL dépasse déjà ce plafond**. La loi prévoit un mécanisme de
+"complément de loyer" pour des caractéristiques exceptionnelles (terrasse,
+vue, cachet architectural...) que ce module ne peut pas vérifier. Un clamp
+aveugle aurait donc RÉDUIT l'estimation pour exactement le type de bien que
+P2 cherche à mieux estimer à la hausse — biais inverse réintroduit par la
+"correction légale" elle-même.
+
+### Pas d'impact sur le cache résidu
+
+`plafondEncadrementParis` n'entre PAS dans `calculerEmpreinteResidu` : il ne
+fait partie ni du texte envoyé à Gemini, ni du schéma de réponse — c'est un
+post-traitement déterministe appliqué après le résidu, comme `det` (toujours
+recalculé, jamais mis en cache). Pas de bump de `PROMPT_RESIDU_VERSION` pour
+ce lot.
+
+### Extension future
+
+Lille, Lyon/Villeurbanne et Montpellier publient des données d'encadrement
+comparables — non couvertes par ce lot (Paris seul avait un signal direct
+depuis l'audit). Même limite qu'ici à anticiper : la résolution quartier par
+quartier demande soit une correspondance de noms fiable, soit une jointure
+géographique (`geo_shape`) — pas un simple ajout de fichier JSON.
 
 ## Ajustements déterministes
 

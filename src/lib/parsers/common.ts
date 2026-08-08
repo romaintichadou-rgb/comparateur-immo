@@ -385,6 +385,7 @@ export function extractFromFreeText(text: string): ParsedListing {
 
   if (/\b[àa]\s+r[eé]nover\b/i.test(text)) data.etat_bien = "À rénover";
   else if (/\b[àa]\s+rafra[iî]chir\b/i.test(text)) data.etat_bien = "À rafraîchir";
+  else if (/\btr[eè]s\s+bon\s+[eé]tat\b/i.test(text) || /\b(?:excellent|parfait)\s+[eé]tat\b/i.test(text)) data.etat_bien = "Très bon état";
   else if (/\bbon\s+[eé]tat\b/i.test(text) || /\b(?:r[eé]nov[eé]|refait|r[eé]habilit[eé]|restaur[eé]|entretenu)\b/i.test(text)) data.etat_bien = "Bon état";
   else if (/\b(?:programme|bien|logement|construction|[eé]tat|vente\s+de)\s+neuf\b/i.test(text) || /\brefait\s+[àa]\s+neuf\b/i.test(text)) data.etat_bien = "Neuf";
 

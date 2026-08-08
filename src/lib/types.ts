@@ -80,6 +80,7 @@ export function isImmeuble(typeBien: string | null | undefined): boolean {
 
 export const ETATS_BIEN = [
   "Neuf",
+  "Très bon état",
   "Bon état",
   "À rafraîchir",
   "À rénover",
@@ -317,17 +318,29 @@ const apartmentBaseFields = {
 };
 
 // Schéma de validation pour la création depuis les formulaires et les
-// routes API. Tous les champs sont optionnels à la création car un ajout
+// routes API. Les champs non listés ci-dessous sont optionnels car un ajout
 // par URL ne renseigne que ce que le parser a réussi à extraire ; chaque
-// champ absent reçoit ici sa valeur de repli explicite. Exception : le prix
-// est obligatoire — sans lui, budget total, rendement et cash-flow ne
-// peuvent tout simplement pas être calculés, l'analyse serait vide de sens.
+// champ absent reçoit sa valeur de repli dans le .transform() qui suit.
+// Champs obligatoires : prix, surface_m2, nb_pieces, ville, code_postal,
+// type_bien, etat_bien, dpe — sans eux l'analyse produit des résultats
+// peu fiables (loyer, charges, rendement, risques).
 export const apartmentInputSchema = z
   .object(apartmentBaseFields)
   .partial()
-  .refine((data) => data.prix != null, {
-    message: "Le prix d'achat est obligatoire.",
-    path: ["prix"],
+  .superRefine((data, ctx) => {
+    const required: [boolean, string, string][] = [
+      [data.prix == null, "Le prix d'achat est obligatoire.", "prix"],
+      [data.surface_m2 == null, "La surface est obligatoire.", "surface_m2"],
+      [data.nb_pieces == null, "Le nombre de pièces est obligatoire.", "nb_pieces"],
+      [!data.ville?.trim(), "La ville est obligatoire.", "ville"],
+      [!data.code_postal?.trim(), "Le code postal est obligatoire.", "code_postal"],
+      [!data.type_bien?.trim(), "Le type de bien est obligatoire.", "type_bien"],
+      [!data.etat_bien?.trim(), "L'état du bien est obligatoire.", "etat_bien"],
+      [!data.dpe?.trim(), "Le DPE est obligatoire.", "dpe"],
+    ];
+    for (const [missing, message, path] of required) {
+      if (missing) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [path] });
+    }
   })
   .transform((data) => ({
     url: data.url ?? "",

@@ -108,8 +108,16 @@ suivis de exactement 3 chiffres avant la fin ou une virgule
 - **LogicImmo** : partage le frontend Aviv Group de SeLoger — bloc
   `if(pf==='SeLoger'||pf==='LogicImmo')` commun, ne pas créer de bloc séparé.
 - **SeLoger/LogicImmo** : `etat_bien` depuis
-  `[data-testid="cdp-energy-features"]` ("neuf" → `"Neuf"`,
+  `[data-testid="cdp-energy-features"]` ("neuf" → `"Neuf"`, "très bon état"/
+  "excellent état"/"parfait état" → `"Très bon état"`,
   "rénov/refait/réhabilit" → `"Bon état"`).
+
+⚠️ **"Très bon état"** (palier ajouté entre "Bon état" et "Neuf", voir
+`docs/reference/estimation-loyer-charges.md`) : partout où `etat_bien` est
+détecté par regex (bookmarklet ET `parsers/common.ts`), le motif "très bon
+état"/"excellent état"/"parfait état" doit être testé AVANT le motif générique
+"bon état" — sinon "bon état" matche déjà "très bon état" comme sous-chaîne et
+absorbe la nuance.
 
 ## DPE/GES — extraction
 
