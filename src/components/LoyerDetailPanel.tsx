@@ -280,18 +280,31 @@ export default function LoyerDetailPanel({
                       +12 %, voir anilReference.ts. */}
                   <div className="rounded-lg border border-ink-100 bg-white px-4 py-3">
                     <ul className="divide-y divide-ink-100/50">
+                      {/* ⚠️ Ligne 1 = €/m² de référence (mesuré pour un logement
+                          de ${surfaceReference} m², PAS pour ce bien) DÉJÀ
+                          multiplié par la surface réelle — un montant encore
+                          sans signification pour ce bien précis. C'est la ligne
+                          SUIVANTE qui corrige le €/m² pour sa vraie taille (loi
+                          d'élasticité). Le hint ne doit donc jamais prétendre
+                          que la surface réelle est déjà prise en compte ici :
+                          exactement l'inverse de ce que dit "Ajusté à la
+                          surface réelle" juste en dessous — contradiction
+                          relevée après coup, à ne pas réintroduire. */}
                       <StepRow
                         label={`Loyer médian ANIL — ${TYPOLOGIE_LABEL[refCC.typologie]}`}
-                        hint={`logement de référence ${refCC.surfaceReference} m², ramené à ${surface} m²`}
+                        hint={`logement de référence ANIL : ${refCC.surfaceReference} m²`}
                         value={anilBrutTotal}
                       />
                       {/* Le loyer/m² décroît avec la surface (élasticité −0,485
                           mesurée sur les données ANIL) : un studio se loue plus
                           cher au m² que la surface de référence, un grand
-                          logement moins. */}
+                          logement moins — d'où l'ajustement, dans un sens ou
+                          l'autre selon que ce bien est plus grand ou plus petit
+                          que la référence. */}
                       {Math.abs(refCC.facteurSurface - 1) > 0.005 && (
                         <StepRow
                           label="Ajusté à la surface réelle"
+                          hint={`${surface} m² vs ${refCC.surfaceReference} m² de référence`}
                           pct={Math.round((refCC.facteurSurface - 1) * 100)}
                           value={anilSurfaceTotal}
                         />
