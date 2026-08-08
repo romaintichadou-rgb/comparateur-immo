@@ -139,10 +139,16 @@ marché = bon pour l'investisseur.
 
 | Écart       | Tone    | Raison                    |
 |-------------|---------|---------------------------|
-| > +15 %     | red     | Trop optimiste/irréaliste |
-| 0 % à +15 % | emerald | Bon revenu locatif        |
+| > +20 %     | red     | Trop optimiste/irréaliste |
+| 0 % à +20 % | emerald | Bon revenu locatif        |
 | −10 % à 0 % | amber   | Revenu sous-optimal       |
 | < −10 %     | red     | Très sous le marché       |
+
+⚠️ Seuil haut aligné sur `RESIDU_MAX` (`rentEstimation.ts`, ±20 depuis
+l'audit post-déploiement — voir `docs/reference/estimation-loyer-charges.md`)
+: les deux doivent bouger ensemble, sinon une estimation légitimement élargie
+par le clamp se retrouve repeinte en rouge par un seuil resté sur l'ancienne
+valeur.
 
 Ne JAMAIS inverser cette logique.
 

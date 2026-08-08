@@ -64,7 +64,7 @@ réellement leur domaine, pas systématiquement.
 | Domaine | Fichier | À lire quand la tâche touche… |
 |---|---|---|
 | Multi-utilisateurs, monétisation, Stripe, auth | `docs/reference/monetisation-auth.md` | plans/quotas, `/compte`, webhook Stripe, `lib/auth.ts`, RLS, écrans de connexion |
-| Estimation loyer/charges (IA + déterministe) | `docs/reference/estimation-loyer-charges.md` | `rentEstimation.ts`, `chargesEstimation.ts`, `anilReference.ts`, `/api/estimate-*` |
+| Estimation loyer/charges (IA + déterministe) | `docs/reference/estimation-loyer-charges.md` | `rentEstimation.ts`, `chargesEstimation.ts`, `anilReference.ts`, `encadrementLoyers.ts`, `/api/estimate-*` |
 | Taxe foncière + quote-part terrain | `docs/reference/taxe-fonciere.md` | `taxeFonciereCommune.ts`, `taxeFonciereData.ts`, `quote_part_terrain_pct` |
 | Couleurs sémantiques & scoring (tables tonalité complètes) | `docs/reference/couleurs-scoring.md` | tout chiffre coloré par un seuil, `scoring.ts`, bloc Risques/DPE |
 | Profil investisseur, simulation financière, héritage | `docs/reference/simulation-financiere.md` | `SimulationFinanciere.tsx`, `SettingsForm.tsx`, `simulation.ts`, `resolveInputs` |

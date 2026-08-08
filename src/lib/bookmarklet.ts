@@ -184,7 +184,7 @@ if((a=A('energy_rate'))&&!d.dpe)d.dpe=a.value_label||a.value;
 if((a=A('ghg'))&&!d.ges)d.ges=a.value_label||a.value;
 if(!d.charges_copro_annuelles){for(var ci2=0;ci2<at.length;ci2++){var ck=at[ci2].key;if(/charge|copro|condo|fee/i.test(ck)&&!/energy|facture/i.test(ck)){var ckv=N(at[ci2].value_label||at[ci2].value);if(ckv&&ckv>=100&&ckv<=20000){d.charges_copro_annuelles=ckv;break;}}}}
 if(!d.annee_construction){a=A('construction_year')||A('year_of_construction');if(a){var cyv=N(a.value_label||a.value);if(cyv&&cyv>=1800&&cyv<=2030)d.annee_construction=cyv;}}
-if(!d.etat_bien){a=A('real_estate_condition')||A('condition');if(a){var ecl=(a.value_label||'').toLowerCase();if(/tr[eè]s\\s+bon/i.test(ecl)||/excellent/i.test(ecl))d.etat_bien='Bon état';else if(/bon\\s+[eé]tat/i.test(ecl))d.etat_bien='Bon état';else if(/[aà]\\s+r[eé]nover/i.test(ecl))d.etat_bien='À rénover';else if(/[aà]\\s+rafra[iî]chir/i.test(ecl))d.etat_bien='À rafraîchir';else if(/neuf/i.test(ecl))d.etat_bien='Neuf';}}
+if(!d.etat_bien){a=A('real_estate_condition')||A('condition');if(a){var ecl=(a.value_label||'').toLowerCase();if(/tr[eè]s\\s+bon/i.test(ecl)||/excellent/i.test(ecl))d.etat_bien='Très bon état';else if(/bon\\s+[eé]tat/i.test(ecl))d.etat_bien='Bon état';else if(/[aà]\\s+r[eé]nover/i.test(ecl))d.etat_bien='À rénover';else if(/[aà]\\s+rafra[iî]chir/i.test(ecl))d.etat_bien='À rafraîchir';else if(/neuf/i.test(ecl))d.etat_bien='Neuf';}}
 if(!d.taxe_fonciere){a=A('property_tax')||A('land_tax');if(a&&N(a.value)){var lbtf=N(a.value);if(lbtf&&lbtf>=100&&lbtf<=10000)d.taxe_fonciere=lbtf;}}
 var im=(ad.images&&ad.images.urls)||[];if(im[0]&&!d.photo_url)d.photo_url=im[0];
 }
@@ -225,7 +225,7 @@ if(!d.etage&&/rez[\\s-]?de[\\s-]?chauss/i.test(ft))d.etage='RDC';
 }
 var etEl=document.querySelector('[data-testid="cdp-energy-features"],[class*="energy-features"],[class*="EnergyFeatures"]');
 if(etEl){var ett=(etEl.textContent||'');
-if(!d.etat_bien){if(/\\bneuf\\b/i.test(ett))d.etat_bien='Neuf';else if(/\\b(?:r[eé]nov|refait|r[eé]habilit|entretenu)/i.test(ett))d.etat_bien='Bon état';else if(/\\b[aà]\\s+r[eé]nover\\b/i.test(ett))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(ett))d.etat_bien='À rafraîchir';}
+if(!d.etat_bien){if(/\\bneuf\\b/i.test(ett))d.etat_bien='Neuf';else if(/\\btr[eè]s\\s+bon\\s+[eé]tat\\b/i.test(ett)||/\\b(?:excellent|parfait)\\s+[eé]tat\\b/i.test(ett))d.etat_bien='Très bon état';else if(/\\b(?:r[eé]nov|refait|r[eé]habilit|entretenu)/i.test(ett))d.etat_bien='Bon état';else if(/\\b[aà]\\s+r[eé]nover\\b/i.test(ett))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(ett))d.etat_bien='À rafraîchir';}
 if(!d.annee_construction){var acm=ett.match(/ann[eé]e\\s+de\\s+construction\\s*(\\d{4})/i)||ett.match(/construit\\w*\\s+en\\s+(\\d{4})/i);if(acm)d.annee_construction=N(acm[1]);}
 }
 var featSec=document.querySelector('[data-testid="cdp-features"]');
@@ -250,7 +250,7 @@ if(!d.nb_chambres){var bcm=blt.match(/(\\d+)\\s?chambres?/i);if(bcm)d.nb_chambre
 if(!d.etage){var bem=blt.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé]tage/i);if(bem)d.etage=bem[1];else if(/dernier\\s+[eé]tage/i.test(blt))d.etage='Dernier';else if(/rez[\\s-]?de[\\s-]?chauss/i.test(blt))d.etage='RDC';}
 if(d.ascenseur===undefined&&/^\\s*ascenseur\\s*$/i.test(blt))d.ascenseur=true;
 if(!d.annee_construction){var bam=blt.match(/construit\\w*\\s+en\\s+(\\d{4})/i);if(bam)d.annee_construction=N(bam[1]);}
-if(!d.etat_bien){if(/\\br[eé]cent\\b/i.test(blt))d.etat_bien='Bon état';else if(/\\b[aà]\\s+r[eé]nover\\b/i.test(blt))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(blt))d.etat_bien='À rafraîchir';else if(/\\bbon\\s+[eé]tat\\b/i.test(blt)||/\\br[eé]nov[eé]\\b/i.test(blt))d.etat_bien='Bon état';}
+if(!d.etat_bien){if(/\\btr[eè]s\\s+bon\\s+[eé]tat\\b/i.test(blt)||/\\b(?:excellent|parfait)\\s+[eé]tat\\b/i.test(blt))d.etat_bien='Très bon état';else if(/\\br[eé]cent\\b/i.test(blt))d.etat_bien='Bon état';else if(/\\b[aà]\\s+r[eé]nover\\b/i.test(blt))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(blt))d.etat_bien='À rafraîchir';else if(/\\bbon\\s+[eé]tat\\b/i.test(blt)||/\\br[eé]nov[eé]\\b/i.test(blt))d.etat_bien='Bon état';}
 if(!d.taxe_fonciere){var btf=blt.match(/taxe\\s+fonci[eè]re\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/i);if(btf){var btfv=N(btf[1]);if(btfv&&btfv>=100&&btfv<=10000)d.taxe_fonciere=btfv;}}
 }
 }catch(e){}
@@ -312,7 +312,7 @@ var c21tk=document.querySelector('.c-the-property-detail-to-know');
 if(c21tk){var c21tt=(c21tk.textContent||'');
 if(!d.taxe_fonciere){var c21tf=c21tt.match(/taxe\\s+fonci[eè]re\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/i);if(c21tf)d.taxe_fonciere=N(c21tf[1]);}
 if(!d.annee_construction){var c21ac=c21tt.match(/ann[eé]e\\s+(?:de\\s+)?construction\\s*[:\\-]?\\s*(\\d{4})/i)||c21tt.match(/construit\\w*\\s+en\\s+(\\d{4})/i);if(c21ac)d.annee_construction=N(c21ac[1]);}
-if(!d.etat_bien){if(/\\btr[eè]s\\s+bon\\s+[eé]tat\\b/i.test(c21tt)||/\\bparfait\\s+[eé]tat\\b/i.test(c21tt)||/\\bexcellent\\s+[eé]tat\\b/i.test(c21tt))d.etat_bien='Bon état';else if(/\\b[aà]\\s+r[eé]nover\\b/i.test(c21tt))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(c21tt))d.etat_bien='À rafraîchir';else if(/\\bbon\\s+[eé]tat\\b/i.test(c21tt)||/\\br[eé]nov[eé]\\b/i.test(c21tt))d.etat_bien='Bon état';else if(/\\bneuf\\b/i.test(c21tt))d.etat_bien='Neuf';}
+if(!d.etat_bien){if(/\\btr[eè]s\\s+bon\\s+[eé]tat\\b/i.test(c21tt)||/\\bparfait\\s+[eé]tat\\b/i.test(c21tt)||/\\bexcellent\\s+[eé]tat\\b/i.test(c21tt))d.etat_bien='Très bon état';else if(/\\b[aà]\\s+r[eé]nover\\b/i.test(c21tt))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(c21tt))d.etat_bien='À rafraîchir';else if(/\\bbon\\s+[eé]tat\\b/i.test(c21tt)||/\\br[eé]nov[eé]\\b/i.test(c21tt))d.etat_bien='Bon état';else if(/\\bneuf\\b/i.test(c21tt))d.etat_bien='Neuf';}
 }
 var c21eq=document.querySelector('.c-the-property-detail-equipment');
 if(c21eq){var c21et=(c21eq.textContent||'');
@@ -335,7 +335,7 @@ if(!d.etage){var lem=lft.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé]tage/i);if(lem)d
 if(!d.annee_construction){var lam=lft.match(/ann\\.?\\s*const\\.?\\s*:\\s*(\\d{4})/i);if(lam)d.annee_construction=N(lam[1]);}
 if(!d.charges_copro_annuelles){var lcco=lft.match(/charges\\s+mensuelles\\s+copro\\s*:\\s*(\\d[\\d\\s]*)\\s*€/i);if(lcco){var lcv=N(lcco[1]);if(lcv)d.charges_copro_annuelles=lcv*12;}}
 if(!d.taxe_fonciere){var ltf=lft.match(/taxe\\s+fonci[eè]re\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/i);if(ltf){var ltfv=N(ltf[1]);if(ltfv&&ltfv>=100&&ltfv<=10000)d.taxe_fonciere=ltfv;}}
-if(!d.etat_bien){if(/\\b[aà]\\s+r[eé]nover\\b/i.test(lft))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(lft))d.etat_bien='À rafraîchir';else if(/\\bbon\\s+[eé]tat\\b/i.test(lft)||/\\br[eé]nov[eé]\\b/i.test(lft)||/\\btr[eè]s\\s+bon/i.test(lft))d.etat_bien='Bon état';else if(/\\bneuf\\b/i.test(lft))d.etat_bien='Neuf';}
+if(!d.etat_bien){if(/\\b[aà]\\s+r[eé]nover\\b/i.test(lft))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(lft))d.etat_bien='À rafraîchir';else if(/\\btr[eè]s\\s+bon\\s+[eé]tat\\b/i.test(lft)||/\\b(?:excellent|parfait)\\s+[eé]tat\\b/i.test(lft))d.etat_bien='Très bon état';else if(/\\bbon\\s+[eé]tat\\b/i.test(lft)||/\\br[eé]nov[eé]\\b/i.test(lft))d.etat_bien='Bon état';else if(/\\bneuf\\b/i.test(lft))d.etat_bien='Neuf';}
 if(d.ascenseur===undefined&&/^\\s*ascenseur\\s*$/i.test(lft))d.ascenseur=true;
 }}
 if(!d.description){var lfDesc=Array.from(document.querySelectorAll('h2')).find(function(h){return h.textContent.trim()==='Description';});if(lfDesc&&lfDesc.nextElementSibling){var lfdt=(lfDesc.nextElementSibling.textContent||'').trim();if(lfdt.length>80)d.description=lfdt;}}
@@ -396,7 +396,7 @@ m=t.match(/(\\d+)(?:er|e|[eè]me)?\\s?[eé](?:tage(?!s)|t\\.)/i)||t.match(/[eé]
 if(/sans ascenseur/i.test(t))d.ascenseur=false;else if(/\\bascenseur\\b/i.test(t))d.ascenseur=true;
 m=t.match(/\\(DPE\\)\\s*([A-G])/i)||t.match(/\\bdpe\\s*[:\\-]?\\s*([A-G])\\b/i);if(m)d.dpe=m[1].toUpperCase();
 m=t.match(/\\(GES\\)\\s*([A-G])/i)||t.match(/\\b(?:ges|climat)\\s*[:\\-]?\\s*([A-G])\\b/i);if(m)d.ges=m[1].toUpperCase();
-if(/\\b[aà]\\s+r[eé]nover\\b/i.test(t))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(t))d.etat_bien='À rafraîchir';else if(/\\bbon\\s+[eé]tat\\b/i.test(t)||/\\b(?:r[eé]nov[eé]|refait|r[eé]habilit[eé]|restaur[eé]|entretenu)\\b/i.test(t))d.etat_bien='Bon état';else if(/\\b(?:programme|bien|logement|construction|[eé]tat|vente\\s+de)\\s+neuf\\b/i.test(t)||/\\brefait\\s+[aà]\\s+neuf\\b/i.test(t))d.etat_bien='Neuf';
+if(/\\b[aà]\\s+r[eé]nover\\b/i.test(t))d.etat_bien='À rénover';else if(/\\b[aà]\\s+rafra[iî]chir\\b/i.test(t))d.etat_bien='À rafraîchir';else if(/\\btr[eè]s\\s+bon\\s+[eé]tat\\b/i.test(t)||/\\b(?:excellent|parfait)\\s+[eé]tat\\b/i.test(t))d.etat_bien='Très bon état';else if(/\\bbon\\s+[eé]tat\\b/i.test(t)||/\\b(?:r[eé]nov[eé]|refait|r[eé]habilit[eé]|restaur[eé]|entretenu)\\b/i.test(t))d.etat_bien='Bon état';else if(/\\b(?:programme|bien|logement|construction|[eé]tat|vente\\s+de)\\s+neuf\\b/i.test(t)||/\\brefait\\s+[aà]\\s+neuf\\b/i.test(t))d.etat_bien='Neuf';
 m=t.match(/construit\\w* en (\\d{4})/i)||t.match(/ann[eé]e de construction\\s*[:\\-]?\\s*(\\d{4})/i)||t.match(/ann\\.?\\s*const\\.?\\s*[:\\-]?\\s*(\\d{4})/i)||t.match(/(?:immeuble|r[eé]sidence|b[aâ]timent)\\s+(?:de|du)\\s+(\\d{4})/i)||t.match(/(?:b[aâ]ti|[eé]difi[eé]|[eé]rig[eé]|livr[eé])\\w*\\s+en\\s+(\\d{4})/i)||t.match(/dat\\w+\\s+(?:de|du)\\s+(\\d{4})/i);if(m)d.annee_construction=N(m[1]);
 m=t.match(/charges?\\s+(?:de\\s+)?copropri[eé]t[eé]\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/i);if(m){var ccv=N(m[1]);if(ccv&&ccv>=100&&ccv<=20000)d.charges_copro_annuelles=ccv;}
 m=t.match(/taxe\\s+fonci[eè]re\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/i)||t.match(/T\\.?F\\.?\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/)||t.match(/imp[oô]t\\s+foncier\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/i)||t.match(/foncier\\s+(?:annuel)?\\s*[:\\-]?\\s*(\\d[\\d\\s]*)\\s*€/i);if(m){var tfv=N(m[1]);if(tfv&&tfv>=100&&tfv<=10000)d.taxe_fonciere=tfv;}

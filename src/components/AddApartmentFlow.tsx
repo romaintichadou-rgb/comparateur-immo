@@ -6,15 +6,11 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowLeft,
-  Banknote,
   CheckCircle2,
-  Home,
   Info,
   Link2,
   Loader2,
   Plus,
-  Sparkles,
-  User,
   X,
 } from "lucide-react";
 import {
@@ -37,6 +33,7 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/form/Fields";
+import { SectionHeader } from "@/components/SectionHeader";
 import UrlHeroCard from "@/components/UrlHeroCard";
 import ProcessingStepsList from "@/components/ProcessingStepsList";
 
@@ -241,14 +238,6 @@ export default function AddApartmentFlow() {
       return n;
     });
 
-  // Sur mobile : affiche/masque la section "Détails du bien" (champs moins essentiels)
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-  const toggleSection = (sectionId: string) =>
-    setExpandedSections((s) => {
-      const n = new Set(s);
-      n.has(sectionId) ? n.delete(sectionId) : n.add(sectionId);
-      return n;
-    });
   const [form, setForm] = useState<ApartmentInput>(initial.form);
 
   function set<K extends keyof ApartmentInput>(key: K, value: ApartmentInput[K]) {
@@ -319,14 +308,19 @@ export default function AddApartmentFlow() {
   }, []);
 
   async function handleSubmit() {
-    // Le prix est la seule donnée dont tout le reste dépend (budget total,
-    // rendement, cash-flow) : sans lui, l'analyse serait vide de sens. On
-    // bloque ici, avant même d'afficher l'écran de traitement, pour un
-    // retour immédiat plutôt qu'un aller-retour serveur.
-    if (form.prix == null) {
+    const champsManquants: string[] = [];
+    if (form.prix == null) champsManquants.push("Prix");
+    if (form.surface_m2 == null) champsManquants.push("Surface");
+    if (form.nb_pieces == null) champsManquants.push("Nb pièces");
+    if (!form.ville.trim()) champsManquants.push("Ville");
+    if (!form.code_postal.trim()) champsManquants.push("Code postal");
+    if (!form.type_bien) champsManquants.push("Type de bien");
+    if (!form.etat_bien) champsManquants.push("État du bien");
+    if (!form.dpe) champsManquants.push("DPE");
+    if (champsManquants.length > 0) {
       setBanner({
         tone: "warning",
-        text: "Le prix d'achat est obligatoire — renseigne-le pour continuer.",
+        text: `Champ(s) obligatoire(s) manquant(s) : ${champsManquants.join(", ")}.`,
       });
       return;
     }
@@ -471,12 +465,9 @@ export default function AddApartmentFlow() {
         <div className="space-y-6 pb-8">
           {banner && <BannerCard banner={banner} />}
 
-          {/* Sur mobile, afficher un champ d'URL au premier rendu */}
-          <section className="lg:hidden rounded-2xl border border-ink-100 bg-white p-6">
-            <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900 mb-4">
-              <SectionIcon icon={Home} />
-              Copier/coller l'URL de l'annonce
-            </h2>
+          {/* Mobile : champ URL rapide */}
+          <section className="lg:hidden rounded-xl border border-ink-100 bg-white p-5">
+            <SectionHeader title="URL de l'annonce" className="mb-4" />
             <TextField
               label="URL"
               value={form.url}
@@ -484,227 +475,211 @@ export default function AddApartmentFlow() {
               placeholder="https://www.leboncoin.fr/immobilier/..."
             />
             <p className="mt-3 text-xs text-ink-400">
-              Colle ici l'URL de l'annonce pour pré-remplir les champs, ou continue avec la saisie manuelle.
+              Colle ici l&apos;URL de l&apos;annonce pour pré-remplir les champs, ou continue avec la saisie manuelle.
             </p>
           </section>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-            {/* Colonne principale */}
-            <div className="min-w-0 space-y-6">
-              <section className="rounded-2xl border border-ink-100 bg-white p-6 sm:p-8">
-                <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
-                  <SectionIcon icon={Home} />
-                  Description du bien
-                </h2>
+          {/* Grille 2 colonnes : Localisation + Caractéristiques */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <section className="rounded-xl border border-ink-100 bg-white p-5">
+              <SectionHeader title="Localisation" className="mb-4" />
+              <div className="space-y-4">
+                <TextField
+                  label="Ville"
+                  value={form.ville}
+                  onChange={(v) => set("ville", v)}
+                  hint={<><span className="text-red-500" title="Obligatoire">*</span>{extrait("ville") && <ExtractedBadge />}</>}
+                />
+                <TextField
+                  label="Code postal"
+                  value={form.code_postal}
+                  onChange={(v) => set("code_postal", v)}
+                  hint={<><span className="text-red-500" title="Obligatoire">*</span>{extrait("code_postal") && <ExtractedBadge />}</>}
+                />
+                <TextField label="Quartier" value={form.quartier} onChange={(v) => set("quartier", v)} hint={extrait("quartier") && <ExtractedBadge />} />
+                <TextField label="Adresse" value={form.adresse} onChange={(v) => set("adresse", v)} hint={extrait("adresse") && <ExtractedBadge />} />
+              </div>
+            </section>
 
-                {/* Champs essentiels — toujours visibles */}
-                <div className="mt-6 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
-                  <SelectField
-                    label="Plateforme"
-                    value={form.plateforme}
-                    onChange={(v) => set("plateforme", v)}
-                    options={PLATEFORMES}
-                    allowEmpty={false}
-                  />
-                  <TextField label="Ville" value={form.ville} onChange={(v) => set("ville", v)} hint={extrait("ville") && <ExtractedBadge />} />
-                  <TextField label="Quartier" value={form.quartier} onChange={(v) => set("quartier", v)} hint={extrait("quartier") && <ExtractedBadge />} />
+            <section className="rounded-xl border border-ink-100 bg-white p-5">
+              <SectionHeader title="Caractéristiques" className="mb-4" />
+              <div className="space-y-4">
+                <SelectField
+                  label="Type de bien"
+                  value={form.type_bien as (typeof TYPES_BIEN)[number] | ""}
+                  onChange={(v) => set("type_bien", v)}
+                  options={TYPES_BIEN}
+                  allowEmpty={false}
+                  hint={<span className="text-red-500" title="Obligatoire">*</span>}
+                />
+                <NumberField
+                  label={isImmeuble(form.type_bien) ? "Surface totale" : "Surface"}
+                  value={form.surface_m2}
+                  onChange={(v) => set("surface_m2", v)}
+                  suffix="m²"
+                  hint={<><span className="text-red-500" title="Obligatoire">*</span>{extrait("surface_m2") && <ExtractedBadge />}</>}
+                />
+                <NumberField
+                  label="Nb pièces"
+                  value={form.nb_pieces}
+                  onChange={(v) => set("nb_pieces", v)}
+                  hint={<><span className="text-red-500" title="Obligatoire">*</span>{extrait("nb_pieces") && <ExtractedBadge />}</>}
+                />
+                <NumberField label="Nb chambres" value={form.nb_chambres} onChange={(v) => set("nb_chambres", v)} hint={extrait("nb_chambres") && <ExtractedBadge />} />
+                {isImmeuble(form.type_bien) && (
                   <NumberField
-                    label={isImmeuble(form.type_bien) ? "Surface totale" : "Surface"}
-                    value={form.surface_m2}
-                    onChange={(v) => set("surface_m2", v)}
-                    suffix="m²"
-                    hint={extrait("surface_m2") && <ExtractedBadge />}
+                    label="Nombre de lots"
+                    value={form.nb_lots}
+                    onChange={(v) => set("nb_lots", v)}
+                    hint={<span className="text-xs font-normal text-ink-400">logements de l&apos;immeuble</span>}
                   />
-                  <TextField label="Adresse (si connue)" value={form.adresse} onChange={(v) => set("adresse", v)} hint={extrait("adresse") && <ExtractedBadge />} />
-                  <TextField label="Code postal" value={form.code_postal} onChange={(v) => set("code_postal", v)} hint={extrait("code_postal") && <ExtractedBadge />} />
-                  <NumberField label="Nb pièces" value={form.nb_pieces} onChange={(v) => set("nb_pieces", v)} hint={extrait("nb_pieces") && <ExtractedBadge />} />
-                  <NumberField label="Nb chambres" value={form.nb_chambres} onChange={(v) => set("nb_chambres", v)} hint={extrait("nb_chambres") && <ExtractedBadge />} />
-                </div>
-
-                {/* Bouton "Détails avancés" sur mobile */}
-                <button
-                  type="button"
-                  onClick={() => toggleSection("advanced")}
-                  className="mt-6 flex items-center gap-2 text-sm font-medium text-accent-600 transition-colors hover:text-accent-700 lg:hidden"
-                >
-                  {expandedSections.has("advanced") ? "▼" : "▶"} Détails avancés ({expandedSections.has("advanced") ? "masquer" : "afficher"})
-                </button>
-
-                {/* Champs avancés — repliables sur mobile, toujours visibles sur desktop */}
-                {(expandedSections.has("advanced") || typeof window === "undefined" || window.innerWidth >= 1024) && (
-                  <div className="mt-6 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 border-t border-ink-100 pt-6 lg:border-0 lg:pt-0">
-                    <SelectField
-                      label="Type de bien"
-                      value={form.type_bien as (typeof TYPES_BIEN)[number] | ""}
-                      onChange={(v) => set("type_bien", v)}
-                      options={TYPES_BIEN}
-                    />
-                    {isImmeuble(form.type_bien) && (
-                      <NumberField
-                        label="Nombre de lots"
-                        value={form.nb_lots}
-                        onChange={(v) => set("nb_lots", v)}
-                        hint={<span className="text-xs font-normal text-ink-400">logements de l&apos;immeuble</span>}
-                      />
-                    )}
-                    <TextField label="Étage" value={form.etage} onChange={(v) => set("etage", v)} hint={extrait("etage") && <ExtractedBadge />} />
-                    <BooleanField label="Ascenseur" value={form.ascenseur} onChange={(v) => set("ascenseur", v)} hint={extrait("ascenseur") && <ExtractedBadge />} />
-                    <NumberField
-                      label="Année de construction"
-                      value={form.annee_construction}
-                      onChange={(v) => set("annee_construction", v)}
-                      hint={extrait("annee_construction") && <ExtractedBadge />}
-                    />
-                    <SelectField
-                      label="État du bien"
-                      value={form.etat_bien as (typeof ETATS_BIEN)[number] | ""}
-                      onChange={(v) => set("etat_bien", v)}
-                      options={ETATS_BIEN}
-                      hint={extrait("etat_bien") && <ExtractedBadge />}
-                    />
-                    <SelectField label="DPE" value={form.dpe as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => set("dpe", v)} options={DPE_GES_VALEURS} hint={extrait("dpe") && <ExtractedBadge />} />
-                    <SelectField label="GES" value={form.ges as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => set("ges", v)} options={DPE_GES_VALEURS} hint={extrait("ges") && <ExtractedBadge />} />
-                    <TextField label="Photo (URL)" value={form.photo_url} onChange={(v) => set("photo_url", v)} hint={extrait("photo_url") && <ExtractedBadge />} />
-                  </div>
                 )}
+              </div>
+            </section>
+          </div>
 
-                <div className="mt-4">
-                  <TextAreaField label="Description" value={form.description} onChange={(v) => set("description", v)} hint={extrait("description") && <ExtractedBadge />} />
-                </div>
-              </section>
+          {/* Grille 2 colonnes : Bâtiment + État et diagnostics */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <section className="rounded-xl border border-ink-100 bg-white p-5">
+              <SectionHeader title="Bâtiment" className="mb-4" />
+              <div className="space-y-4">
+                <TextField label="Étage" value={form.etage} onChange={(v) => set("etage", v)} hint={extrait("etage") && <ExtractedBadge />} />
+                <BooleanField label="Ascenseur" value={form.ascenseur} onChange={(v) => set("ascenseur", v)} hint={extrait("ascenseur") && <ExtractedBadge />} />
+                <NumberField
+                  label="Année de construction"
+                  value={form.annee_construction}
+                  onChange={(v) => set("annee_construction", v)}
+                  hint={extrait("annee_construction") && <ExtractedBadge />}
+                />
+              </div>
+            </section>
 
-              <section className="space-y-8 rounded-2xl border border-ink-100 bg-white p-6 sm:p-8">
-                <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
-                  <SectionIcon icon={Banknote} />
-                  Données financières
-                </h2>
+            <section className="rounded-xl border border-ink-100 bg-white p-5">
+              <SectionHeader title="État et diagnostics" className="mb-4" />
+              <div className="space-y-4">
+                <SelectField
+                  label="État du bien"
+                  value={form.etat_bien as (typeof ETATS_BIEN)[number] | ""}
+                  onChange={(v) => set("etat_bien", v)}
+                  options={ETATS_BIEN}
+                  hint={<><span className="text-red-500" title="Obligatoire">*</span>{extrait("etat_bien") && <ExtractedBadge />}</>}
+                />
+                <SelectField
+                  label="DPE"
+                  value={form.dpe as (typeof DPE_GES_VALEURS)[number] | ""}
+                  onChange={(v) => set("dpe", v)}
+                  options={DPE_GES_VALEURS}
+                  hint={<><span className="text-red-500" title="Obligatoire">*</span>{extrait("dpe") && <ExtractedBadge />}</>}
+                />
+                <SelectField label="GES" value={form.ges as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => set("ges", v)} options={DPE_GES_VALEURS} hint={extrait("ges") && <ExtractedBadge />} />
+              </div>
+            </section>
+          </div>
 
-                <Subsection title="Achat" accent="bg-ink-400" noBorder>
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
-                    <NumberField
-                      label="Prix"
-                      value={form.prix}
-                      onChange={(v) => set("prix", v)}
-                      suffix="€"
-                      hint={
-                        <>
-                          <span className="text-red-500" title="Obligatoire">
-                            *
-                          </span>
-                          {extrait("prix") && <ExtractedBadge />}
-                        </>
-                      }
-                    />
-                    <ChampOptionnel
-                      label="Travaux"
-                      value={form.travaux}
-                      onChange={(v) => set("travaux", v)}
-                      suffix="€"
-                      ouvert={champsOuverts.has("travaux")}
-                      onOuvrir={() => ouvrirChamp("travaux")}
-                      onFermer={() => fermerChamp("travaux")}
-                    />
-                  </div>
-                </Subsection>
+          {/* Annonce — pleine largeur */}
+          <section className="rounded-xl border border-ink-100 bg-white p-5">
+            <SectionHeader title="Annonce" className="mb-4" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <SelectField
+                label="Plateforme"
+                value={form.plateforme}
+                onChange={(v) => set("plateforme", v)}
+                options={PLATEFORMES}
+                allowEmpty={false}
+              />
+              <TextField label="Photo (URL)" value={form.photo_url} onChange={(v) => set("photo_url", v)} hint={extrait("photo_url") && <ExtractedBadge />} />
+            </div>
+            <div className="mt-4">
+              <TextAreaField label="Description" value={form.description} onChange={(v) => set("description", v)} hint={extrait("description") && <ExtractedBadge />} />
+            </div>
+          </section>
 
-                <Subsection title="Charges annuelles" accent="bg-amber-400">
-                  {/* Le « (laisser vide = estimées) » qui allongeait chaque
-                      libellé sur deux lignes est remonté ici, dit une fois. */}
-                  <p className="mb-3 text-xs text-ink-400">
-                    Laisse vide pour estimer automatiquement.
-                  </p>
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-5">
-                    <ChampOptionnel
-                      label={
-                        isImmeuble(form.type_bien)
-                          ? "Charges d'exploitation annuelles"
-                          : "Charges copro annuelles"
-                      }
-                      value={form.charges_copro_annuelles}
-                      onChange={(v) => set("charges_copro_annuelles", v)}
-                      suffix="€/an"
-                      hint={extrait("charges_copro_annuelles") && <ExtractedBadge />}
-                      ouvert={champsOuverts.has("charges_copro_annuelles")}
-                      onOuvrir={() => ouvrirChamp("charges_copro_annuelles")}
-                      onFermer={() => fermerChamp("charges_copro_annuelles")}
-                    />
-                    <ChampOptionnel
-                      label="Taxe foncière"
-                      value={form.taxe_fonciere}
-                      onChange={(v) => set("taxe_fonciere", v)}
-                      suffix="€/an"
-                      hint={extrait("taxe_fonciere") && <ExtractedBadge />}
-                      ouvert={champsOuverts.has("taxe_fonciere")}
-                      onOuvrir={() => ouvrirChamp("taxe_fonciere")}
-                      onFermer={() => fermerChamp("taxe_fonciere")}
-                    />
-                  </div>
-                </Subsection>
-              </section>
+          {/* Données financières — pleine largeur */}
+          <section className="rounded-xl border border-ink-100 bg-white p-5 space-y-6">
+            <SectionHeader title="Données financières" />
+
+            <div>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Achat</h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <NumberField
+                  label="Prix"
+                  value={form.prix}
+                  onChange={(v) => set("prix", v)}
+                  suffix="€"
+                  hint={<><span className="text-red-500" title="Obligatoire">*</span>{extrait("prix") && <ExtractedBadge />}</>}
+                />
+                <ChampOptionnel
+                  label="Travaux"
+                  value={form.travaux}
+                  onChange={(v) => set("travaux", v)}
+                  suffix="€"
+                  ouvert={champsOuverts.has("travaux")}
+                  onOuvrir={() => ouvrirChamp("travaux")}
+                  onFermer={() => fermerChamp("travaux")}
+                />
+              </div>
             </div>
 
-            {/* Colonne latérale — sticky à partir de lg (2 colonnes) pour que
-                le contact et surtout le CTA "Enregistrer" restent visibles au
-                défilement. `top-20` dégage la hauteur de la navbar sticky
-                (~67px). Sur mobile (1 colonne), la section reste simplement en
-                bas, non figée. */}
-            <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
-              <div className="rounded-2xl border border-ink-100 bg-white p-5">
-                <h2 className="flex items-center gap-3 text-sm font-semibold text-ink-900">
-                  <SectionIcon icon={User} size="sm" />
-                  Contact
-                </h2>
-                <p className="mt-2 mb-4 text-xs text-ink-400">
-                  Agence ou propriétaire — facultatif.
-                </p>
-                <div className="space-y-3">
-                  <TextField label="Nom" value={form.contact_nom} onChange={(v) => set("contact_nom", v)} />
-                  <TextField
-                    label="Téléphone"
-                    value={form.contact_telephone}
-                    onChange={(v) => set("contact_telephone", v)}
-                    hint={extrait("contact_telephone") && <ExtractedBadge />}
-                  />
-                  <TextField
-                    label="Email"
-                    value={form.contact_email}
-                    onChange={(v) => set("contact_email", v)}
-                    hint={extrait("contact_email") && <ExtractedBadge />}
-                  />
-                </div>
+            <div className="border-t border-ink-100 pt-6">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Charges annuelles</h3>
+              <p className="mb-3 text-xs text-ink-400">Laisse vide pour estimer automatiquement.</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <ChampOptionnel
+                  label={isImmeuble(form.type_bien) ? "Charges d'exploitation annuelles" : "Charges copro annuelles"}
+                  value={form.charges_copro_annuelles}
+                  onChange={(v) => set("charges_copro_annuelles", v)}
+                  suffix="€/an"
+                  hint={extrait("charges_copro_annuelles") && <ExtractedBadge />}
+                  ouvert={champsOuverts.has("charges_copro_annuelles")}
+                  onOuvrir={() => ouvrirChamp("charges_copro_annuelles")}
+                  onFermer={() => fermerChamp("charges_copro_annuelles")}
+                />
+                <ChampOptionnel
+                  label="Taxe foncière"
+                  value={form.taxe_fonciere}
+                  onChange={(v) => set("taxe_fonciere", v)}
+                  suffix="€/an"
+                  hint={extrait("taxe_fonciere") && <ExtractedBadge />}
+                  ouvert={champsOuverts.has("taxe_fonciere")}
+                  onOuvrir={() => ouvrirChamp("taxe_fonciere")}
+                  onFermer={() => fermerChamp("taxe_fonciere")}
+                />
               </div>
+            </div>
+          </section>
 
-              <button
-                onClick={handleSubmit}
-                disabled={saving}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-600 px-4 py-3.5 text-base font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50 sm:px-5 sm:py-2.5 sm:text-sm"
-              >
-                {saving && <Loader2 className="h-5 w-5 animate-spin" />}
-                {saving ? "Enregistrement..." : "Enregistrer"}
-              </button>
-            </aside>
-          </div>
+          {/* Contact — en bas, compact, 3 champs en ligne sur desktop */}
+          <section className="rounded-xl border border-ink-100 bg-white p-5">
+            <SectionHeader title="Contact" className="mb-1" />
+            <p className="mb-4 text-xs text-ink-400">Agence ou propriétaire — facultatif.</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <TextField label="Nom" value={form.contact_nom} onChange={(v) => set("contact_nom", v)} />
+              <TextField
+                label="Téléphone"
+                value={form.contact_telephone}
+                onChange={(v) => set("contact_telephone", v)}
+                hint={extrait("contact_telephone") && <ExtractedBadge />}
+              />
+              <TextField
+                label="Email"
+                value={form.contact_email}
+                onChange={(v) => set("contact_email", v)}
+                hint={extrait("contact_email") && <ExtractedBadge />}
+              />
+            </div>
+          </section>
+
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="mx-auto flex items-center justify-center gap-2 rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 disabled:opacity-50"
+          >
+            {saving && <Loader2 className="h-5 w-5 animate-spin" />}
+            {saving ? "Enregistrement..." : "Enregistrer"}
+          </button>
         </div>
       )}
     </div>
-  );
-}
-
-/** Icône de section, dans un badge circulaire teinté — remplace l'icône grise
- * plate pour donner un peu plus de repère visuel à chaque bloc du formulaire. */
-function SectionIcon({
-  icon: Icon,
-  size = "md",
-}: {
-  icon: typeof Home;
-  size?: "sm" | "md";
-}) {
-  const dims = size === "sm" ? "h-7 w-7" : "h-8 w-8";
-  const iconDims = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
-  return (
-    <span className={`flex ${dims} shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-600`}>
-      <Icon className={iconDims} />
-    </span>
   );
 }
 
@@ -794,28 +769,6 @@ function ChampOptionnel({
   );
 }
 
-function Subsection({
-  title,
-  accent,
-  children,
-  noBorder = false,
-}: {
-  title: string;
-  accent: string;
-  children: React.ReactNode;
-  noBorder?: boolean;
-}) {
-  return (
-    <div className={noBorder ? "" : "border-t border-ink-100 pt-6"}>
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
-        <span className={`h-1.5 w-1.5 rounded-full ${accent}`} />
-        {title}
-      </h3>
-      {children}
-    </div>
-  );
-}
-
 function ScrapingScreen({ scrapingPhase }: { scrapingPhase: ScrapingPhase }) {
   return (
     <div className="flex min-h-[calc(100vh-120px)] items-center justify-center px-4 py-10">
@@ -885,9 +838,8 @@ function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
           </svg>
         </div>
 
-        <h1 className="font-display flex items-center justify-center gap-2 text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
-          <Sparkles className="h-5 w-5 text-accent-500" />
-          Analyse de votre bien en cours
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+          Analyse en cours
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
           Nous enregistrons le bien puis collectons des données publiques réelles (DVF, ADEME,

@@ -13,6 +13,7 @@ import {
   type ReferenceCC,
   type TypologieAnil,
 } from "./anilReference";
+import { plafondEncadrementParis, type PlafondLegalParis } from "./encadrementLoyers";
 import type { LoyerReference } from "./analyse/sources/loyers";
 
 export interface RentEstimationInput {
@@ -81,7 +82,7 @@ export interface CritereResidu {
  * séparées, qui en demanderaient une à chaque champ.
  */
 export interface LoyerCalcul {
-  /** Écart NET (%, signé, déjà clampé ±15) retenu pour construire le loyer. */
+  /** Écart NET (%, signé, déjà clampé ±20) retenu pour construire le loyer. */
   ajustementPct: number;
   /** Critères IA retenus, DÉJÀ filtrés du double comptage, ordonnés par importance décroissante. */
   criteres: CritereResidu[];
@@ -122,6 +123,19 @@ export interface LoyerCalcul {
    * qu'un nouveau calcul a tourné pour rien.
    */
   reutilise: boolean;
+  /**
+   * Plafond légal de l'encadrement des loyers (Paris uniquement, P1 — voir
+   * `encadrementLoyers.ts`), `null` hors Paris ou si aucune donnée ne
+   * correspond, `undefined` sur les calculs enregistrés avant ce champ.
+   *
+   * ⚠️ **INFORMATIF, ne clampe PAS `loyer`** : la loi prévoit un "complément
+   * de loyer" pour des prestations exceptionnelles que ce module ne peut pas
+   * vérifier — un clamp aveugle réintroduirait, pour les biens au-dessus de
+   * la moyenne, le biais à la baisse que P2 corrige par ailleurs. Sert
+   * uniquement à afficher un avertissement quand `loyer` le dépasse (voir
+   * `justification`).
+   */
+  plafondLegal?: PlafondLegalParis | null;
 }
 
 export interface RentEstimationResult {
@@ -309,6 +323,7 @@ function facteurEtage(input: RentEstimationInput): number {
  */
 const ETAT_COEF: Record<string, number> = {
   "Neuf": 1.06,
+  "Très bon état": 1.03,
   "Bon état": 1.00,
   "À rafraîchir": 0.96,
   "À rénover": 0.92,
@@ -448,8 +463,20 @@ function computeDeterministicRent(input: RentEstimationInput, refCC: ReferenceCC
 // Prompt v4 — résidu IA (2.2), sans blend (2.1), sans Google Search (2.3).
 // ─────────────────────────────────────────────────────────────────────────
 
-const RESIDU_MIN = -15;
-const RESIDU_MAX = 15;
+/**
+ * ⚠️ Élargi de ±15 à ±20 (audit post-déploiement, voir
+ * docs/reference/estimation-loyer-charges.md « Calibrage du résidu — élargi
+ * après audit ») : sur 8 biens réels testés, 6 étaient sous-estimés — souvent
+ * PAS parce que le résidu butait sur le clamp (peu de cas l'atteignaient),
+ * mais parce que la combinaison clamp serré + règle de calibrage
+ * conservatrice (voir plus bas) ne laissait quasiment jamais un cumul de
+ * critères factuels dépasser 5-8 points. Le clamp reste un GARDE-FOU contre
+ * l'hallucination, pas la cause principale du biais — mais un clamp à ±15
+ * aurait de toute façon plafonné artificiellement les cas où la règle
+ * assouplie ci-dessous laisse enfin le cumul monter plus haut.
+ */
+const RESIDU_MIN = -20;
+const RESIDU_MAX = 20;
 
 const SCHEMA_RESIDU = {
   type: "OBJECT",
@@ -544,6 +571,51 @@ const CAVEAT_LOCALISATION_APPROX =
  * que pour l'indépendance à `precisionLocalisation` juste au-dessus. Testé
  * stable après coup (voir docs/reference/estimation-loyer-charges.md).
  */
+
+/**
+ * Seuil sous lequel la correction de surface ANIL (`facteurSurface`,
+ * `anilReference.ts`) devient une EXTRAPOLATION significative, pas une
+ * interpolation. `elasticiteLocale` est mesurée entre les deux seules
+ * ressources publiées (37 m² et 72 m² de référence) — c'est une pente
+ * "entre populations" (annonces 1-2 pièces vs annonces 3 pièces et +),
+ * appliquée comme si c'était une pente "au sein" de la population des petits
+ * logements. En dessous de 37 m², c'est déjà une extrapolation ; en dessous
+ * de ce seuil-ci, l'écart mesuré (audit P3, docs/reference/
+ * estimation-loyer-charges.md) devient trop grand pour l'ignorer : deux
+ * studios réels de 18-19 m² étaient sous-estimés de −24 % à −41 % malgré les
+ * correctifs P1/P2.
+ *
+ * ⚠️ CONVENTIONNEL, pas mesuré — contrairement à `elasticiteLocale`. Aucune
+ * ressource ANIL n'a de pivot sous 37 m² (voir le script
+ * `generate-anil-loyers.mjs`, seulement 4 ressources publiées) : impossible
+ * de mesurer une élasticité propre à ce segment avec les données
+ * disponibles. Plutôt que d'inventer un coefficient déterministe non mesuré,
+ * ce seuil ne fait que DÉBLOQUER le résidu IA sur ce cas précis — voir
+ * `buildConsigneMicroLogement` — en s'appuyant sur la connaissance générale
+ * du marché du modèle plutôt que sur un chiffre fabriqué.
+ */
+const SEUIL_SURFACE_MICRO_LOGEMENT = 25;
+
+/**
+ * Exception ciblée à "la surface est déjà comptée" (voir le corps du prompt
+ * dans `buildPromptResidu`) — SEULE exception à cette règle. Sans elle, le
+ * résidu est structurellement empêché de corriger un biais qu'on sait pourtant
+ * réel sur ce segment (voir `SEUIL_SURFACE_MICRO_LOGEMENT`) : le prompt lui
+ * dit explicitement de ne rien recompter sur la surface, y compris quand
+ * l'ancre déterministe est peu fiable pour ce cas.
+ *
+ * Ne s'applique ni aux maisons (une seule ressource ANIL, pas de pivot à
+ * extrapoler de la même façon) ni aux immeubles (la correction de surface y
+ * porte sur la surface PAR LOT, pas sur le bien recherché par un locataire).
+ */
+function buildConsigneMicroLogement(input: RentEstimationInput): string {
+  const surface = input.surface_m2;
+  if (surface == null || surface >= SEUIL_SURFACE_MICRO_LOGEMENT) return "";
+  const typeBien = (input.type_bien ?? "").trim().toLowerCase();
+  if (typeBien === "maison" || isImmeuble(input.type_bien)) return "";
+  return `EXCEPTION à la consigne "la surface est déjà comptée" ci-dessus : la correction de surface appliquée à l'ancre est calibrée entre 37 et 72 m² (les deux seules références publiées) — pour ce logement de ${surface} m², nettement en dessous, c'est une extrapolation. Les micro-logements bien situés (proches transports, gare, centre, université) se louent SOUVENT au m² sensiblement au-dessus de ce que cette extrapolation prédit — un phénomène de marché réel, pas une erreur à corriger systématiquement. Si ta connaissance du secteur te permet de juger que CE micro-logement s'inscrit dans cette dynamique, tu PEUX ajouter UN critère de catégorie "prestations" en ce sens. C'est la SEULE exception à "ne recompte pas la surface" — elle ne s'applique QU'à ce cas de très petite surface, jamais à un logement de taille standard.`;
+}
+
 function buildConsigneQuartier(input: RentEstimationInput): string {
   const quartier = (input.quartier ?? "").trim();
   if (!quartier) return "";
@@ -565,7 +637,9 @@ function buildConsigneQuartier(input: RentEstimationInput): string {
  * - déclarer étage/état/travaux/DPE comme DÉJÀ appliqués (sans quoi l'IA les
  *   recompte, ce qui a rendu un bien instable sur 5 appels identiques :
  *   résidus observés {-5, -5, +3, -5, -5}) — le quartier n'en fait PLUS
- *   partie sans condition, voir `buildConsigneQuartier` ;
+ *   partie sans condition, voir `buildConsigneQuartier`, et la SURFACE non
+ *   plus en dessous de `SEUIL_SURFACE_MICRO_LOGEMENT`, voir
+ *   `buildConsigneMicroLogement` (audit P3) ;
  * - la règle de calibrage « ordinaire = 0 » (sans elle, l'IA ne cite que ce
  *   que l'annonce valorise et ne renvoie jamais de résidu négatif — mesuré
  *   sur 10 biens attractifs : 0 résidu négatif).
@@ -586,6 +660,7 @@ function buildPromptResidu(
   const positionExacte = input.precisionLocalisation === "exacte";
   const caveatLocalisation = positionExacte ? "" : CAVEAT_LOCALISATION_APPROX;
   const consigneQuartier = buildConsigneQuartier(input);
+  const consigneMicroLogement = buildConsigneMicroLogement(input);
 
   return `Tu estimes l'écart entre le loyer réel d'un logement et le loyer déjà calculé pour lui.
 
@@ -599,6 +674,8 @@ Ce montant TIENT DÉJÀ COMPTE de :
 - la classe DPE.
 
 Ne recompte AUCUN de ces éléments, ni en positif ni en négatif. Ta seule question : ce logement précis est-il meilleur ou moins bon que les logements VOISINS, à surface et état comparables ?
+
+${consigneMicroLogement}
 
 ${consigneQuartier}
 
@@ -615,7 +692,9 @@ ${desc}
 - L'ABSENCE d'un équipement (pas de balcon, pas de parking, pas de cave, pas de vue) est la NORME, pas un défaut : ne retire rien pour une simple absence non mentionnée.
 - Ne compte un négatif QUE si un problème ACTIF est décrit : vis-à-vis, exposition nord, nuisance sonore (bar, boulevard, voie ferrée, rocade), rez-de-chaussée sur rue passante, copropriété explicitement dégradée, cuisine borgne, isolement marqué (accès uniquement en voiture, aucun commerce à proximité).
 
-RÈGLE DE CALIBRAGE — la plus importante : un logement ORDINAIRE pour son secteur vaut **0**. C'est le cas le plus fréquent, et de loin. Un logement sans particularité décrite, ni atout ni défaut actif, vaut 0, JAMAIS un négatif "par défaut" ni un positif "par politesse". Réserve un écart de plus de 8 en valeur absolue aux cas vraiment marquants.
+RÈGLE DE CALIBRAGE — la plus importante : un logement ORDINAIRE pour son secteur, SANS AUCUN critère factuel identifié (ni positif ni négatif), vaut **0**. C'est le cas le plus fréquent, et de loin. Ne renvoie JAMAIS un négatif "par défaut" ni un positif "par politesse" sur un tel logement.
+
+En revanche, quand PLUSIEURS critères factuels INDÉPENDANTS et vérifiés se cumulent (ex. terrasse ET garage ET quartier que tu sais recherché), NE LES ÉCRASE PAS sous un total proche de 0 par prudence : chaque critère retenu pèse pour lui-même, et leur somme peut légitimement approcher la borne haute si 3 à 5 critères factuels solides sont réunis — la seule limite est la borne globale ci-dessous, pas une habitude de rester proche de 0.
 
 Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères ORDONNÉS du plus important au moins important. Si le logement est ordinaire, rends 0 et UN SEUL critère de sens "neutre" indiquant qu'il est conforme à son secteur — n'utilise JAMAIS "neutre" pour un autre critère : un critère réellement notable est toujours "positif" ou "negatif".`;
 }
@@ -673,8 +752,23 @@ Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères OR
  * v5 : découplage explicite quartier / description (voir le ⚠️ dans
  * `buildConsigneQuartier`) — corrige l'instabilité mesurée en v4 sur les
  * descriptions contenant "secteur recherché" ou équivalent.
+ *
+ * v6 : clamp élargi ±15 → ±20 (`RESIDU_MIN`/`RESIDU_MAX`) + RÈGLE DE
+ * CALIBRAGE assouplie — audit après signalement utilisateur (biens réels
+ * majoritairement sous-estimés, voir docs/reference/estimation-loyer-charges.md
+ * « Calibrage du résidu — élargi après audit »). "Ordinaire = 0" reste le
+ * défaut, mais plusieurs critères factuels cumulés n'ont plus vocation à
+ * être écrasés sous un total proche de 0 par prudence.
+ *
+ * v7 : exception ciblée « micro-logement » (`buildConsigneMicroLogement`,
+ * `SEUIL_SURFACE_MICRO_LOGEMENT`, audit P3) — sous 25 m², le résidu est
+ * désormais autorisé à corriger la surface, seule exception à "ne recompte
+ * pas la surface" ci-dessus. Motivée par deux studios réels (18-19 m²)
+ * sous-estimés de −24 % à −41 % malgré v6, cause identifiée : aucune
+ * ressource ANIL n'a de pivot sous 37 m², et le résidu était jusqu'ici
+ * explicitement empêché de compenser cette extrapolation.
  */
-const PROMPT_RESIDU_VERSION = 5;
+const PROMPT_RESIDU_VERSION = 7;
 
 function calculerEmpreinteResidu(
   input: RentEstimationInput,
@@ -1012,7 +1106,15 @@ async function estimerAvecReference(
   const justificationBrute = echecIa
     ? "Estimation basée sur le barème déterministe (étage, état, DPE) — ajustement IA indisponible."
     : synthetiserJustification(criteres);
-  const justification = sanitizeJustification(justificationBrute, input.surface_m2, "€/mois", 6);
+  let justification = sanitizeJustification(justificationBrute, input.surface_m2, "€/mois", 6);
+
+  // P1 (audit encadrement des loyers) : Paris uniquement, INFORMATIF — voir
+  // le ⚠️ de `LoyerCalcul.plafondLegal` et `encadrementLoyers.ts`. N'altère
+  // jamais `finalLoyer`, seulement la justification affichée.
+  const plafondLegal = plafondEncadrementParis(input.code_postal, input.nb_pieces, input.annee_construction, surface);
+  if (plafondLegal && finalLoyer > plafondLegal.plafond) {
+    justification += ` ⚠️ Dépasse le plafond légal de l'encadrement des loyers du ${plafondLegal.arrondissement} (${plafondLegal.annee}) : ${Math.round(plafondLegal.plafond).toLocaleString("fr-FR")} €/mois, sauf complément de loyer justifiable (prestation exceptionnelle).`;
+  }
 
   const ancreAnil: RentEstimationResult["ancreAnil"] = {
     loyerM2Anil: loyerRef.loyerM2,
@@ -1030,6 +1132,7 @@ async function estimerAvecReference(
     facteursDeterministes: detailFacteursDeterministes(input, surface),
     empreinteResidu: empreinte,
     reutilise,
+    plafondLegal,
   };
   const loyerHC = deriveLoyerHC(finalLoyer, input.charges_copro_annuelles ?? 0);
   return { loyer: finalLoyer, loyerHC, justification, ancreAnil, plafonne, calcul };
