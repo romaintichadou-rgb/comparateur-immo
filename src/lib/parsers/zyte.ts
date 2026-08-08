@@ -19,7 +19,7 @@ export async function fetchViaZyte(url: string): Promise<{
         "Content-Type": "application/json",
         Authorization: `Basic ${auth}`,
       },
-      body: JSON.stringify({ url, browserHtml: true }),
+      body: JSON.stringify({ url, httpResponseBody: true }),
       signal: AbortSignal.timeout(60_000),
     });
   } catch (err) {
@@ -42,12 +42,13 @@ export async function fetchViaZyte(url: string): Promise<{
   }
 
   const json = await res.json();
-  const html = json.browserHtml ?? "";
+  const bodyB64: string = json.httpResponseBody ?? "";
+  const html = bodyB64 ? Buffer.from(bodyB64, "base64").toString("utf-8") : "";
 
   return {
     ok: html.length > 0,
     html,
     status: json.statusCode ?? 200,
-    ...(!html && { reason: "Zyte n'a pas retourné de HTML" }),
+    ...(!html && { reason: "Zyte n'a pas retourné de contenu" }),
   };
 }
