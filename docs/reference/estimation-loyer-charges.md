@@ -100,8 +100,9 @@ pénalité implicite).
 L'IA ne reçoit PAS le médian ANIL brut, mais la valeur **déjà passée par le
 barème déterministe** (`det`) — sinon elle ajusterait un nombre que le
 déterministe a déjà fait bouger. Le prompt déclare étage/ascenseur/état/
-travaux/DPE/quartier comme DÉJÀ appliqués, et demande explicitement de ne rien
-recompter.
+travaux/DPE comme DÉJÀ appliqués, et demande explicitement de ne rien
+recompter. ⚠️ Le quartier n'en fait PLUS partie sans condition depuis le
+correctif quartier (voir plus bas) — il l'était par erreur.
 
 1. **« Ordinaire = 0 »** — sans elle, l'IA ne cite que ce que l'annonce
    valorise (un argumentaire commercial ne mentionne jamais ses propres
@@ -314,6 +315,58 @@ vis-à-vis, l'exposition précise ou les nuisances de voisinage immédiat ».
 si Overpass répond vide). Ce module (`analyse/sources/osm.ts`) reste utilisé
 ailleurs, par les blocs Potentiel et Quartier de l'Analyse IA — ne pas le
 supprimer en pensant qu'il est mort.
+
+### Le quartier — bug audité, IA autorisée à en tenir compte
+
+⚠️ **Bug corrigé après un signalement utilisateur** (loyer réel très
+supérieur à l'estimation, sur un bien à deux pas du Canal Saint-Martin,
+Paris 10e). Le prompt déclarait auparavant l'« attractivité générale du
+QUARTIER » comme déjà comptée en toute circonstance — vrai pour la quasi-
+totalité des communes françaises (la référence ANIL est déjà au niveau
+communal, la maille la plus fine publiée), **FAUX pour Paris, Lyon et
+Marseille** : la référence n'y descend qu'au niveau ARRONDISSEMENT (10e,
+3e…), qui peut recouvrir des quartiers très inégaux (Canal Saint-Martin et
+Gare du Nord sont tous deux « 75010 Paris »).
+
+`buildConsigneQuartier()` remplace cette fausse affirmation : gardée
+UNIQUEMENT quand `input.quartier` est renseigné (sinon chaîne vide,
+comportement inchangé), elle autorise l'IA à ajouter UN critère de
+catégorie `"quartier"` — mais seulement si elle identifie le nom **avec
+confiance** et connaît sa position relative (plus ou moins recherché que la
+moyenne de sa commune/son arrondissement). Interdiction explicite d'inventer
+une réputation pour un nom trop générique ou inconnu.
+
+⚠️ **Indépendante de `precisionLocalisation`, volontairement** — connaître
+le NOM d'un quartier ne demande pas de connaître l'adresse exacte (on peut
+savoir qu'on est à "Canal Saint-Martin" sans connaître le numéro de rue).
+C'est `CAVEAT_LOCALISATION_APPROX` (ci-dessus) qui restreint déjà les
+affirmations de RUE (vis-à-vis, exposition précise) à la seule position
+exacte — un périmètre plus étroit, resté inchangé.
+
+**Mesuré avant déploiement** (3 appels répétés par cas, `gemini-2.5-flash`,
+`temperature: 0`) :
+- reproductible à l'identique sur des répétitions du même prompt (3/3
+  identiques dans chaque cas testé) ;
+- **mais initialement sensible à `precisionLocalisation`** pour un même
+  quartier : `"arrondissement"` déclenchait le critère (+5 %), `"exacte"`
+  restait neutre (0 %) — deux prompts légèrement différents (présence ou non
+  de `CAVEAT_LOCALISATION_APPROX`) donnant deux jugements différents sur une
+  information qui ne dépend pourtant pas de cette précision. Corrigé en
+  rendant l'indépendance EXPLICITE dans la consigne plutôt que de compter sur
+  l'IA pour l'inférer — les deux cas convergent désormais sur le même
+  résultat ;
+- anti-hallucination vérifié sur un nom de quartier inventé et sur un
+  hameau rural peu connu : reste neutre (0 %) dans les deux cas, aucun
+  critère "quartier" inventé.
+
+⚠️ Échantillon limité (1 bien réel, quelques variantes). Contrairement à
+`thinkingBudget` (§7 du plan d'optimisation), ce n'est PAS une donnée
+mesurée comme l'est l'ANIL : c'est la connaissance générale du modèle sur la
+réputation d'un quartier, avec les limites que ça implique (biais possibles,
+connaissance datée). À surveiller sur des cas réels avant d'étendre.
+
+`PROMPT_RESIDU_VERSION` bumpé (v3 → v4) : changement du TEXTE du prompt,
+donc tous les calculs déjà en cache (§6) sont invalidés au prochain appel.
 
 ### Description : troncature relevée de 800 à 1 500 caractères
 

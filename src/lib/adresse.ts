@@ -59,10 +59,18 @@ function clef(valeur: string | null | undefined): string {
 }
 
 /**
- * Bloc commune à la norme postale : « 75020 Paris », espace et non virgule.
- * Rend « 75020 » ou « Paris » seul si l'autre manque, « » si les deux manquent.
+ * Bloc commune SEUL, à la norme postale : « 75020 Paris », espace et non
+ * virgule — sans le quartier, contrairement à `formatSecteur`. Rend « 75020 »
+ * ou « Paris » seul si l'autre manque, « » si les deux manquent.
+ *
+ * Exporté (pas seulement interne à `formatAdressePostale`/`formatSecteur`) :
+ * c'est l'échelle à laquelle la référence ANIL est calculée (commune, ou
+ * arrondissement pour Paris/Lyon/Marseille — le code postal la distingue déjà
+ * dans ces trois villes) — `rentEstimation.ts` en a besoin pour dire à l'IA
+ * QUELLE échelle est déjà couverte par l'ancre, distincte du quartier
+ * potentiellement plus fin qu'elle contient.
  */
-function blocCommune(a: ChampsAdresse): string {
+export function formatCommune(a: ChampsAdresse): string {
   return [nettoyer(a.code_postal), nettoyer(a.ville)].filter(Boolean).join(" ");
 }
 
@@ -111,7 +119,7 @@ export function aAdressePrecise(a: ChampsAdresse): boolean {
 export function formatAdressePostale(a: ChampsAdresse): string {
   const voie = nettoyer(a.adresse) || nettoyer(a.quartier);
   const parties = voie ? segmentsVoie(voie, a) : [];
-  const commune = blocCommune(a);
+  const commune = formatCommune(a);
   if (commune) parties.push(commune);
   return parties.join(", ");
 }
@@ -125,7 +133,7 @@ export function formatAdressePostale(a: ChampsAdresse): string {
 export function formatSecteur(a: ChampsAdresse): string {
   const quartier = nettoyer(a.quartier);
   const parties = quartier ? segmentsVoie(quartier, a) : [];
-  const commune = blocCommune(a);
+  const commune = formatCommune(a);
   if (commune) parties.push(commune);
   return parties.join(", ");
 }

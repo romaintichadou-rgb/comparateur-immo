@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { generateGeminiText, getGeminiApiKey } from "./gemini";
 import { isImmeuble, type PrecisionLocalisation } from "./types";
-import { formatSecteur } from "./adresse";
+import { formatCommune, formatSecteur } from "./adresse";
 import { sanitizeJustification } from "./format";
 import { lotsEffectifs } from "./estimates";
 import { deriveLoyerHC } from "./calculations";
@@ -500,6 +500,43 @@ const CAVEAT_LOCALISATION_APPROX =
   "⚠️ La localisation de ce bien n'est connue qu'au niveau du quartier ou de la commune (pas l'adresse exacte) : ne fais AUCUNE affirmation sur la rue, le vis-à-vis, l'exposition précise ou les nuisances de voisinage immédiat — tu ne peux pas les connaître à cette précision.";
 
 /**
+ * Consigne quartier (correctif audité — bien réel loué 1 950 €, estimé
+ * 1 503 € avant le fix élasticité, puis 1 653 € après, écart résiduel
+ * attribué au quartier). Avant ce correctif, la référence déclarait
+ * l'« attractivité du quartier » comme déjà comptée EN TOUTE CIRCONSTANCE —
+ * vrai pour la quasi-totalité des communes françaises (la référence ANIL est
+ * déjà au niveau communal, la plus fine maille publiée), FAUX pour Paris,
+ * Lyon et Marseille : la référence n'y descend qu'au niveau ARRONDISSEMENT
+ * (10e, 3e…), qui peut recouvrir des quartiers très inégaux (Canal
+ * Saint-Martin et Gare du Nord sont tous deux "75010 Paris").
+ *
+ * Gardée UNIQUEMENT sur `input.quartier` non vide, INDÉPENDAMMENT de
+ * `precisionLocalisation` : connaître le NOM d'un quartier ne demande pas de
+ * connaître l'adresse exacte (on peut savoir qu'on est "Canal Saint-Martin"
+ * sans connaître le numéro de rue) — c'est `CAVEAT_LOCALISATION_APPROX`
+ * ci-dessus qui restreint déjà les affirmations de rue/vis-à-vis à la seule
+ * position exacte, un périmètre plus étroit qui reste inchangé. Les trois cas
+ * possibles :
+ * - quartier connu (adresse exacte ou non) → cette consigne s'ajoute ;
+ * - seul l'arrondissement/la commune est connu (quartier vide) → chaîne
+ *   vide, comportement inchangé : rien à nommer, la référence reste la
+ *   meilleure estimation disponible à cette échelle.
+ *
+ * Garde-fous contre l'hallucination (un quartier n'est PAS une donnée
+ * mesurée, contrairement à l'ancre ANIL) : exige une identification "avec
+ * confiance", interdit explicitement d'inventer une réputation pour un nom
+ * trop générique ou inconnu, et le résidu reste borné à
+ * [`RESIDU_MIN`, `RESIDU_MAX`] comme tout le reste — un quartier ne peut pas
+ * à lui seul faire sortir l'ajustement de cette fourchette.
+ */
+function buildConsigneQuartier(input: RentEstimationInput): string {
+  const quartier = (input.quartier ?? "").trim();
+  if (!quartier) return "";
+  const commune = formatCommune(input) || "son secteur";
+  return `La référence ci-dessus est calculée à l'échelle de ${commune}, PAS à celle du quartier "${quartier}" qui s'y trouve — une même commune ou un même arrondissement peut regrouper des quartiers très inégaux. Que l'adresse exacte du bien soit connue ou non, tu connais le NOM de son quartier : si tu identifies "${quartier}" AVEC CONFIANCE et sais qu'il est structurellement plus recherché OU moins recherché que la moyenne de ${commune}, tu peux l'exprimer via UN critère de catégorie "quartier" — la précision de l'adresse ne change rien à ce que tu sais ou non de la réputation de ce quartier. N'INVENTE RIEN : si ce nom est trop générique pour être identifié sans ambiguïté, ou si tu n'as pas de connaissance fiable de sa position relative, ne rends AUCUN critère "quartier" — la référence reste la meilleure estimation disponible à cette échelle.`;
+}
+
+/**
  * Prompt du chemin RÉSIDU — le cœur de la Phase 2.
  *
  * `ancre` est la valeur APRÈS barème déterministe (`computeDeterministicRent`),
@@ -510,9 +547,10 @@ const CAVEAT_LOCALISATION_APPROX =
  *
  * Deux règles ont été mesurées comme nécessaires sur des appels réels
  * (voir AGENTS.md, section « Reproductibilité ») :
- * - déclarer étage/état/travaux/DPE/quartier comme DÉJÀ appliqués (sans quoi
- *   l'IA les recompte, ce qui a rendu un bien instable sur 5 appels
- *   identiques : résidus observés {-5, -5, +3, -5, -5}) ;
+ * - déclarer étage/état/travaux/DPE comme DÉJÀ appliqués (sans quoi l'IA les
+ *   recompte, ce qui a rendu un bien instable sur 5 appels identiques :
+ *   résidus observés {-5, -5, +3, -5, -5}) — le quartier n'en fait PLUS
+ *   partie sans condition, voir `buildConsigneQuartier` ;
  * - la règle de calibrage « ordinaire = 0 » (sans elle, l'IA ne cite que ce
  *   que l'annonce valorise et ne renvoie jamais de résidu négatif — mesuré
  *   sur 10 biens attractifs : 0 résidu négatif).
@@ -532,6 +570,7 @@ function buildPromptResidu(
   const desc = buildDescriptionResidu(input);
   const positionExacte = input.precisionLocalisation === "exacte";
   const caveatLocalisation = positionExacte ? "" : CAVEAT_LOCALISATION_APPROX;
+  const consigneQuartier = buildConsigneQuartier(input);
 
   return `Tu estimes l'écart entre le loyer réel d'un logement et le loyer déjà calculé pour lui.
 
@@ -542,10 +581,11 @@ Ce montant TIENT DÉJÀ COMPTE de :
 - la surface, le nombre de pièces, le type de bien, la majoration meublé ;
 - l'étage et la présence d'un ascenseur ;
 - l'état général du bien et les travaux prévus ;
-- la classe DPE ;
-- l'attractivité générale du QUARTIER (la référence est calculée pour ce secteur précis, pas pour la ville entière).
+- la classe DPE.
 
 Ne recompte AUCUN de ces éléments, ni en positif ni en négatif. Ta seule question : ce logement précis est-il meilleur ou moins bon que les logements VOISINS, à surface et état comparables ?
+
+${consigneQuartier}
 
 LOGEMENT : ${carac} — ${secteur}.
 
@@ -605,8 +645,17 @@ Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères OR
  * lui seul (une nouvelle clé dans le tableau produit un hash différent, donc
  * invalide déjà tout cache existant) ; le bump documente l'intention pour un
  * futur lecteur du diff, comme convenu depuis le bug ci-dessus.
+ *
+ * v4 : retrait de la fausse consigne « le quartier est déjà compté » +
+ * ajout de `buildConsigneQuartier` — changement du TEXTE du prompt, pas
+ * d'un champ : `input.quartier` était déjà dans le tableau ci-dessous, mais
+ * seule sa VALEUR entrait dans le hash, pas la façon dont le prompt s'en sert.
+ * Sans ce bump, un bien SANS quartier (`buildConsigneQuartier` renvoie "")
+ * aurait gardé un résidu calculé sous l'ancien texte, alors que le résultat
+ * ne dépend pas que du texte final mais de la version du prompt qui a
+ * tourné — cas exactement prévu par le paragraphe ⚠️ ci-dessus.
  */
-const PROMPT_RESIDU_VERSION = 3;
+const PROMPT_RESIDU_VERSION = 4;
 
 function calculerEmpreinteResidu(
   input: RentEstimationInput,
