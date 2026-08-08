@@ -308,37 +308,26 @@ export default function LoyerDetailPanel({
                       +12 %, voir anilReference.ts. */}
                   <div className="rounded-lg border border-ink-100 bg-white px-4 py-3">
                     <ul className="divide-y divide-ink-100/50">
-                      {/* Ligne 1 = loyer total pour le logement DE RÉFÉRENCE
-                          ANIL (`surfaceReference` m²) — un nombre qui se lit
-                          seul : "un {typologie} type de X m² se loue Y € dans
-                          ce secteur". PAS encore le total de CE bien. */}
+                      {/* Le total pour le logement DE RÉFÉRENCE ANIL
+                          (`surfaceReference` m²) n'est plus affiché ici — un
+                          chiffre basé sur une surface qui n'est pas celle de CE
+                          bien, jugé pas assez utile pour occuper une ligne
+                          entière (demande explicite). Le détail (surface de
+                          référence, effet net) reste disponible, en clair, dans
+                          le paragraphe de bas de carte plutôt que dans un
+                          tooltip : ce fichier a déjà constaté qu'un `title` seul
+                          n'est pas fiable au toucher sur mobile — voir plus bas. */}
                       <StepRow
-                        label={`Loyer moyen du secteur — ${TYPOLOGIE_LABEL[refCC.typologie]}`}
-                        hint={`pour un logement type de ${refCC.surfaceReference} m²`}
-                        value={anilRefTotal}
+                        label="Loyer moyen non meublé (CC)"
+                        hint={`${TYPOLOGIE_LABEL[refCC.typologie]} · ${surface} m²`}
+                        value={anilSurfaceTotal}
                       />
-                      {/* Passe DIRECTEMENT du total de référence au total réel :
-                          le pourcentage est donc l'effet NET (surface + taux/m²
-                          combinés), jamais le taux seul — voir le commentaire
-                          plus haut sur le bug corrigé. Le loyer/m² décroît avec
-                          la surface (élasticité −0,485 mesurée sur les données
-                          ANIL), mais un bien PLUS GRAND que la référence garde
-                          un total PLUS ÉLEVÉ : plus de m² compense largement le
-                          taux/m² plus bas. */}
-                      {anilSurfaceTotal !== anilRefTotal && (
-                        <StepRow
-                          label="Ajusté à la surface réelle"
-                          hint={`${surface} m² au lieu de ${refCC.surfaceReference} m² type`}
-                          pct={pctSurface}
-                          value={anilSurfaceTotal}
-                        />
-                      )}
                       <StepRow
                         label="Majoration meublé"
                         pct={Math.round(MAJORATION_MEUBLE * 100)}
                         value={anilMedian}
                         total
-                        totalLabel="Loyer de référence"
+                        totalLabel="Loyer de référence meublé (CC)"
                       />
                     </ul>
                     <div className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-ink-100/50 pt-2.5">
@@ -352,6 +341,7 @@ export default function LoyerDetailPanel({
                     <Info className="h-3 w-3 text-ink-300 mt-0.5 shrink-0" />
                     <p className="text-[11px] leading-relaxed text-ink-400">
                       Carte des loyers ANIL {anil.annee} · {anil.nbObs.toLocaleString("fr-FR")} annonces observées · loyers <strong className="font-medium">charges comprises</strong>, logement non meublé.
+                      {" "}Loyer moyen pour un logement type de {refCC.surfaceReference} m² : {formatEuros(anilRefTotal)}, ajusté à {surface} m² ({pctSurface > 0 ? "+" : ""}{pctSurface} %).
                       {/* Tooltip du badge ci-dessus, en clair : un `title` seul
                           n'est pas fiable au toucher (mobile). */}
                       {!referenceFiable && <> {raisonFiabiliteReduite(anil)}</>}
