@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { findParserForUrl, parseListingUrl } from "@/lib/parsers";
 import { getApiSession } from "@/lib/auth";
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   // Vérification EXPLICITE : cette route ne passe pas par `db.ts`, elle
   // n'hérite donc pas de sa protection. Laissée ouverte, elle irait chercher

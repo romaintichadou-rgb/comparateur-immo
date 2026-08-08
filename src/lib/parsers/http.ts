@@ -42,31 +42,39 @@ export async function fetchListingHtml(url: string): Promise<FetchResult> {
   const direct = await directFetch(url);
   if (direct.ok) return direct;
 
-  if (!process.env.ZYTE_API_KEY) return direct;
+  if (!process.env.ZYTE_API_KEY) {
+    return {
+      ...direct,
+      reason: `${direct.reason} Fallback anti-bot indisponible (ZYTE_API_KEY non configurée).`,
+    };
+  }
 
+  console.log(`[parse] Direct fetch bloqué (${direct.status}), tentative via Zyte…`);
   const zyte = await fetchViaZyte(url);
+
   if (!zyte.ok) {
+    console.log(`[parse] Zyte a échoué : ${zyte.reason}`);
     return {
       ok: false,
       blocked: true,
       status: zyte.status,
       html: zyte.html,
-      reason:
-        zyte.reason ??
-        "Le site a bloqué la récupération automatique malgré le contournement anti-bot.",
+      reason: zyte.reason ?? "Échec du contournement anti-bot (Zyte).",
     };
   }
 
   if (looksBlocked(zyte.status, zyte.html)) {
+    console.log(`[parse] Zyte a répondu mais le contenu reste bloqué (statut ${zyte.status})`);
     return {
       ok: false,
       blocked: true,
       status: zyte.status,
       html: zyte.html,
-      reason: `Le site a bloqué la récupération automatique (statut ${zyte.status}).`,
+      reason: `Le site a bloqué la récupération même via le contournement anti-bot (statut ${zyte.status}).`,
     };
   }
 
+  console.log(`[parse] Zyte OK — ${zyte.html.length} caractères récupérés`);
   return { ok: true, blocked: false, status: zyte.status, html: zyte.html };
 }
 
@@ -81,6 +89,7 @@ async function directFetch(url: string): Promise<FetchResult> {
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
       },
       redirect: "follow",
+      signal: AbortSignal.timeout(5_000),
     });
   } catch (err) {
     return {
