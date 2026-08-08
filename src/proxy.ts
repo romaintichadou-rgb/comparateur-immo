@@ -68,11 +68,16 @@ export async function proxy(request: NextRequest) {
 
   if (!user && !estPublique && !estApi) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    // Mémorise la destination pour y revenir après connexion — c'est ce qui
-    // fait que le bookmarklet fonctionne sur un compte déconnecté : l'annonce
-    // n'est pas perdue en route.
     const dest = chemin + request.nextUrl.search;
+
+    if (process.env.NODE_ENV === "development" && process.env.DEV_EMAIL) {
+      url.pathname = "/api/dev-login";
+      url.search = "";
+      if (dest !== "/") url.searchParams.set("suivant", dest);
+      return NextResponse.redirect(url);
+    }
+
+    url.pathname = "/login";
     if (dest !== "/") {
       url.searchParams.set("suivant", dest);
     }
