@@ -93,10 +93,9 @@ function emptyInput(): ApartmentInput {
 type Step = "url" | "scraping" | "review" | "processing";
 type Banner = { tone: "info" | "warning" | "success"; text: string } | null;
 
-type ScrapingPhase = "connecting" | "bypassing" | "extracting";
+type ScrapingPhase = "connecting" | "extracting";
 const SCRAPING_STEPS: { key: ScrapingPhase; label: string; detail: string }[] = [
   { key: "connecting", label: "Connexion au site", detail: "Récupération de la page d'annonce." },
-  { key: "bypassing", label: "Contournement de la protection", detail: "Le site est protégé — passage par un navigateur distant." },
   { key: "extracting", label: "Extraction des données", detail: "Lecture du prix, surface, DPE, localisation, description…" },
 ];
 
@@ -267,8 +266,7 @@ export default function AddApartmentFlow() {
     setScrapingPhase("connecting");
     setStep("scraping");
 
-    const t1 = setTimeout(() => setScrapingPhase("bypassing"), 3_000);
-    const t2 = setTimeout(() => setScrapingPhase("extracting"), 10_000);
+    const t1 = setTimeout(() => setScrapingPhase("extracting"), 5_000);
 
     try {
       const res = await fetch("/api/parse", {
@@ -305,7 +303,6 @@ export default function AddApartmentFlow() {
       });
     } finally {
       clearTimeout(t1);
-      clearTimeout(t2);
       setAnalysing(false);
       setStep("review");
     }
