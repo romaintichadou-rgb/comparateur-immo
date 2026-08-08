@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { X, Info, Sparkles, Database, SlidersHorizontal } from "lucide-react";
+import { X, Info } from "lucide-react";
+import { TITRE_SECTION } from "@/components/SectionHeader";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, sanitizeJustification } from "@/lib/format";
@@ -247,12 +248,7 @@ export default function LoyerDetailPanel({
                 return (
                 <section className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex rounded-lg bg-ink-100 p-1.5 text-ink-500">
-                      <Database className="h-3.5 w-3.5" />
-                    </span>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                      Étape 1 — Référence de marché
-                    </h3>
+                    <h3 className={TITRE_SECTION}>Étape 1 — Référence de marché</h3>
                     {/* Phase 4 (2) : signal discret quand la prédiction ANIL ne
                         vient pas de la commune elle-même, ou repose sur trop
                         peu d'observations — jamais affiché avant. Le loyer de
@@ -291,8 +287,8 @@ export default function LoyerDetailPanel({
                           surface réelle" juste en dessous — contradiction
                           relevée après coup, à ne pas réintroduire. */}
                       <StepRow
-                        label={`Loyer médian ANIL — ${TYPOLOGIE_LABEL[refCC.typologie]}`}
-                        hint={`logement de référence ANIL : ${refCC.surfaceReference} m²`}
+                        label={`Loyer moyen du secteur — ${TYPOLOGIE_LABEL[refCC.typologie]}`}
+                        hint={`pour un logement type de ${refCC.surfaceReference} m²`}
                         value={anilBrutTotal}
                       />
                       {/* Le loyer/m² décroît avec la surface (élasticité −0,485
@@ -304,7 +300,7 @@ export default function LoyerDetailPanel({
                       {Math.abs(refCC.facteurSurface - 1) > 0.005 && (
                         <StepRow
                           label="Ajusté à la surface réelle"
-                          hint={`${surface} m² vs ${refCC.surfaceReference} m² de référence`}
+                          hint={`${surface} m² au lieu de ${refCC.surfaceReference} m² type`}
                           pct={Math.round((refCC.facteurSurface - 1) * 100)}
                           value={anilSurfaceTotal}
                         />
@@ -353,34 +349,13 @@ export default function LoyerDetailPanel({
                     (le % par critère n'existe pas dans les données). */}
               {aiEstimated && (
                 <section className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex rounded-lg bg-ink-100 p-1.5 text-ink-500">
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                    </span>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                      Étape 2 — Ce qui fait varier ce loyer
-                    </h3>
-                    {/* Total = écart réel entre la référence et le loyer retenu.
-                        ⚠️ Ce n'est PAS la somme des tags ci-dessous : les
-                        facteurs sont multiplicatifs, bornés, puis suivis du
-                        plafonnement sur la fourchette ANIL. Les tags disent ce
-                        qui a joué, ce badge dit où on a atterri.
-                        ⚠️ Colorisé par `ecartTone` (perspective INVESTISSEUR),
-                        pas par `pctToneClasses` : c'est LE MÊME nombre que
-                        l'« Écart vs marché » de l'Étape 3, il doit donc porter
-                        exactement la même couleur — deux teintes pour une seule
-                        valeur à quelques centimètres d'écart se lisent comme un
-                        bug. Les badges des familles ci-dessous gardent, eux, la
-                        colorisation DIRECTIONNELLE (hausse/baisse) : ils
-                        décrivent un effet, pas une position vs marché. */}
-                    {ecartPct != null && (
-                      <span
-                        className={`ml-auto shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold ${ecartTone(ecartPct, "wrap")} ${ecartTone(ecartPct, "value")}`}
-                      >
-                        {ecartPct > 0 ? "+" : ""}{ecartPct.toFixed(0)} %
-                      </span>
-                    )}
-                  </div>
+                  {/* Pas de badge ici : le total (écart réel entre référence et
+                      loyer retenu) est DÉJÀ affiché à l'Étape 3 — le même
+                      nombre à deux endroits à quelques centimètres d'écart se
+                      lit comme un bug, pas comme deux informations. Cette
+                      étape n'a qu'un rôle : détailler CE QUI a joué, pas
+                      annoncer OÙ on a atterri. */}
+                  <h3 className={TITRE_SECTION}>Étape 2 — Ce qui fait varier ce loyer</h3>
                   <div className="space-y-4 rounded-lg border border-ink-100 bg-white p-4">
                     {!calcul ? (
                       // Chemins sans résidu structuré (immeuble, logement sans
@@ -393,11 +368,11 @@ export default function LoyerDetailPanel({
                       )
                     ) : (
                       <>
-                        {/* ── Famille 1 : barème du bien (déterministe) ── */}
+                        {/* ── Famille 1 : caractéristiques objectives du bien ── */}
                         {facteursBareme.length > 0 && (
                           <FamilleFacteurs
                             titre="Caractéristiques du bien"
-                            aide="Barème appliqué automatiquement"
+                            aide="effet automatique selon le bien"
                           >
                             {facteursBareme.map((f) => (
                               <FacteurTag key={f.libelle} label={f.libelle} pct={f.pct} />
@@ -405,10 +380,14 @@ export default function LoyerDetailPanel({
                           </FamilleFacteurs>
                         )}
 
-                        {/* ── Famille 2 : critères qualitatifs (résidu IA) ── */}
+                        {/* ── Famille 2 : particularités relevées dans l'annonce ──
+                            Nom volontairement sans "IA" (demande explicite) :
+                            l'utilisateur n'a pas besoin de savoir QUEL
+                            sous-système a produit l'info, seulement CE QUI joue
+                            sur le loyer. */}
                         <FamilleFacteurs
-                          titre="Analyse IA"
-                          aide="Critères qualitatifs non couverts par le barème"
+                          titre="Autres particularités"
+                          aide="en plus des caractéristiques ci-dessus"
                           badge={
                             !calcul.echecIa ? (
                               <span
@@ -420,12 +399,10 @@ export default function LoyerDetailPanel({
                           }
                         >
                           {calcul.echecIa ? (
-                            <p className="text-xs text-ink-500">
-                              Indisponible pour ce calcul — seul le barème ci-dessus a été appliqué.
-                            </p>
+                            <p className="text-xs text-ink-500">Indisponible pour ce calcul.</p>
                           ) : calcul.criteres.length === 0 ? (
                             <p className="text-xs text-ink-500">
-                              Aucun critère marquant — logement conforme à son secteur.
+                              Rien à signaler — loyer aligné sur la référence de marché.
                             </p>
                           ) : (
                             grouperCriteresParCategorie(calcul.criteres).map((groupe, _, groupes) => (
@@ -448,13 +425,15 @@ export default function LoyerDetailPanel({
                         </FamilleFacteurs>
 
                         {/* Phase 4 (3) : sans ce texte, un clic sur "Estimer
-                            avec IA" qui réutilise le résidu (cache par
-                            empreinte, §6) semblerait n'avoir rien fait — un
+                            avec IA" qui réutilise le résultat précédent (cache
+                            par empreinte, §6) semblerait n'avoir rien fait — un
                             bouton qui ne répond pas plutôt qu'un calcul jugé
-                            toujours valide. */}
+                            toujours valide. "Résidu" (jargon interne) évité :
+                            l'utilisateur n'a pas besoin de savoir que c'est un
+                            résidu de calcul qui a été réutilisé. */}
                         {calcul.reutilise && (
                           <p className="border-t border-ink-100/50 pt-2.5 text-[11px] italic text-ink-400">
-                            Résidu IA inchangé depuis la dernière estimation.
+                            Pas de changement depuis la dernière estimation.
                           </p>
                         )}
                       </>
@@ -465,14 +444,7 @@ export default function LoyerDetailPanel({
 
               {/* ── ÉTAPE 3 : Résultat final ── */}
               <section className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex rounded-lg bg-accent-50 p-1.5 text-accent-500">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </span>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                    {aiEstimated ? "Étape 3 — " : ""}Loyer retenu
-                  </h3>
-                </div>
+                <h3 className={TITRE_SECTION}>{aiEstimated ? "Étape 3 — " : ""}Loyer retenu</h3>
                 <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl bg-accent-50 p-4">
@@ -487,12 +459,12 @@ export default function LoyerDetailPanel({
                     </div>
                     {ecartPct != null && (
                       <div className={`rounded-xl p-4 ${ecartTone(ecartPct, "wrap")}`}>
-                        <p className={`text-xs font-medium ${ecartTone(ecartPct, "label")}`}>Écart vs marché</p>
+                        <p className={`text-xs font-medium ${ecartTone(ecartPct, "label")}`}>Écart au marché</p>
                         <p className={`mt-1 text-3xl font-bold font-mono ${ecartTone(ecartPct, "value")}`}>
                           {ecartPct > 0 ? "+" : ""}{ecartPct.toFixed(0)} %
                         </p>
                         <p className={`mt-1 text-[11px] ${ecartTone(ecartPct, "sub")}`}>
-                          vs {anilMedian != null ? formatEuros(anilMedian) : "médian"}
+                          référence : {anilMedian != null ? formatEuros(anilMedian) : "n/d"}
                         </p>
                       </div>
                     )}
@@ -579,16 +551,24 @@ function pctToneClasses(pct: number): string {
  * pas `emerald`/`red` : un critère négatif (rez-de-chaussée, vis-à-vis…) pèse
  * un peu sur le loyer, ce n'est pas une alerte au sens de la charte (`red`
  * réservé au danger réel — DPE G, risques, destructif).
+ *
+ * `neutre` (le placeholder "logement ordinaire", voir `CritereResidu`) est en
+ * `ink` — NI vert NI ambre. Avant cette 3ᵉ couleur, ce placeholder forçait
+ * `sens: "positif"` pour respecter le schéma IA, donc un tag VERT pour un
+ * bien où rien n'a été trouvé : incohérent, un investisseur pouvait croire à
+ * un vrai point positif. Un `•` remplace le `+`/`−`, qui n'aurait pas de sens
+ * ici (rien ne penche).
  */
 function CritereTag({ critere }: { critere: CritereResidu }) {
-  const positif = critere.sens === "positif";
+  const styles: Record<CritereResidu["sens"], string> = {
+    positif: "bg-emerald-50 text-emerald-700",
+    negatif: "bg-amber-50 text-amber-700",
+    neutre: "bg-ink-100 text-ink-500",
+  };
+  const signe = critere.sens === "positif" ? "+" : critere.sens === "negatif" ? "−" : "•";
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-        positif ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-      }`}
-    >
-      <span aria-hidden="true">{positif ? "+" : "−"}</span>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${styles[critere.sens]}`}>
+      <span aria-hidden="true">{signe}</span>
       {critere.libelle}
     </span>
   );

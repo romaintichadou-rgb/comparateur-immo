@@ -51,7 +51,15 @@ export interface RentEstimationInput {
  */
 export interface CritereResidu {
   libelle: string;
-  sens: "positif" | "negatif";
+  /**
+   * `"neutre"` RÉSERVÉ au placeholder « logement ordinaire, conforme à son
+   * secteur » (voir RÈGLE DE CALIBRAGE dans `buildPromptResidu`) — la
+   * consigne interdit explicitement à l'IA de l'utiliser ailleurs. Sans
+   * cette 3ᵉ valeur, ce placeholder devait forcer `"positif"` pour respecter
+   * le schéma, ce qui affichait un tag vert alors que RIEN de notable n'a
+   * été trouvé — incohérent, corrigé après coup (voir panneau de détail).
+   */
+  sens: "positif" | "negatif" | "neutre";
   /**
    * Non exploitée en Phase 2 (pas de tags par catégorie tant que le panneau
    * n'a pas été refondu — Phase 4). Collectée dès maintenant pour ne pas
@@ -453,7 +461,7 @@ const SCHEMA_RESIDU = {
         type: "OBJECT",
         properties: {
           libelle: { type: "STRING" },
-          sens: { type: "STRING", enum: ["positif", "negatif"] },
+          sens: { type: "STRING", enum: ["positif", "negatif", "neutre"] },
           categorie: {
             type: "STRING",
             enum: ["quartier", "prestations", "exposition", "nuisances", "copropriete"],
@@ -554,7 +562,7 @@ ${desc}
 
 RÈGLE DE CALIBRAGE — la plus importante : un logement ORDINAIRE pour son secteur vaut **0**. C'est le cas le plus fréquent, et de loin. Un logement sans particularité décrite, ni atout ni défaut actif, vaut 0, JAMAIS un négatif "par défaut" ni un positif "par politesse". Réserve un écart de plus de 8 en valeur absolue aux cas vraiment marquants.
 
-Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères ORDONNÉS du plus important au moins important. Si le logement est ordinaire, rends 0 et un seul critère expliquant qu'il est conforme à son secteur.`;
+Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères ORDONNÉS du plus important au moins important. Si le logement est ordinaire, rends 0 et UN SEUL critère de sens "neutre" indiquant qu'il est conforme à son secteur — n'utilise JAMAIS "neutre" pour un autre critère : un critère réellement notable est toujours "positif" ou "negatif".`;
 }
 
 /**
@@ -711,10 +719,14 @@ function filtrerCriteresDejaComptes(criteres: CritereResidu[]): CritereResidu[] 
  * structure (catégories, tags) n'est exploitée qu'à partir de la Phase 4.
  */
 function synthetiserJustification(criteres: CritereResidu[]): string {
-  if (criteres.length === 0) {
+  // Les critères "neutre" (placeholder "logement ordinaire", voir
+  // CritereResidu) n'ont rien à ajouter à une justification — un "+"/"−"
+  // devant serait aussi trompeur que le tag vert qu'il a remplacé.
+  const notables = criteres.filter((c) => c.sens !== "neutre");
+  if (notables.length === 0) {
     return "Logement conforme aux caractéristiques standards de son secteur — aucun ajustement retenu.";
   }
-  return criteres.map((c) => `${c.sens === "positif" ? "+" : "−"} ${c.libelle}`).join(" · ");
+  return notables.map((c) => `${c.sens === "positif" ? "+" : "−"} ${c.libelle}`).join(" · ");
 }
 
 function extractJson<T>(text: string): T | null {
