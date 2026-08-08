@@ -528,12 +528,27 @@ const CAVEAT_LOCALISATION_APPROX =
  * trop générique ou inconnu, et le résidu reste borné à
  * [`RESIDU_MIN`, `RESIDU_MAX`] comme tout le reste — un quartier ne peut pas
  * à lui seul faire sortir l'ajustement de cette fourchette.
+ *
+ * ⚠️ **DÉCOUPLAGE explicite d'avec la description** (v5, bug mesuré après
+ * déploiement de v4) : une description contenant "secteur recherché" (langage
+ * promotionnel que la règle anti-battage plus bas interdit déjà de
+ * récompenser seul) rendait ce critère INSTABLE — 0 %, +5 %, 0 % sur 3 appels
+ * identiques à `temperature: 0`, du jamais-vu sur ce prompt jusque-là. Le
+ * modèle semblait confondre deux signaux censés être indépendants : "le
+ * vendeur ÉCRIT que c'est recherché" (à ignorer, règle anti-battage) et "JE
+ * SAIS que ce quartier est recherché" (la vraie connaissance qu'on veut
+ * exploiter ici). Sans clarification, tantôt il traitait les deux comme liés
+ * (se méfiant du second parce que le premier est suspect), tantôt non — d'où
+ * l'instabilité. Fixé en rendant l'indépendance ELLE AUSSI explicite plutôt
+ * que de compter sur le modèle pour la déduire — même stratégie de correction
+ * que pour l'indépendance à `precisionLocalisation` juste au-dessus. Testé
+ * stable après coup (voir docs/reference/estimation-loyer-charges.md).
  */
 function buildConsigneQuartier(input: RentEstimationInput): string {
   const quartier = (input.quartier ?? "").trim();
   if (!quartier) return "";
   const commune = formatCommune(input) || "son secteur";
-  return `La référence ci-dessus est calculée à l'échelle de ${commune}, PAS à celle du quartier "${quartier}" qui s'y trouve — une même commune ou un même arrondissement peut regrouper des quartiers très inégaux. Que l'adresse exacte du bien soit connue ou non, tu connais le NOM de son quartier : si tu identifies "${quartier}" AVEC CONFIANCE et sais qu'il est structurellement plus recherché OU moins recherché que la moyenne de ${commune}, tu peux l'exprimer via UN critère de catégorie "quartier" — la précision de l'adresse ne change rien à ce que tu sais ou non de la réputation de ce quartier. N'INVENTE RIEN : si ce nom est trop générique pour être identifié sans ambiguïté, ou si tu n'as pas de connaissance fiable de sa position relative, ne rends AUCUN critère "quartier" — la référence reste la meilleure estimation disponible à cette échelle.`;
+  return `La référence ci-dessus est calculée à l'échelle de ${commune}, PAS à celle du quartier "${quartier}" qui s'y trouve — une même commune ou un même arrondissement peut regrouper des quartiers très inégaux. Que l'adresse exacte du bien soit connue ou non, tu connais le NOM de son quartier : si tu identifies "${quartier}" AVEC CONFIANCE et sais qu'il est structurellement plus recherché OU moins recherché que la moyenne de ${commune}, tu peux l'exprimer via UN critère de catégorie "quartier" — la précision de l'adresse ne change rien à ce que tu sais ou non de la réputation de ce quartier. Cette évaluation vient UNIQUEMENT de ta propre connaissance du quartier nommé ci-dessus, JAMAIS de ce que la description dit ou suggère à son sujet : si la description affirme que le secteur est "recherché", "prisé" ou similaire, ignore-la ENTIÈREMENT pour ce critère — ni preuve, ni raison de te méfier, un argumentaire commercial non vérifiable qui n'a aucun poids ici. N'INVENTE RIEN : si ce nom est trop générique pour être identifié sans ambiguïté, ou si tu n'as pas de connaissance fiable de sa position relative, ne rends AUCUN critère "quartier" — la référence reste la meilleure estimation disponible à cette échelle.`;
 }
 
 /**
@@ -654,8 +669,12 @@ Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères OR
  * aurait gardé un résidu calculé sous l'ancien texte, alors que le résultat
  * ne dépend pas que du texte final mais de la version du prompt qui a
  * tourné — cas exactement prévu par le paragraphe ⚠️ ci-dessus.
+ *
+ * v5 : découplage explicite quartier / description (voir le ⚠️ dans
+ * `buildConsigneQuartier`) — corrige l'instabilité mesurée en v4 sur les
+ * descriptions contenant "secteur recherché" ou équivalent.
  */
-const PROMPT_RESIDU_VERSION = 4;
+const PROMPT_RESIDU_VERSION = 5;
 
 function calculerEmpreinteResidu(
   input: RentEstimationInput,

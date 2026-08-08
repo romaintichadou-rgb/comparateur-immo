@@ -359,14 +359,39 @@ exacte — un périmètre plus étroit, resté inchangé.
   hameau rural peu connu : reste neutre (0 %) dans les deux cas, aucun
   critère "quartier" inventé.
 
+⚠️ **Seconde instabilité trouvée APRÈS déploiement, corrigée en v5** :
+une description contenant "secteur recherché" (langage promotionnel que la
+règle anti-battage de `buildPromptResidu` interdit déjà de récompenser seul)
+rendait ce critère instable — 0 %, +5 %, 0 % sur 3 appels identiques à
+`temperature: 0`, alors que ce prompt n'avait jusque-là jamais montré
+d'instabilité à température nulle. Diagnostic : le modèle confondait deux
+signaux censés être indépendants — « le vendeur ÉCRIT que c'est recherché »
+(à ignorer, règle anti-battage) et « JE SAIS que ce quartier est recherché »
+(la connaissance qu'on veut exploiter). Fixé en ajoutant à
+`buildConsigneQuartier` une phrase de découplage EXPLICITE (« cette
+évaluation vient UNIQUEMENT de ta connaissance du quartier, JAMAIS de ce que
+la description dit à son sujet ») — même stratégie de correction que pour
+`precisionLocalisation` juste au-dessus : rendre explicite ce qu'on voulait
+que le modèle déduise seul. Reconfirmé stable (3/3) après coup, y compris sur
+le bien réel qui avait révélé le problème.
+
+⚠️ **Hallucination distincte observée en testant ce correctif**, non liée au
+quartier : sur ce même bien, avec cette même description ("secteur
+recherché du 10e arrondissement", qui ne mentionne ni vue ni nuisances),
+l'IA a ajouté par moments des critères "Vue dégagée" / "Absence de nuisances
+sonores" — des éléments FACTUELS selon la règle du prompt, mais absents de
+la description fournie. Pas corrigé ici (hors du périmètre du correctif
+quartier) — à traiter séparément si ça se confirme sur d'autres biens.
+
 ⚠️ Échantillon limité (1 bien réel, quelques variantes). Contrairement à
 `thinkingBudget` (§7 du plan d'optimisation), ce n'est PAS une donnée
 mesurée comme l'est l'ANIL : c'est la connaissance générale du modèle sur la
 réputation d'un quartier, avec les limites que ça implique (biais possibles,
 connaissance datée). À surveiller sur des cas réels avant d'étendre.
 
-`PROMPT_RESIDU_VERSION` bumpé (v3 → v4) : changement du TEXTE du prompt,
-donc tous les calculs déjà en cache (§6) sont invalidés au prochain appel.
+`PROMPT_RESIDU_VERSION` bumpé v3 → v4 → v5 : deux changements de TEXTE du
+prompt coup sur coup, donc tous les calculs déjà en cache (§6) sont
+invalidés au prochain appel.
 
 ### Description : troncature relevée de 800 à 1 500 caractères
 
