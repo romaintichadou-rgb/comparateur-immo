@@ -619,35 +619,51 @@ croire que deux choses changeaient (le meublé ET les charges) alors qu'une
 seule bouge. « Charges comprises » est énoncé comme une PROPRIÉTÉ de la
 source (footer « Source »), jamais comme une marche du calcul.
 
-### Étape 2 — barème ET résidu IA dans UNE SEULE carte, en deux familles
+### Étape 2 — un badge global, un contexte dédoublonné, une phrase (refonte v2)
 
-L'utilisateur se demande « qu'est-ce qui a fait varier mon loyer », pas quel
-sous-système (table de coefficients ou LLM) l'a calculé — les deux familles
-sont donc dans la même carte (`FamilleFacteurs` × 2), mais restent des
-sous-groupes VISUELLEMENT distincts, pour deux raisons qui ne disparaissent
-pas avec la fusion :
-- **Fiabilité** : le barème est reproductible et auditable (une table de
-  coefficients), le résidu est le jugement d'un LLM. Tout aplatir ferait
-  passer une opinion pour une règle.
-- **Granularité** : chaque facteur du barème porte SON propre %
-  (`FacteurTag`). Le résidu n'en a qu'UN SEUL pour l'ensemble de ses
-  critères — cette donnée n'existe pas au niveau du critère individuel,
-  inutile de l'inventer.
+⚠️ **Design remplacé** — la version précédente (deux familles de tags avec un
+% chacune, `FamilleFacteurs`/`FacteurTag`/`CritereTag`/
+`grouperCriteresParCategorie`, tous supprimés) est décrite ci-dessous par
+contraste, pour ne pas la réintroduire par erreur en pensant "corriger" la
+version actuelle.
 
-Le badge d'en-tête de l'Étape 2 (`ecartPct`) est colorisé par `ecartTone`
-(perspective INVESTISSEUR), **pas** par `pctToneClasses` : c'est le MÊME
-nombre que l'« Écart vs marché » de l'Étape 3 (même `apt.loyer_retenu` vs
-`anilMedian`), il doit donc porter EXACTEMENT la même couleur — deux teintes
-pour une seule valeur à quelques centimètres d'écart se lisent comme un bug,
-pas comme deux informations différentes. Les tags de facteurs individuels
-(`FacteurTag`, `CritereTag`), eux, restent en `pctToneClasses` : ils décrivent
-un EFFET directionnel (hausse/baisse), pas une position vs marché.
+**Trois défauts identifiés à l'usage** (demande utilisateur directe, `/ui-ux-pro-max`) :
+1. **Doublon** : un fait comme "Bon état" apparaissait DEUX fois — une pastille
+   grise neutre dans le "contexte", une pastille verte "+3 %" dans "Ajustement
+   automatique" juste en dessous. Même chose pour l'étage.
+2. **Trop de %** : chaque tag de facteur portait son propre pourcentage — un
+   niveau de granularité que l'utilisateur n'exploitait pas ("il veut savoir
+   uniquement le % final").
+3. **Ton robotique** : le résumé résidu était une concaténation
+   `"+ X · + Y · + Z"`, pas une phrase.
 
-⚠️ La somme des tags ne reconstitue PAS l'écart du badge : les facteurs
-déterministes sont multiplicatifs puis bornés (`FACTEUR_DETERMINISTE_MIN/MAX`),
-suivis du résidu IA puis du plafonnement sur la fourchette ANIL
-(`RentEstimationResult.plafonne`). Les tags disent CE QUI a joué, le badge dit
-OÙ on a atterri — ne pas laisser un utilisateur vérifier l'un par l'autre.
+**Ce que fait la version actuelle** :
+- **Un seul badge**, dans l'en-tête de l'Étape 2, à côté du titre — RÉINTRODUIT
+  l'ancien design Phase 4 (`ecartPct`, colorisé par `ecartTone` et NON par
+  `pctToneClasses`, pour porter EXACTEMENT la même couleur que l'« Écart au
+  marché » de l'Étape 3 : deux teintes pour une seule valeur se liraient comme
+  un bug). Il avait été retiré à un moment sans que ce fichier ne soit mis à
+  jour ; ce lot corrige aussi cette dérive doc/code au passage.
+- **Le contexte ("pastilles grises")** reste affiché en entier (TOUTES les
+  caractéristiques, effet ou non), mais chaque pastille est colorée UNE FOIS
+  quand elle correspond à un facteur déterministe non neutre
+  (`toneEtageEtAscenseur`, `toneFacteurPour` dans `LoyerDetailPanel.tsx`) —
+  plus de pastille verte séparée à côté. Matching par correspondance de
+  LIBELLÉ contre le vocabulaire exact de `detailFacteursDeterministes()`
+  (`rentEstimation.ts`) — ⚠️ si ce vocabulaire change, ce matching doit
+  suivre, sinon une pastille reste neutre à tort.
+- **Une phrase** (`phraseSyntheseEtape2`) remplace les tags de critères IA et
+  leur pourcentage : deux clauses (barème, puis résidu IA) plutôt qu'une
+  liste fusionnée — la distinction "coefficient reproductible" vs "jugement
+  d'un LLM" reste réelle, seule sa présentation change (des mots dans une
+  phrase, pas deux familles visuellement séparées avec badge propre).
+
+⚠️ La somme implicite des facteurs qu'on peut lire dans la phrase ne
+reconstitue PAS le badge : les facteurs déterministes sont multiplicatifs
+puis bornés (`FACTEUR_DETERMINISTE_MIN/MAX`), suivis du résidu IA puis du
+plafonnement sur la fourchette ANIL (`RentEstimationResult.plafonne`, non
+persisté — voir « INFORMATIF » plus haut). La phrase dit CE QUI a joué, le
+badge dit OÙ on a atterri.
 
 ### Facteurs déterministes exposés — persistés, jamais recalculés côté client
 
@@ -663,17 +679,10 @@ n'affiche aucun tag, jamais trois tags « 0 % ».
 
 **Repli pour les calculs enregistrés avant ce champ** (`undefined`) :
 `LoyerDetailPanel` déduit l'effet GLOBAL du barème depuis
-`loyerDeterministe / anilMedian − 1` et l'affiche en un seul tag agrégé
+`loyerDeterministe / anilMedian − 1` et l'affiche en un seul facteur agrégé
 (« Étage · état · DPE »), plutôt que de ne rien montrer ou de tenter un
-recalcul.
-
-### Fusion des groupes IA sans catégorie inutile
-
-`grouperCriteresParCategorie` groupe toujours les critères par catégorie,
-mais le panneau n'affiche le LIBELLÉ de catégorie que si plusieurs catégories
-sont réellement présentes (`groupes.length > 1`) — le cas le plus fréquent
-(3-5 critères, souvent une seule catégorie dominante) ne répète pas le titre
-de famille « Analyse IA » pour rien.
+recalcul — ce facteur agrégé alimente `phraseSyntheseEtape2` comme n'importe
+quel autre.
 
 ## Taxe foncière — mode déterministe (taux communal disponible)
 

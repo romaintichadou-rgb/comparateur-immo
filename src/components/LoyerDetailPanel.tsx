@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X, Info } from "lucide-react";
 import { TITRE_SECTION } from "@/components/SectionHeader";
 import type { ApartmentWithComputed } from "@/lib/types";
@@ -8,10 +8,10 @@ import { isImmeuble } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, sanitizeJustification } from "@/lib/format";
 import { isAiEstimated } from "@/lib/estimates";
 import { TONE_PANEL_STYLES, type RendementTone, type TonePanelStyle } from "@/lib/analyse/scoring";
-import { renderBoldInline } from "@/components/richText";
+import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
 import Skeleton from "@/components/Skeleton";
 import { lotsEffectifs } from "@/lib/estimates";
-import type { CritereResidu } from "@/lib/rentEstimation";
+import { facteursBaremeEffectifs, phraseSyntheseLoyer } from "@/lib/loyerSynthese";
 import {
   MAJORATION_MEUBLE,
   SEUIL_NB_OBS_FIABLE,
@@ -186,34 +186,30 @@ export default function LoyerDetailPanel({
   // Facteurs du barème (étage, état×travaux, DPE), tels qu'APPLIQUÉS au moment
   // du calcul — jamais recalculés ici : les coefficients vivent dans
   // `rentEstimation.ts` et les recopier côté client rejouerait la divergence
-  // que `anilReference.ts` a été écrit pour supprimer.
-  //
-  // Repli pour les calculs enregistrés avant ce champ : `loyerDeterministe`
-  // (persisté de longue date) porte l'effet GLOBAL du barème par rapport au
-  // loyer de référence, qu'on rend alors en un seul tag agrégé.
-  const facteursBareme: { libelle: string; pct: number }[] = (() => {
-    if (calcul?.facteursDeterministes) return calcul.facteursDeterministes;
-    if (!calcul || anilMedian == null || anilMedian <= 0) return [];
-    const pct = Math.round((calcul.loyerDeterministe / anilMedian - 1) * 100);
-    return pct === 0 ? [] : [{ libelle: "Étage · état · DPE", pct }];
-  })();
+  // que `anilReference.ts` a été écrit pour supprimer. Fonction PARTAGÉE avec
+  // `ApartmentDetail` (section Revenus) — voir `loyerSynthese.ts`.
+  const facteursBareme = facteursBaremeEffectifs(calcul, anilMedian);
 
   // Contexte du bien — TOUTES les caractéristiques, y compris celles sans
-  // effet (un étage neutre, un DPE D neutre…). Distinct des tags colorés
-  // ci-dessus : ceux-ci ne montrent QUE ce qui a un effet chiffrable, celui-ci
-  // montre ce qui a été CONSIDÉRÉ, effet ou non — c'est la seule vue qui
-  // répond à "quels sont les éléments neutres du calcul", puisque le
-  // déterministe (contrairement au résidu IA) connaît la valeur de chaque
-  // champ qu'il ait joué ou non.
-  const caracteristiquesBien: string[] = [];
-  if (apt.type_bien) caracteristiquesBien.push(apt.type_bien);
-  if (hasSurface) caracteristiquesBien.push(`${surface} m²`);
-  if (apt.nb_pieces != null) caracteristiquesBien.push(`${apt.nb_pieces} pièce(s)`);
-  if (apt.etage) caracteristiquesBien.push(`étage ${apt.etage}`);
-  if (apt.ascenseur === true) caracteristiquesBien.push("ascenseur");
-  if (apt.etat_bien) caracteristiquesBien.push(apt.etat_bien);
-  if (apt.dpe) caracteristiquesBien.push(`DPE ${apt.dpe}`);
-  if (apt.travaux != null && apt.travaux > 0) caracteristiquesBien.push("travaux prévus");
+  // effet (un étage neutre, un DPE D neutre…), colorée quand elle correspond
+  // à un facteur déterministe non neutre (voir `toneEtageEtAscenseur` etc.
+  // plus bas). Remplace l'ancien doublon : le fait apparaissait ici en gris
+  // ET, séparément, dans un tag "Ajustement automatique" avec son % — une
+  // même caractéristique ("Bon état") affichée deux fois, une seule fois
+  // colorée. Chaque fait n'apparaît plus qu'UNE fois désormais.
+  const { etage: toneEtage, ascenseur: toneAscenseur } = toneEtageEtAscenseur(facteursBareme);
+  const toneEtat = toneFacteurPour(facteursBareme, [apt.etat_bien, `${apt.etat_bien} + travaux`, "Travaux prévus"]);
+  const toneDpe = apt.dpe ? toneFacteurPour(facteursBareme, [`DPE ${apt.dpe.toUpperCase()}`]) : "neutre";
+
+  const caracteristiquesBien: { label: string; tone: ToneCaracteristique }[] = [];
+  if (apt.type_bien) caracteristiquesBien.push({ label: apt.type_bien, tone: "neutre" });
+  if (hasSurface) caracteristiquesBien.push({ label: `${surface} m²`, tone: "neutre" });
+  if (apt.nb_pieces != null) caracteristiquesBien.push({ label: `${apt.nb_pieces} pièce(s)`, tone: "neutre" });
+  if (apt.etage) caracteristiquesBien.push({ label: formatEtageLabel(apt.etage), tone: toneEtage });
+  if (apt.ascenseur === true) caracteristiquesBien.push({ label: "ascenseur", tone: toneAscenseur });
+  if (apt.etat_bien) caracteristiquesBien.push({ label: apt.etat_bien, tone: toneEtat });
+  if (apt.dpe) caracteristiquesBien.push({ label: `DPE ${apt.dpe}`, tone: toneDpe });
+  if (apt.travaux != null && apt.travaux > 0) caracteristiquesBien.push({ label: "travaux prévus", tone: toneEtat });
 
   return (
     <div className="fixed inset-0 z-[2000]">
@@ -353,44 +349,46 @@ export default function LoyerDetailPanel({
               })()}
 
               {/* ── ÉTAPE 2 : tout ce qui fait varier le loyer de référence ──
-                  Barème déterministe ET résidu IA dans UNE carte : l'utilisateur
-                  se demande « qu'est-ce qui a fait bouger mon loyer », pas « quel
-                  sous-système l'a calculé ». L'ancien découpage en deux étapes
-                  était calqué sur l'architecture du code (barème → résidu).
-                  Les deux familles restent des SOUS-GROUPES distincts, pour deux
-                  raisons qui tiennent toujours :
-                  - fiabilité : le barème est une table de coefficients
-                    reproductible, le résidu est le jugement d'un LLM. L'app badge
-                    partout ce qui vient d'une IA, tout aplatir ferait passer une
-                    opinion pour une règle ;
-                  - granularité : chaque facteur du barème porte SON %, alors que
-                    le résidu n'en a qu'un seul pour l'ensemble de ses critères
-                    (le % par critère n'existe pas dans les données). */}
+                  Barème déterministe ET résidu IA dans UNE carte, résumés en
+                  UNE phrase : l'utilisateur se demande « qu'est-ce qui a fait
+                  bouger mon loyer », pas « quel sous-système l'a calculé, et
+                  de combien exactement chaque critère ». Refonte (retrait des
+                  % par tag + dédoublonnage + phrase de synthèse) : voir
+                  docs/reference/estimation-loyer-charges.md. */}
               {aiEstimated && (
                 <section className="space-y-1.5">
-                  {/* Pas de badge ici : le total (écart réel entre référence et
-                      loyer retenu) est DÉJÀ affiché à l'Étape 3 — le même
-                      nombre à deux endroits à quelques centimètres d'écart se
-                      lit comme un bug, pas comme deux informations. Cette
-                      étape n'a qu'un rôle : détailler CE QUI a joué, pas
-                      annoncer OÙ on a atterri. */}
-                  <h3 className={TITRE_SECTION}>Étape 2 — Ce qui fait varier ce loyer</h3>
-                  <div className="space-y-4 rounded-lg border border-ink-100 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <h3 className={TITRE_SECTION}>Étape 2 — Ce qui fait varier ce loyer</h3>
+                    {/* Même nombre que l'Écart au marché de l'Étape 3 (même
+                        apt.loyer_retenu vs anilMedian), coloré avec EXACTEMENT
+                        la même fonction (`ecartTone`, pas `pctToneClasses`) —
+                        deux teintes différentes pour une seule valeur à
+                        quelques centimètres d'écart se liraient comme un bug. */}
+                    {ecartPct != null && (
+                      <span
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold ${ecartTone(ecartPct, "wrap")} ${ecartTone(ecartPct, "value")}`}
+                      >
+                        {ecartPct > 0 ? "+" : ""}{ecartPct.toFixed(0)} %
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-3 rounded-lg border border-ink-100 bg-white p-4">
                     {/* ── Contexte : TOUTES les caractéristiques du bien, effet
-                        ou non — demande explicite : l'ancien panneau montrait
-                        cette liste grise et elle a été retirée à tort en Phase
-                        4 (seuls les tags COLORÉS ci-dessous sont apparus).
-                        Distincte des tags colorés : ceux-ci ne montrent que ce
-                        qui a un effet chiffrable, celle-ci montre tout ce qui a
-                        été considéré — c'est la seule vue qui répond à "quels
-                        sont les éléments neutres du calcul" côté déterministe
-                        (le résidu IA, lui, ne remonte jamais les critères
-                        neutres — voir plus bas). */}
+                        ou non — colorée quand elle correspond à un facteur
+                        déterministe non neutre (voir `toneEtageEtAscenseur`
+                        et consorts plus bas), grise sinon. Chaque fait
+                        n'apparaît plus qu'UNE fois : avant cette refonte, un
+                        fait comme "Bon état" était répété ici EN GRIS puis,
+                        séparément, dans un tag "Ajustement automatique" avec
+                        son %. */}
                     {caracteristiquesBien.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {caracteristiquesBien.map((c) => (
-                          <span key={c} className="rounded-full bg-ink-50 px-2.5 py-1 text-[11px] font-medium text-ink-600">
-                            {c}
+                          <span
+                            key={c.label}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${classesCaracteristique(c.tone)}`}
+                          >
+                            {c.label}
                           </span>
                         ))}
                       </div>
@@ -405,92 +403,16 @@ export default function LoyerDetailPanel({
                         </div>
                       )
                     ) : (
-                      <>
-                        {/* ── Famille 1 : EFFET des caractéristiques déterministes ──
-                            Distincte du bloc "contexte" ci-dessus (qui liste TOUT),
-                            celle-ci ne montre QUE ce qui a un effet chiffrable —
-                            d'où un titre différent ("Ajustement", pas
-                            "Caractéristiques", déjà pris par le contexte). */}
-                        {facteursBareme.length > 0 && (
-                          <FamilleFacteurs
-                            titre="Ajustement automatique"
-                            aide="selon étage, état, DPE"
-                          >
-                            {facteursBareme.map((f) => (
-                              <FacteurTag key={f.libelle} label={f.libelle} pct={f.pct} />
-                            ))}
-                          </FamilleFacteurs>
-                        )}
-
-                        {/* ── Famille 2 : particularités relevées dans l'annonce ──
-                            Nom volontairement sans "IA" (demande explicite) :
-                            l'utilisateur n'a pas besoin de savoir QUEL
-                            sous-système a produit l'info, seulement CE QUI joue
-                            sur le loyer.
-                            ⚠️ Le placeholder "neutre" (logement ordinaire, voir
-                            CritereResidu) est exclu de `critNotables` : sans ce
-                            filtre, le titre "Autres particularités" s'affichait
-                            au-dessus d'un unique tag disant "rien de notable" —
-                            un titre qui promet une particularité, suivi d'un
-                            contenu qui dit le contraire. Quand il ne reste RIEN
-                            de notable, pas de famille du tout : une phrase
-                            simple, sans l'habillage "particularités". */}
-                        {(() => {
-                          const critNotables = calcul.criteres.filter((c) => c.sens !== "neutre");
-                          if (calcul.echecIa) {
-                            return <p className="text-xs text-ink-500">Indisponible pour ce calcul.</p>;
-                          }
-                          if (critNotables.length === 0) {
-                            return (
-                              <p className="text-xs text-ink-500">
-                                Rien de particulier ne joue sur ce loyer — aligné sur la référence de marché.
-                              </p>
-                            );
-                          }
-                          return (
-                            <FamilleFacteurs
-                              titre="Autres particularités"
-                              aide="en plus de l'ajustement ci-dessus"
-                              badge={
-                                <span
-                                  className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold ${pctToneClasses(calcul.ajustementPct)}`}
-                                >
-                                  {calcul.ajustementPct > 0 ? "+" : ""}{calcul.ajustementPct} %
-                                </span>
-                              }
-                              // Résumé en PROSE, demandé en plus des tags : les
-                              // pastilles disent QUOI, la prose dit POURQUOI et
-                              // met les critères en relation ("le quartier est
-                              // recherché, ce qui justifie...") — une nuance
-                              // qu'une liste de tags ne porte pas seule.
-                              // `loyer_justification` est généré server-side à
-                              // partir de CES MÊMES critères (synthetiserJustification),
-                              // jamais d'un texte séparé qui pourrait diverger.
-                              intro={
-                                apt.loyer_justification &&
-                                renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))
-                              }
-                            >
-                              {grouperCriteresParCategorie(critNotables).map((groupe, _, groupes) => (
-                                <div key={groupe.key} className="contents">
-                                  {/* Le libellé de catégorie n'apparaît que s'il
-                                      DISCRIMINE : avec une seule catégorie il
-                                      répète le titre de famille pour rien (cas
-                                      le plus fréquent — 3 critères, 1 catégorie). */}
-                                  {groupes.length > 1 && (
-                                    <span className="mt-0.5 w-full text-[10px] font-medium uppercase tracking-wide text-ink-400">
-                                      {groupe.label}
-                                    </span>
-                                  )}
-                                  {groupe.items.map((c, i) => (
-                                    <CritereTag key={i} critere={c} />
-                                  ))}
-                                </div>
-                              ))}
-                            </FamilleFacteurs>
-                          );
-                        })()}
-                      </>
+                      // Phrase de synthèse — remplace l'ancienne liste de tags
+                      // "+ X · + Y · + Z" par une vraie phrase, en DEUX
+                      // clauses distinctes (barème puis résidu IA) plutôt
+                      // qu'une liste fusionnée : la fiabilité des deux sources
+                      // reste différente (coefficients reproductibles vs
+                      // jugement d'un LLM) — fusionner les MOTS reste
+                      // défendable, fusionner la DONNÉE ne l'était pas.
+                      <p className="text-sm leading-relaxed text-ink-600">
+                        {renderMarkdownBold(phraseSyntheseLoyer(facteursBareme, calcul.criteres, calcul.echecIa))}
+                      </p>
                     )}
                   </div>
                 </section>
@@ -548,11 +470,15 @@ export default function LoyerDetailPanel({
  */
 function ecartTone(pct: number, slot: keyof TonePanelStyle): string {
   let tone: RendementTone;
-  // Seuil aligné sur RESIDU_MAX (rentEstimation.ts, ±20 depuis l'audit
-  // post-déploiement) : un clamp élargi à 20 % pour laisser passer des
-  // estimations légitimement au-dessus du marché ne doit pas être repeint en
-  // rouge "trop optimiste" par un seuil resté sur l'ancien ±15.
-  if (pct > 20) tone = "alerte";
+  // Seuil relevé de 20 à 25 % (audit "booster les critères positifs") : un
+  // bien avec plusieurs bons critères LÉGITIMES (état + prestations +
+  // quartier) peut désormais atteindre +20-24 % sans rien d'anormal — le
+  // résidu IA (RESIDU_MAX=20, rentEstimation.ts) tape simplement son propre
+  // plafond. Aligné sur la largeur documentée de la fourchette ANIL
+  // elle-même (intervalle de prédiction à 95 %, ±25 % — voir
+  // docs/reference/estimation-loyer-charges.md) : au-delà, c'est
+  // statistiquement hors norme, en dessous ça reste dans la plage plausible.
+  if (pct > 25) tone = "alerte";
   else if (pct >= 0) tone = "positif";
   else if (pct >= -10) tone = "attention";
   else tone = "alerte";
@@ -561,42 +487,11 @@ function ecartTone(pct: number, slot: keyof TonePanelStyle): string {
 }
 
 /**
- * Catégories du résidu IA — mêmes clés que `SCHEMA_RESIDU.criteres.categorie`
- * (`rentEstimation.ts`), dans l'ordre d'affichage. `autre` est un filet pour
- * une catégorie absente/inattendue (donnée écrite par un LLM) — jamais
- * censé arriver vu le schéma contraint côté serveur, mais un critère ne doit
- * jamais disparaître silencieusement pour autant.
- */
-const CATEGORIES: { key: string; label: string }[] = [
-  { key: "quartier", label: "Quartier" },
-  { key: "prestations", label: "Prestations" },
-  { key: "exposition", label: "Exposition" },
-  { key: "nuisances", label: "Nuisances" },
-  { key: "copropriete", label: "Copropriété" },
-  { key: "autre", label: "Autre" },
-];
-
-function grouperCriteresParCategorie(
-  criteres: CritereResidu[]
-): { key: string; label: string; items: CritereResidu[] }[] {
-  const parCategorie = new Map<string, CritereResidu[]>();
-  for (const c of criteres) {
-    const cle = CATEGORIES.some((cat) => cat.key === c.categorie) ? c.categorie! : "autre";
-    const liste = parCategorie.get(cle) ?? [];
-    liste.push(c);
-    parCategorie.set(cle, liste);
-  }
-  return CATEGORIES
-    .map((cat) => ({ ...cat, items: parCategorie.get(cat.key) ?? [] }))
-    .filter((groupe) => groupe.items.length > 0);
-}
-
-/**
- * Couleur du badge d'ajustement (Étape 2) — PAS `TONE_PANEL_STYLES` : ce n'est
- * pas un chiffre jugé par un seuil investisseur (comme l'écart au marché de
- * l'Étape 3), juste le signe brut renvoyé par l'IA. 0 % n'est ni bon ni
- * mauvais — c'est le cas normal, "conforme au secteur" — d'où le neutre
- * plutôt qu'une des deux couleurs.
+ * Couleur d'un % signé sur fond BLANC (pas `TONE_PANEL_STYLES`, réservé aux
+ * fonds teintés) — utilisée par `StepRow` (Étape 1, majoration meublé) : ce
+ * n'est pas un chiffre jugé par un seuil investisseur (comme l'écart au
+ * marché de l'Étape 3), juste le signe brut. 0 % n'est ni bon ni mauvais —
+ * cas normal — d'où le neutre plutôt qu'une des deux couleurs.
  */
 function pctToneClasses(pct: number): string {
   if (pct > 0) return "bg-emerald-50 text-emerald-700";
@@ -605,52 +500,67 @@ function pctToneClasses(pct: number): string {
 }
 
 /**
- * Tag d'un critère du résidu. `positif`/`négatif` reprend `emerald`/`amber` —
- * pas `emerald`/`red` : un critère négatif (rez-de-chaussée, vis-à-vis…) pèse
- * un peu sur le loyer, ce n'est pas une alerte au sens de la charte (`red`
- * réservé au danger réel — DPE G, risques, destructif).
+ * Tonalité d'une caractéristique du bien (pastille de contexte, Étape 2) —
+ * NEUTRE par défaut, POSITIF/NÉGATIF quand elle correspond à un facteur
+ * déterministe non neutre (`facteursBareme`). Remplace l'ancien doublon : un
+ * fait comme "Bon état" apparaissait EN GRIS dans le contexte ET, séparément,
+ * dans un tag "Ajustement automatique" avec son % — chaque fait ne s'affiche
+ * plus qu'UNE fois, coloré s'il pèse sur le loyer.
  *
- * `neutre` (le placeholder "logement ordinaire", voir `CritereResidu`) est en
- * `ink` — NI vert NI ambre. Avant cette 3ᵉ couleur, ce placeholder forçait
- * `sens: "positif"` pour respecter le schéma IA, donc un tag VERT pour un
- * bien où rien n'a été trouvé : incohérent, un investisseur pouvait croire à
- * un vrai point positif. Un `•` remplace le `+`/`−`, qui n'aurait pas de sens
- * ici (rien ne penche).
+ * ⚠️ Couplé au VOCABULAIRE produit par `detailFacteursDeterministes()`
+ * (`rentEstimation.ts`) — si ses libellés changent, ce matching doit suivre.
+ * Alternative écartée : RECALCULER les coefficients ici recréerait la
+ * divergence serveur/client que ce panneau a déjà été corrigé pour éviter
+ * (voir plus haut, "jamais recalculé côté client").
  */
-function CritereTag({ critere }: { critere: CritereResidu }) {
-  const styles: Record<CritereResidu["sens"], string> = {
-    positif: "bg-emerald-50 text-emerald-700",
-    negatif: "bg-amber-50 text-amber-700",
-    neutre: "bg-ink-100 text-ink-500",
-  };
-  const signe = critere.sens === "positif" ? "+" : critere.sens === "negatif" ? "−" : "•";
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${styles[critere.sens]}`}>
-      <span aria-hidden="true">{signe}</span>
-      {critere.libelle}
-    </span>
-  );
+type ToneCaracteristique = "positif" | "negatif" | "neutre";
+
+function toneDepuisPct(pct: number): ToneCaracteristique {
+  return pct > 0 ? "positif" : pct < 0 ? "negatif" : "neutre";
+}
+
+/** Cherche, parmi les facteurs, celui dont le libellé correspond exactement à l'un des `libelles` attendus. */
+function toneFacteurPour(facteurs: { libelle: string; pct: number }[], libelles: string[]): ToneCaracteristique {
+  const f = facteurs.find((f) => libelles.includes(f.libelle));
+  return f ? toneDepuisPct(f.pct) : "neutre";
 }
 
 /**
- * Tag d'un facteur DÉTERMINISTE de l'Étape 1 (majoration meublé, ajustement
- * surface) — même langage visuel que `CritereTag` ci-dessus, à dessein : les
- * deux étapes listent des "facteurs qui ont joué", déterministes ici,
- * qualitatifs IA à l'Étape 2. Le pourcentage porte déjà le signe, pas besoin
- * du symbole `+`/`−` séparé de `CritereTag` (qui, lui, n'a qu'un sens sans
- * magnitude).
+ * Étage et ascenseur partagent UN SEUL facteur déterministe ("3e étage avec
+ * ascenseur", "Rez-de-chaussée"...) — les deux pastilles héritent donc de la
+ * même tonalité, SAUF au rez-de-chaussée : l'ascenseur n'y est pour rien dans
+ * la décote, donc sa pastille reste neutre plutôt que de laisser croire le
+ * contraire.
  */
-function FacteurTag({ label, pct }: { label: string; pct: number }) {
-  const positif = pct >= 0;
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${
-        positif ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-      }`}
-    >
-      {label} {positif ? "+" : "−"}{Math.abs(Math.round(pct))} %
-    </span>
-  );
+function toneEtageEtAscenseur(
+  facteurs: { libelle: string; pct: number }[]
+): { etage: ToneCaracteristique; ascenseur: ToneCaracteristique } {
+  const rdc = facteurs.find((f) => f.libelle === "Rez-de-chaussée");
+  if (rdc) return { etage: toneDepuisPct(rdc.pct), ascenseur: "neutre" };
+  const etage = facteurs.find((f) => /étage (avec|sans) ascenseur$/.test(f.libelle));
+  if (etage) {
+    const tone = toneDepuisPct(etage.pct);
+    return { etage: tone, ascenseur: tone };
+  }
+  return { etage: "neutre", ascenseur: "neutre" };
+}
+
+function classesCaracteristique(tone: ToneCaracteristique): string {
+  if (tone === "positif") return "bg-emerald-50 text-emerald-700";
+  if (tone === "negatif") return "bg-amber-50 text-amber-700";
+  return "bg-ink-50 text-ink-600";
+}
+
+/** "003" → "3e étage", "0" → "RDC" — nettoyage d'AFFICHAGE uniquement, aucun effet sur le calcul (qui lit `apt.etage` brut). */
+function formatEtageLabel(etage: string): string {
+  const trimmed = etage.trim();
+  // `apt.etage` n'est pas toujours numérique : les parsers y écrivent aussi
+  // "RDC" ou "Dernier" en toutes lettres (bookmarklet.ts, parsers/common.ts).
+  if (/^rdc$/i.test(trimmed)) return "RDC";
+  if (/^dernier$/i.test(trimmed)) return "dernier étage";
+  const n = parseInt(trimmed, 10);
+  if (isNaN(n)) return `étage ${trimmed}`;
+  return n === 0 ? "RDC" : `${n}e étage`;
 }
 
 /** Texte, en clair, du badge "Fiabilité réduite" de l'Étape 1 (Phase 4). */
@@ -746,40 +656,3 @@ function StepRow({
   );
 }
 
-/**
- * Une famille de facteurs dans la carte « Ce qui fait varier ce loyer » :
- * un intertitre discret + sa grille de tags. Les enfants sont posés dans le
- * MÊME conteneur `flex-wrap` que les tags (d'où le `contents` côté appelant
- * pour les groupes par catégorie) : les tags de toute la famille coulent
- * ensemble et se répartissent naturellement sur 375 px comme sur desktop.
- */
-function FamilleFacteurs({
-  titre,
-  aide,
-  badge,
-  intro,
-  children,
-}: {
-  titre: string;
-  aide: string;
-  badge?: ReactNode;
-  /** Explication en prose, affichée AU-DESSUS des tags — le résumé narratif
-   * ("le quartier est recherché, ce qui justifie...") que des pastilles seules
-   * ne peuvent pas porter (nuance, mise en relation des critères entre eux). */
-  intro?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <div className="mb-2 flex items-baseline gap-2">
-        <h4 className="text-xs font-semibold text-ink-700">{titre}</h4>
-        {badge}
-        <span className="min-w-0 flex-1 truncate text-[11px] text-ink-400">{aide}</span>
-      </div>
-      {intro && (
-        <div className="mb-2 rounded-lg bg-ink-50 p-3 text-sm text-ink-600 whitespace-pre-line">{intro}</div>
-      )}
-      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
-    </div>
-  );
-}

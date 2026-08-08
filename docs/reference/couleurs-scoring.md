@@ -139,16 +139,19 @@ marché = bon pour l'investisseur.
 
 | Écart       | Tone    | Raison                    |
 |-------------|---------|---------------------------|
-| > +20 %     | red     | Trop optimiste/irréaliste |
-| 0 % à +20 % | emerald | Bon revenu locatif        |
+| > +25 %     | red     | Trop optimiste/irréaliste |
+| 0 % à +25 % | emerald | Bon revenu locatif        |
 | −10 % à 0 % | amber   | Revenu sous-optimal       |
 | < −10 %     | red     | Très sous le marché       |
 
-⚠️ Seuil haut aligné sur `RESIDU_MAX` (`rentEstimation.ts`, ±20 depuis
-l'audit post-déploiement — voir `docs/reference/estimation-loyer-charges.md`)
-: les deux doivent bouger ensemble, sinon une estimation légitimement élargie
-par le clamp se retrouve repeinte en rouge par un seuil resté sur l'ancienne
-valeur.
+⚠️ **Seuil haut relevé 20 → 25** (audit "booster les critères positifs") :
+`RESIDU_MAX` (`rentEstimation.ts`) est resté à 20, mais un bien avec
+plusieurs bons critères LÉGITIMES peut désormais atteindre ce plafond de
+résidu sans rien d'anormal — un seuil d'alerte resté à 20 le repeignait donc
+en rouge pour de bonnes raisons devenues trop fréquentes. Réaligné sur la
+largeur documentée de la fourchette ANIL elle-même (intervalle de prédiction
+à 95 %, ±25 % — voir `docs/reference/estimation-loyer-charges.md`) : au-delà,
+c'est statistiquement hors norme, pas juste "généreux".
 
 Ne JAMAIS inverser cette logique.
 
