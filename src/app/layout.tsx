@@ -6,7 +6,6 @@ import { LoyerDetailProvider } from "@/components/LoyerDetailProvider";
 import { CashflowDetailProvider } from "@/components/CashflowDetailProvider";
 import { getSession } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
-import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
 // Titres H1/H2 (éditorial).

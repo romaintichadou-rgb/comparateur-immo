@@ -1,9 +1,11 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { SEUILS_RENDEMENT_DEFAUT, type RendementSeuils } from "@/lib/analyse/scoring";
-import RendementDetailPanel from "./RendementDetailPanel";
+
+const RendementDetailPanel = dynamic(() => import("./RendementDetailPanel"));
 
 interface RendementDetailContextValue {
   open: (apartment: ApartmentWithComputed, seuils?: RendementSeuils) => void;

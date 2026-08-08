@@ -26,7 +26,15 @@ export default async function NouveauApartementPage() {
   }
 
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
+          <div className="h-8 w-56 animate-pulse rounded bg-ink-100" />
+          <div className="h-12 w-full animate-pulse rounded-lg bg-ink-100" />
+          <div className="h-48 w-full animate-pulse rounded-xl bg-ink-100" />
+        </div>
+      }
+    >
       <AddApartmentFlow />
     </Suspense>
   );

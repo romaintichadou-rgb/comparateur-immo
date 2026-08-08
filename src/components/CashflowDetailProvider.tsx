@@ -1,10 +1,12 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { CashflowSeuils } from "@/lib/analyse/scoring";
 import { DEFAULT_SETTINGS, type AppSettings } from "@/lib/settings";
-import CashflowDetailPanel from "./CashflowDetailPanel";
+
+const CashflowDetailPanel = dynamic(() => import("./CashflowDetailPanel"));
 
 interface CashflowDetailContextValue {
   open: (

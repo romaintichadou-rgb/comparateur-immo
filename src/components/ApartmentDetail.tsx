@@ -25,7 +25,7 @@ import {
   TF_JUSTIF_COMMUNE_PREFIX,
 } from "@/lib/estimates";
 import { formatAdressePostale, lienGoogleMaps } from "@/lib/adresse";
-import { formatApartmentTitle, formatDate, formatEuros, formatPercent, sanitizeJustification } from "@/lib/format";
+import { formatApartmentTitle, formatDate, formatEuros, formatNote, sanitizeJustification } from "@/lib/format";
 import { redirectionQuota } from "@/lib/quota";
 import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
 import {
@@ -38,13 +38,25 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/form/Fields";
-import AnalyseIA, { formatNote } from "@/components/AnalyseIA";
-import OptimiserView from "@/components/OptimiserView";
-import SimulationFinanciere, { ResultCard } from "@/components/SimulationFinanciere";
-import FinancementSection from "@/components/FinancementSection";
-import { DECISION_CHIP, cashflowSeuilsFromSettings, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
+
+const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"), {
+  loading: () => <AnalyseIASkeleton />,
+});
+const OptimiserView = dynamic(() => import("@/components/OptimiserView"), {
+  loading: () => <OptimiserSkeleton />,
+});
+const SimulationFinanciere = dynamic(
+  () => import("@/components/SimulationFinanciere"),
+  { loading: () => <TabLoadingSkeleton /> },
+);
+const FinancementSection = dynamic(
+  () => import("@/components/FinancementSection"),
+  { loading: () => <TabLoadingSkeleton /> },
+);
+import { DECISION_CHIP, cashflowSeuilsFromSettings, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
-import { renderBoldInline } from "@/components/richText";
+import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
+import { facteursBaremeEffectifs, phraseSyntheseLoyer } from "@/lib/loyerSynthese";
 import { SectionHeader, TabHeader } from "@/components/SectionHeader";
 import { memeProfil, type AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
@@ -1196,10 +1208,32 @@ export default function ApartmentDetail({
                     onCancel={() => cancelField("loyer_retenu")}
                   />
                 )}
-                {apt.loyer_justification && !editingFields.has("loyer_retenu") && !("loyer_retenu" in finPatch) && (
-                  <p className="rounded-md bg-ink-50 p-3 text-xs text-ink-600 whitespace-pre-line">
-                    {renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))}
-                  </p>
+                {!editingFields.has("loyer_retenu") && !("loyer_retenu" in finPatch) && (
+                  // Même phrase de synthèse que l'Étape 2 du panneau de
+                  // détail (`LoyerDetailPanel`, fonction PARTAGÉE
+                  // `loyerSynthese.ts`) — les deux décrivaient auparavant le
+                  // même calcul avec des textes différents. `anilMedian`
+                  // omis volontairement : cette page ne fetch pas la
+                  // référence ANIL côté client, seul le repli des calculs
+                  // enregistrés avant `facteursDeterministes` (rare) en perd
+                  // la clause "barème", jamais toute la phrase.
+                  apt.loyer_calcul ? (
+                    <p className="rounded-md bg-ink-50 p-3 text-xs text-ink-600 whitespace-pre-line">
+                      {renderMarkdownBold(
+                        phraseSyntheseLoyer(
+                          facteursBaremeEffectifs(apt.loyer_calcul),
+                          apt.loyer_calcul.criteres,
+                          apt.loyer_calcul.echecIa
+                        )
+                      )}
+                    </p>
+                  ) : (
+                    apt.loyer_justification && (
+                      <p className="rounded-md bg-ink-50 p-3 text-xs text-ink-600 whitespace-pre-line">
+                        {renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))}
+                      </p>
+                    )
+                  )
                 )}
                 <button
                   type="button"
@@ -1815,6 +1849,20 @@ function OptimiserSkeleton() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TabLoadingSkeleton() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 3 }, (_, i) => (
+        <div key={i} className="space-y-3 rounded-xl border border-ink-100 bg-white p-5">
+          <Skeleton className="h-5 w-32 rounded" />
+          <Skeleton className="h-10 w-full rounded-md" />
+          <Skeleton className="h-10 w-full rounded-md" />
+        </div>
+      ))}
     </div>
   );
 }

@@ -26,7 +26,7 @@ import { simulate, resolveInputs } from "@/lib/simulation";
 import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
-import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
+import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatNote, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderMarkdownBold } from "@/components/richText";
 import { TITRE_SECTION } from "@/components/SectionHeader";
@@ -158,10 +158,6 @@ const GRAVITE_STYLES: Record<FaitGravite, { dot: string; value: string }> = {
   attention: { dot: "bg-amber-500", value: "text-amber-700" },
   alerte: { dot: "bg-red-500", value: "text-red-600" },
 };
-
-export function formatNote(note: number): string {
-  return Number.isInteger(note) ? String(note) : note.toFixed(1).replace(".", ",");
-}
 
 
 function dpeInfo(dpe: string): { sub: string; tone: StatCardTone } {

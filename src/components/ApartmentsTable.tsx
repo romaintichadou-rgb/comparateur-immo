@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { formatLocalisationCourte } from "@/lib/adresse";
-import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
+import { formatApartmentTitle, formatEuros, formatNote, formatPercent } from "@/lib/format";
 import {
   DECISION_RING_STYLES,
   TONE_TEXT_CLASS,
@@ -14,7 +14,6 @@ import {
   type RendementSeuils,
 } from "@/lib/analyse/scoring";
 import { decisionFromAnalyse } from "@/lib/analyse/decision";
-import { formatNote } from "@/components/AnalyseIA";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
 

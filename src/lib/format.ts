@@ -195,3 +195,7 @@ export function formatDateTime(iso: string | null | undefined): string {
     return "—";
   }
 }
+
+export function formatNote(note: number): string {
+  return Number.isInteger(note) ? String(note) : note.toFixed(1).replace(".", ",");
+}

@@ -1,8 +1,10 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import type { ApartmentWithComputed } from "@/lib/types";
-import LoyerDetailPanel from "./LoyerDetailPanel";
+
+const LoyerDetailPanel = dynamic(() => import("./LoyerDetailPanel"));
 
 interface LoyerDetailContextValue {
   open: (apartment: ApartmentWithComputed) => void;
