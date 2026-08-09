@@ -39,20 +39,10 @@ import {
   TextField,
 } from "@/components/form/Fields";
 
-const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"), {
-  loading: () => <AnalyseIASkeleton />,
-});
-const OptimiserView = dynamic(() => import("@/components/OptimiserView"), {
-  loading: () => <OptimiserSkeleton />,
-});
-const SimulationFinanciere = dynamic(
-  () => import("@/components/SimulationFinanciere"),
-  { loading: () => <TabLoadingSkeleton /> },
-);
-const FinancementSection = dynamic(
-  () => import("@/components/FinancementSection"),
-  { loading: () => <TabLoadingSkeleton /> },
-);
+const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"));
+const OptimiserView = dynamic(() => import("@/components/OptimiserView"));
+const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"));
+const FinancementSection = dynamic(() => import("@/components/FinancementSection"));
 import { DECISION_CHIP, cashflowSeuilsFromSettings, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
 import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
