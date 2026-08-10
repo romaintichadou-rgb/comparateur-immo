@@ -45,7 +45,6 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
 
   const seuils = cashflowSeuilsFromSettings(settings);
   const cfLMNP = result.cashflowMensuelMoyenLMNP;
-  const cfAn1 = result.cashflowMensuelAn1;
 
   // Source unique (scoring.ts) : mêmes seuils, même tonalité que les
   // MetricCards, l'onglet Optimiser et le tableau de simulation.

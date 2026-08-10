@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { getUserProfile } from "@/lib/db";
@@ -27,12 +28,12 @@ export default async function UpgradeSuccessPage() {
           : "Activation en cours, encore quelques instants — recharge cette page si l'accès n'est pas ouvert."
       }
       action={
-        <a
+        <Link
           href="/"
           className="inline-block rounded-lg bg-accent-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-700 active:bg-accent-800"
         >
           Revenir à mes biens
-        </a>
+        </Link>
       }
       retour={{ href: "/compte", label: "Voir mon compte" }}
     />

@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { AppMark } from "@/components/Navbar";
 import AuthShell from "../AuthShell";
-import { motDePasseOublie, type EtatAuth } from "../actions";
+import { motDePasseOublie } from "../actions";
 
 function BoutonSoumettre() {
   const { pending } = useFormStatus();

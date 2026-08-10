@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Settings, User } from "lucide-react";
@@ -66,9 +66,20 @@ function Wordmark() {
 const ROUTES_AUTH = ["/login", "/signup", "/mot-de-passe-oublie"];
 
 function UserMenu({ email }: { email: string }) {
-  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+
+  // Le menu retient la page SUR LAQUELLE il a été ouvert, plutôt qu'un booléen
+  // qu'un effet remettrait à false à chaque changement de route : naviguer
+  // change `pathname`, donc referme le menu par simple dérivation. L'effet
+  // équivalent provoquait un rendu en cascade (menu visible une frame après
+  // l'arrivée sur la nouvelle page).
+  const [ouvertSur, setOuvertSur] = useState<string | null>(null);
+  const open = ouvertSur === pathname;
+  const setOpen = useCallback(
+    (valeur: boolean) => setOuvertSur(valeur ? pathname : null),
+    [pathname]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -84,18 +95,14 @@ function UserMenu({ email }: { email: string }) {
       document.removeEventListener("mousedown", onClickOutside);
       document.removeEventListener("keydown", onEscape);
     };
-  }, [open]);
-
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  }, [open, setOpen]);
 
   const initial = email.charAt(0).toUpperCase();
 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition-colors ${
           open
             ? "bg-accent-200 text-accent-800"

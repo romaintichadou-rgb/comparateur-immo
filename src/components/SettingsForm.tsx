@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Banknote, TrendingUp, Wallet, ChevronDown, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ChevronDown, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { GroupTitle, SectionHeader } from "@/components/SectionHeader";
 import {
   FINANCEMENT_MODE_INFOS,

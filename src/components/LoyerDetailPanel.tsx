@@ -79,18 +79,25 @@ export default function LoyerDetailPanel({
     return () => clearTimeout(t);
   }, [apartment]);
 
+  // Les quatre entrées de la typologie sont extraites AVANT l'effet, et sont
+  // ses dépendances réelles. La liste ne citait que trois d'entre elles :
+  // `surface_m2` entre pourtant dans `typologieAnil` (seuil T1-T2 / T3+), donc
+  // corriger la surface d'un bien pouvait laisser affichée la référence de
+  // l'ancienne typologie.
+  const codeInsee = apartment?.code_insee ?? "";
+  const typeBien = apartment?.type_bien ?? "";
+  const nbPieces = apartment?.nb_pieces ?? null;
+  const surfaceM2 = apartment?.surface_m2 ?? null;
+
   useEffect(() => {
-    if (!apartment) return;
-    const codeInsee = apartment.code_insee;
-    if (!codeInsee) {
-      setAnilResult({ codeInsee: "", data: null });
-      return;
-    }
+    // Rien à charger, et rien à remettre à zéro : le rendu compare déjà le
+    // code INSEE de la référence en mémoire à celui du bien affiché.
+    if (!codeInsee) return;
     // La typologie fait partie de la clé : deux biens de la même commune mais
     // de typologies différentes (T2 / T4 / maison) lisent des ressources ANIL
     // distinctes. Sans elle dans la clé, le second réutiliserait la référence
     // du premier — soit jusqu'à 19 % d'écart.
-    const typo = typologieAnil(apartment.type_bien, apartment.nb_pieces, isImmeuble(apartment.type_bien), apartment.surface_m2);
+    const typo = typologieAnil(typeBien, nbPieces, isImmeuble(typeBien), surfaceM2);
     const cle = `${codeInsee}|${typo}`;
     if (anilFetchedForRef.current === cle) return;
     anilFetchedForRef.current = cle;
@@ -104,7 +111,7 @@ export default function LoyerDetailPanel({
         if (!cancelled) setAnilResult({ codeInsee, data: null });
       });
     return () => { cancelled = true; };
-  }, [apartment?.code_insee, apartment?.type_bien, apartment?.nb_pieces]);
+  }, [codeInsee, typeBien, nbPieces, surfaceM2]);
 
   useEffect(() => {
     if (!displayed) return;
@@ -144,10 +151,14 @@ export default function LoyerDetailPanel({
   // Quand le bien n'a pas de `code_insee`, il n'y a rien à charger : prêt
   // immédiatement, aucun spinner ne doit apparaître pour rien.
   const contentReady = apt.code_insee === "" || anilResult?.codeInsee === apt.code_insee;
-  const anil = contentReady ? (anilResult?.data ?? null) : null;
+  // ⚠️ La référence en mémoire n'est utilisable que si elle a été chargée POUR
+  // CE bien. Sans cette comparaison, ouvrir le panneau sur un bien SANS code
+  // INSEE juste après un bien qui en a un afficherait la référence du
+  // précédent (`contentReady` est vrai d'emblée dans ce cas). L'effet remettait
+  // l'état à zéro pour s'en prémunir — au prix d'un rendu en cascade, là où la
+  // comparaison suffit.
+  const anil = anilResult?.codeInsee === apt.code_insee ? anilResult.data : null;
 
-  const loyerM2 = hasLoyer && hasSurface ? loyer / surface : null;
-  const loyerAnnuel = hasLoyer ? loyer * 12 : null;
   const aiEstimated = isAiEstimated(apt, "loyer_retenu");
 
   // Conversion ANIL → CC meublé : passe par `anilReference.ts`, la même

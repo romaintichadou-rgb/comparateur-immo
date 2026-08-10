@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { Eye, EyeOff } from "lucide-react";
 import AuthShell from "@/app/(auth)/AuthShell";
-import { changerMotDePasse, type EtatAuth } from "@/app/(auth)/actions";
+import { changerMotDePasse } from "@/app/(auth)/actions";
 
 function BoutonSoumettre() {
   const { pending } = useFormStatus();

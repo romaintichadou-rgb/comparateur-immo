@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const url = request.nextUrl.clone();
   url.pathname = dest;
   url.search = "";
-  let response = NextResponse.redirect(url);
+  const response = NextResponse.redirect(url);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

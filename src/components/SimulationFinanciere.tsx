@@ -24,7 +24,6 @@ import {
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
 import { GroupTitle, SectionHeader, TITRE_SECTION } from "@/components/SectionHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import Skeleton from "@/components/Skeleton";
 import { isAiEstimated } from "@/lib/estimates";
 import { formatEurosSigned, formatNombre } from "@/lib/format";
 
@@ -43,28 +42,6 @@ import { formatEurosSigned, formatNombre } from "@/lib/format";
 /** Intitulé d'un groupe d'hypothèses (Crédit / Fiscalité / Projection). */
 function HypGroupTitle({ children }: { children: ReactNode }) {
   return <GroupTitle className="mb-1">{children}</GroupTitle>;
-}
-
-/**
- * Ligne d'hypothèse en lecture. Dense, discrète : c'est une donnée d'ENTRÉE, on
- * la consulte pour vérifier sur quoi la simulation repose, pas pour la lire
- * comme un résultat.
- *
- * La pastille est collée à la VALEUR, à droite, et non après le libellé : quand
- * elle suivait le libellé (« Montant emprunté [auto · hors notaire] 219 000 € »)
- * elle poussait le montant hors de la ligne, qui passait à deux lignes et
- * cassait l'alignement de la colonne.
- */
-function HypRow({ label, value, badge }: { label: string; value: string; badge?: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 py-[3px]">
-      <span className="truncate text-[11px] text-ink-500">{label}</span>
-      <span className="flex shrink-0 items-center gap-1.5">
-        {badge}
-        <span className="text-xs tabular-nums text-ink-800">{value}</span>
-      </span>
-    </div>
-  );
 }
 
 function FinSectionTitle({ children }: { children: ReactNode }) {
@@ -345,7 +322,6 @@ export default function SimulationFinanciere({
   }
 
   const cfLMNP = resultAffiche.cashflowMensuelMoyenLMNP;
-  const cfAn1 = resultAffiche.cashflowMensuelAn1;
 
   // Moyennes mensuelles sur les années exonérées LMNP (année 1 toujours incluse).
   const exoAnnees = resultAffiche.annees.filter((a) => a.impot < 1);
@@ -669,11 +645,11 @@ export default function SimulationFinanciere({
           </div>
           <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-xs leading-relaxed text-ink-500">
             {resultAffiche.annees[0].impot === 0 ? (<>
-              <strong className="font-semibold text-ink-700">Pourquoi 0 € d'impôt ?</strong>{" "}
-              En LMNP au réel, tu déduis l'usure du bien (amortissements) de tes revenus locatifs.
+              <strong className="font-semibold text-ink-700">Pourquoi 0 € d&apos;impôt ?</strong>{" "}
+              En LMNP au réel, tu déduis l&apos;usure du bien (amortissements) de tes revenus locatifs.
               Ici, <strong className="font-medium text-ink-700">
                 {euros(resultAffiche.amortissements.bati + resultAffiche.amortissements.travaux + resultAffiche.amortissements.notaire)} €/an
-              </strong> d'amortissements{" "}
+              </strong> d&apos;amortissements{" "}
               (bâti {euros(resultAffiche.amortissements.bati)} €
               {resultAffiche.amortissements.travaux > 0 ? ` + travaux ${euros(resultAffiche.amortissements.travaux)} €` : ""}
               {resultAffiche.amortissements.notaire > 0 ? ` + notaire ${euros(resultAffiche.amortissements.notaire)} €` : ""})

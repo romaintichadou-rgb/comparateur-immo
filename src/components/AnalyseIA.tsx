@@ -275,8 +275,6 @@ export default function AnalyseIA({
   const faits = analyse.blocs?.prix?.faits ?? [];
   const faitEcart = faits.find((f) => f.label === "Écart au prix de marché");
   const ecartPct = ecartPrixMarche(analyse.blocs?.prix);
-  const faitMediane = faits.find((f) => f.label === "Prix/m² médian comparable");
-  const medianeM2 = typeof faitMediane?.value === "number" ? faitMediane.value : null;
 
   const simu = simulate(apartment, resolveInputs(apartment.simulation_inputs, settings));
   const cashflow = simu?.cashflowMensuelMoyenLMNP ?? null;
