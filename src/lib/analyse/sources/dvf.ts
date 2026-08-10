@@ -10,7 +10,7 @@
  * des médianes de prix/m², robustes aux valeurs aberrantes. Aucune estimation.
  */
 
-import { memoAsync } from "./memo";
+import { getJson } from "./http";
 
 const BASE = "https://apidf-preprod.cerema.fr/dvf_opendata/geomutations/";
 const RAYON_M = 500;
@@ -46,15 +46,13 @@ interface Feature {
   properties: { valeurfonc?: string; sbati?: string };
 }
 
-export const fetchDvf = memoAsync(
-  fetchDvfRaw,
-  (p) => `${p.lat.toFixed(4)},${p.lon.toFixed(4)},${p.surface ?? ""}`,
-  // Ne cache que si des ventes ont réellement été trouvées : un résultat
-  // vide peut venir d'un échec réseau et doit rester retentable.
-  (r) => r.nbVentesTotal > 0 || r.medianeRecente != null
-);
+/** Page de résultats DVF+ : `next` porte l'URL de la page suivante. */
+interface Page {
+  features?: Feature[];
+  next?: string | null;
+}
 
-async function fetchDvfRaw(params: {
+export async function fetchDvf(params: {
   lat: number;
   lon: number;
   surface: number | null;
@@ -121,7 +119,10 @@ async function fetchWindow(bbox: string, anMin: number, anMax: number): Promise<
 
   const ventes: Vente[] = [];
   for (let page = 0; page < MAX_PAGES && url; page++) {
-    const raw: { features?: Feature[]; next?: string | null } | null = await fetchJson(url);
+    // Annotation explicite : `url` est réaffectée depuis `raw.next`, donc son
+    // type et celui de `raw` se référencent circulairement si on laisse TS
+    // inférer (TS7022).
+    const raw: Page | null = await getJson<Page>(url, { timeoutMs: 15000 });
     if (!raw) break;
     for (const f of raw.features ?? []) {
       const surface = Number(f.properties.sbati);
@@ -140,21 +141,4 @@ function median(arr: number[]): number {
   const sorted = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-async function fetchJson(
-  url: string,
-  timeoutMs = 15000
-): Promise<{ features?: Feature[]; next?: string | null } | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) return null;
-    return (await res.json()) as { features?: Feature[]; next?: string | null };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
 }

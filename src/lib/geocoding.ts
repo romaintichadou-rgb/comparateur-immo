@@ -1,4 +1,5 @@
 import { aAdressePrecise, formatAdressePostale, formatSecteur } from "./adresse";
+import { getJson } from "./analyse/sources/http";
 import type { PrecisionLocalisation } from "./types";
 
 /**
@@ -11,6 +12,16 @@ import type { PrecisionLocalisation } from "./types";
  */
 
 const BAN_URL = "https://api-adresse.data.gouv.fr/search/";
+
+/**
+ * Le géocodage s'exécute EN SÉRIE, avant la vague parallèle des sources
+ * (voir `analyse/run.ts`) : c'est le seul appel de l'analyse dont la lenteur
+ * ne se recouvre avec rien. Il est resté longtemps sans timeout du tout — une
+ * BAN lente suspendait l'analyse entière sans plafond. Mesuré entre 1,6 s et
+ * 5,9 s selon la charge, d'où ce plafond, large mais fini : au-delà, on
+ * retombe sur les coordonnées déjà stockées sur le bien.
+ */
+const TIMEOUT_MS = 8000;
 
 export interface BanResult {
   latitude: number;
@@ -38,15 +49,15 @@ async function banSearch(query: string): Promise<BanResult | null> {
   if (!query.trim()) return null;
 
   const url = `${BAN_URL}?limit=1&q=${encodeURIComponent(query)}`;
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "comparateur-locatif-perso/1.0",
-    },
+  // Caché comme les autres sources : une même adresse re-géocodée à chaque
+  // relance d'analyse donne rigoureusement le même résultat. Le cache est
+  // porté par l'URL, donc par l'adresse — corriger l'adresse du bien
+  // re-géocode bien, ce qu'une colonne `ban_id` stockée n'aurait pas garanti.
+  const json = await getJson<{ features?: BanFeature[] }>(url, {
+    timeoutMs: TIMEOUT_MS,
+    headers: { "User-Agent": "comparateur-locatif-perso/1.0" },
   });
-  if (!res.ok) return null;
-
-  const json = (await res.json()) as { features?: BanFeature[] };
-  const f = json.features?.[0];
+  const f = json?.features?.[0];
   if (!f) return null;
 
   const [lon, lat] = f.geometry.coordinates;

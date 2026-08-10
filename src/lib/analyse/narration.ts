@@ -16,6 +16,34 @@ import type { AnalyseIA, BlocAnalyse, BlocKey } from "./types";
 /** Statut de la génération de narration, remonté à l'UI (non stocké). */
 export type NarrationStatus = "ok" | "quota" | "unavailable" | "error";
 
+/**
+ * Sortie structurée imposée à Gemini : une chaîne par bloc, plus la synthèse.
+ *
+ * Le prompt décrivait déjà cette forme en toutes lettres, mais rien ne la
+ * garantissait : le texte revenait parfois enrobé (```json, phrase
+ * d'introduction), d'où le rattrapage par expression régulière d'`extractJson`
+ * puis, s'il échouait, un SECOND appel complet — 25 s d'attente de plus pour
+ * l'utilisateur, sur un contenu par ailleurs facultatif. Avec le schéma,
+ * l'API ne peut plus renvoyer autre chose que cet objet.
+ *
+ * ⚠️ `responseSchema` est incompatible avec `googleSearch` côté API Gemini
+ * (voir `gemini.ts`) — la narration n'utilise aucun outil, donc pas de
+ * conflit ici, mais ne pas en ajouter un sans retirer ce schéma.
+ */
+const SCHEMA_NARRATION = {
+  type: "OBJECT",
+  properties: {
+    prix: { type: "STRING" },
+    location: { type: "STRING" },
+    risque: { type: "STRING" },
+    potentiel: { type: "STRING" },
+    simulation: { type: "STRING" },
+    quartier: { type: "STRING" },
+    synthese: { type: "STRING" },
+  },
+  required: ["prix", "location", "risque", "potentiel", "simulation", "quartier", "synthese"],
+};
+
 export interface Narrations {
   blocs: Partial<Record<BlocKey, string>>;
   synthese: string;
@@ -99,25 +127,34 @@ RÈGLES ABSOLUES :
   return { blocs, synthese: typeof parsed.synthese === "string" ? parsed.synthese : "", status };
 }
 
-/** Génération de texte avec un retry après délai (rate-limit ponctuel). */
+/**
+ * Génération de texte, UNE seule tentative.
+ *
+ * ⚠️ Ne pas réintroduire de boucle de retry ici. `gemini.ts` a déjà tranché la
+ * question (`MAX_TENTATIVES = 1`, timeout 25 s) : ce qui compte est
+ * l'expérience utilisateur, pas le taux de succès par appel. La boucle qui
+ * vivait ici — 2 tentatives séparées par 2,5 s — rallongeait l'attente jusqu'à
+ * ~52 s pour un contenu que l'analyse sait afficher sans, et contournait donc
+ * la décision documentée un cran plus bas. Les deux causes d'échec qu'elle
+ * visait sont traitées à la source : le JSON malformé par `SCHEMA_NARRATION`,
+ * le rate-limit par le statut "quota" ci-dessous (relance manuelle possible).
+ */
 async function generateText(prompt: string): Promise<{ text: string; status: NarrationStatus }> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return { text: "", status: "unavailable" };
   const model = process.env.GEMINI_ANALYSE_MODEL || process.env.GEMINI_RENT_MODEL || "gemini-2.5-flash";
 
-  let status: NarrationStatus = "error";
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const text = (await generateGeminiText({ apiKey, model, prompt })).trim();
-      if (text) return { text, status: "ok" };
-    } catch (e) {
-      // Quota / rate-limit Gemini (429) : cas à signaler discrètement à l'UI.
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/\b429\b|quota|rate.?limit|resource.?exhausted/i.test(msg)) status = "quota";
-    }
-    if (attempt === 0) await new Promise((r) => setTimeout(r, 2500));
+  try {
+    const text = (
+      await generateGeminiText({ apiKey, model, prompt, responseSchema: SCHEMA_NARRATION })
+    ).trim();
+    return text ? { text, status: "ok" } : { text: "", status: "error" };
+  } catch (e) {
+    // Quota / rate-limit Gemini (429) : cas à signaler discrètement à l'UI.
+    const msg = e instanceof Error ? e.message : String(e);
+    const quota = /\b429\b|quota|rate.?limit|resource.?exhausted/i.test(msg);
+    return { text: "", status: quota ? "quota" : "error" };
   }
-  return { text: "", status };
 }
 
 function extractJson(text: string): Record<string, unknown> | null {

@@ -1,5 +1,5 @@
 import { parentPLM } from "./delinquance";
-import { memoAsync } from "./memo";
+import { getJson } from "./http";
 
 /**
  * Sources de faits réels : deux jeux de données data.gouv.fr (API tabulaire),
@@ -27,18 +27,12 @@ export interface RevenuCommune {
   medianeDisponible: number; // €/an par unité de consommation
 }
 
-export const fetchRevenuMedian = memoAsync(
-  fetchRevenuMedianRaw,
-  (codeInsee) => codeInsee,
-  (r) => r != null
-);
-
-async function fetchRevenuMedianRaw(codeInsee: string): Promise<RevenuCommune | null> {
+export async function fetchRevenuMedian(codeInsee: string): Promise<RevenuCommune | null> {
   if (!codeInsee) return null;
   const url =
     `https://tabular-api.data.gouv.fr/api/resources/${RID_REVENU}/data/` +
     `?${encodeURIComponent(`${COL_REVENU_CODE}__exact`)}=${encodeURIComponent(codeInsee)}`;
-  const raw = await fetchJson(url);
+  const raw = await getJson<{ data?: unknown[] }>(url, { timeoutMs: 15000 });
   const row = raw?.data?.[0] as Record<string, unknown> | undefined;
   if (!row) return null;
   const mediane = Number(row[COL_REVENU_MEDIANE]);
@@ -52,17 +46,11 @@ export interface ProfilCommune {
   typologie: string; // ex. "Grands centres urbains", "Rural autonome peu dense"
 }
 
-export const fetchProfilCommune = memoAsync(
-  fetchProfilCommuneRaw,
-  (codeInsee) => codeInsee,
-  (r) => r != null
-);
-
-async function fetchProfilCommuneRaw(codeInsee: string): Promise<ProfilCommune | null> {
+export async function fetchProfilCommune(codeInsee: string): Promise<ProfilCommune | null> {
   const codeParent = parentPLM(codeInsee) ?? codeInsee;
   if (!codeParent) return null;
   const url = `https://tabular-api.data.gouv.fr/api/resources/${RID_COMMUNE}/data/?code_insee__exact=${encodeURIComponent(codeParent)}`;
-  const raw = await fetchJson(url);
+  const raw = await getJson<{ data?: unknown[] }>(url, { timeoutMs: 15000 });
   const row = raw?.data?.[0] as Record<string, unknown> | undefined;
   if (!row) return null;
   const population = Number(row.population);
@@ -70,18 +58,4 @@ async function fetchProfilCommuneRaw(codeInsee: string): Promise<ProfilCommune |
   const typologie = typeof row.grille_densite_texte === "string" ? row.grille_densite_texte : "";
   if (!Number.isFinite(population) || !Number.isFinite(densite)) return null;
   return { population: Math.round(population), densite: Math.round(densite), typologie };
-}
-
-async function fetchJson(url: string, timeoutMs = 15000): Promise<{ data?: unknown[] } | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) return null;
-    return (await res.json()) as { data?: unknown[] };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
 }

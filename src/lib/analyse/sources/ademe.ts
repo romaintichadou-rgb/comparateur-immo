@@ -6,6 +6,8 @@
  * estimation. Permet aussi de détecter une incohérence avec le DPE saisi.
  */
 
+import { getJson } from "./http";
+
 // Dataset "DPE Logements existants (depuis juillet 2021)" — ~15M lignes.
 const DATASET = "meg-83tjwtg8dyz4vv7h1dqe";
 const BASE = `https://data.ademe.fr/data-fair/api/v1/datasets/${DATASET}/lines`;
@@ -54,17 +56,7 @@ export async function fetchDpe(params: {
     `${BASE}?qs=identifiant_ban:%22${encodeURIComponent(banId)}%22` +
     `&size=50&select=${select}&sort=-date_etablissement_dpe`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  let raw: { results?: AdemeLine[] } | null = null;
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (res.ok) raw = (await res.json()) as { results?: AdemeLine[] };
-  } catch {
-    raw = null;
-  } finally {
-    clearTimeout(timer);
-  }
+  const raw = await getJson<{ results?: AdemeLine[] }>(url, { timeoutMs: 15000 });
 
   const records: DpeRecord[] = (raw?.results ?? [])
     .filter((r) => r.etiquette_dpe)

@@ -5,6 +5,8 @@
  * bloquer les autres, car aucune de ces données n'est garantie présente.
  */
 
+import { getJson } from "./http";
+
 const BASE = "https://georisques.gouv.fr/api/v1";
 
 export interface GeorisquesData {
@@ -18,19 +20,7 @@ export interface GeorisquesData {
   risquesCommune: string[];
 }
 
-async function fetchJson(url: string, timeoutMs = 12000): Promise<unknown | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const fetchJson = (url: string) => getJson<unknown>(url, { timeoutMs: 12000 });
 
 export async function fetchGeorisques(params: {
   lat: number;

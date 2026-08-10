@@ -16,16 +16,48 @@
  * distance par catégorie évite qu'un élément ramené par un sélecteur à grand
  * rayon (ex. gare à 20 km) ne soit compté dans une catégorie à petit rayon.
  * L'appel reste défensif : échec sur tous les miroirs → null, non bloquant.
+ *
+ * ⚠️ Interrogé en **GET** (`?data=`), pas en POST : le Data Cache de Next ne
+ * mémorise que les GET/HEAD (voir `http.ts`). Overpass accepte les deux, et
+ * cette requête est le poste de latence le plus lourd de l'analyse — c'est
+ * celui qui a le plus à gagner à être caché.
  */
 
-import { memoAsync } from "./memo";
+import { unstable_cache } from "next/cache";
+import { CACHE_SOURCES_S, getJson } from "./http";
 
-// Miroirs Overpass essayés dans l'ordre (fallback si l'un est saturé/lent).
+/**
+ * Miroirs Overpass, du plus canonique au plus exotique.
+ *
+ * ⚠️ Ils ne sont PAS essayés en série. Mesuré sur un point de Marseille
+ * (10 août 2026) : 7,6 s de 504 sur le premier, puis 40,8 s sur le deuxième
+ * (coupés au timeout), puis 16,7 s de succès sur le troisième — soit ~51 s
+ * pour une analyse qui tenait sinon en 20 s. La saturation d'un miroir public
+ * est la NORME, pas l'incident : la traiter comme une exception faisait payer
+ * son timeout à chaque analyse. Voir `courseMiroirs`.
+ */
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
+
+/**
+ * Délai avant de doubler un miroir qui n'a pas encore répondu (requête
+ * couverte / "hedged request"). Assez long pour qu'un miroir en forme réponde
+ * seul — les succès mesurés arrivent entre 7 et 17 s, mais un cache chaud
+ * répond en dessous de la seconde — assez court pour ne pas subir un timeout
+ * complet avant d'essayer le suivant.
+ */
+const DELAI_MIROIR_MS = 4000;
+
+/**
+ * Timeout par miroir. 27 s auparavant : au-delà, on n'attend plus une réponse,
+ * on attend un échec — et on le fait attendre à l'utilisateur. La course
+ * ci-dessous rend ce plafond bien moins critique, puisqu'un miroir lent ne
+ * bloque plus les autres.
+ */
+const TIMEOUT_MIROIR_MS = 12000;
 
 const RAYON_M = 800;
 const RAYON_SORTIES_M = 600;
@@ -72,11 +104,44 @@ export interface OsmBundle {
   vieQuartier: VieQuartierInfo;
 }
 
-export const fetchOsmBundle = memoAsync(
-  fetchOsmBundleRaw,
-  (lat, lon) => `${lat.toFixed(4)},${lon.toFixed(4)}`,
-  (r) => r != null
+/**
+ * Bundle OSM autour d'un point, mémorisé sur le résultat CLASSÉ et non sur la
+ * réponse HTTP.
+ *
+ * Cacher au niveau `fetch` (comme les autres sources) ne marcherait pas ici :
+ * les trois miroirs sont trois URLs, donc trois entrées de cache distinctes.
+ * L'analyse suivante repartirait du miroir 1 — le plus souvent saturé — et
+ * n'atteindrait le miroir déjà caché qu'après deux délais de course. Mémoriser
+ * le bundle rend le cache indifférent au miroir qui a répondu, et stocke
+ * quelques centaines d'octets au lieu des ~450 Ko de la réponse brute.
+ *
+ * Coordonnées arrondies à 4 décimales (~11 m) : deux biens du même immeuble
+ * partagent leur voisinage, inutile d'en refaire le tour.
+ */
+const bundleMemorise = unstable_cache(
+  async (lat: number, lon: number): Promise<OsmBundle> => {
+    const bundle = await fetchOsmBundleRaw(lat, lon);
+    // Lever plutôt que renvoyer `null` : `unstable_cache` mémoriserait le
+    // `null`, et une saturation passagère d'Overpass priverait le bien de son
+    // bloc Quartier pour 30 jours. Une exception, elle, n'est pas mémorisée —
+    // la relance suivante retente. Même intention que le prédicat `cacheable`
+    // de l'ancien `memo.ts`.
+    if (!bundle) throw new Error("Overpass indisponible sur tous les miroirs");
+    return bundle;
+  },
+  ["osm-bundle"],
+  { revalidate: CACHE_SOURCES_S }
 );
+
+export async function fetchOsmBundle(lat: number, lon: number): Promise<OsmBundle | null> {
+  try {
+    return await bundleMemorise(round4(lat), round4(lon));
+  } catch {
+    return null; // source non bloquante : le bloc Quartier s'affichera sans OSM
+  }
+}
+
+const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
 async function fetchOsmBundleRaw(lat: number, lon: number): Promise<OsmBundle | null> {
   const at = (r: number) => `(around:${r},${lat},${lon})`;
@@ -98,12 +163,53 @@ async function fetchOsmBundleRaw(lat: number, lon: number): Promise<OsmBundle | 
     `node${at(RAYON_GARE_M)}[railway=station][station!~"subway|light_rail"];` +
     `);out center;`;
 
-  for (const endpoint of ENDPOINTS) {
-    const els = await queryOverpass(endpoint, query);
-    if (!els) continue; // ce miroir a échoué → on tente le suivant
-    return classify(els, lat, lon);
+  const els = await courseMiroirs(query);
+  return els ? classify(els, lat, lon) : null;
+}
+
+/**
+ * Course entre les miroirs : le premier démarre tout de suite, chaque suivant
+ * n'est lancé que si aucun n'a encore répondu après `DELAI_MIROIR_MS`. Le
+ * premier succès gagne et annule les autres.
+ *
+ * ⚠️ Ce n'est PAS un simple `Promise.any` sur les trois miroirs : lancer trois
+ * requêtes de front à chaque analyse triplerait la charge qu'on impose à des
+ * APIs publiques gratuites — pour rien, puisque le premier miroir répond seul
+ * la plupart du temps. Le décalage fait qu'on ne paie ce coût que quand il
+ * achète réellement quelque chose.
+ */
+async function courseMiroirs(query: string): Promise<OverpassElement[] | null> {
+  const abandon = new AbortController();
+
+  const tentatives = ENDPOINTS.map(async (endpoint, i) => {
+    if (i > 0) await attendre(i * DELAI_MIROIR_MS, abandon.signal);
+    // Un miroir plus rapide a déjà répondu pendant l'attente : ne pas partir.
+    if (abandon.signal.aborted) throw new Error("miroir doublé");
+    const els = await queryOverpass(endpoint, query, abandon.signal);
+    // `Promise.any` ne retient que les promesses TENUES : un miroir en échec
+    // doit rejeter, pas résoudre sur `null` — sinon le premier échec gagnerait
+    // la course.
+    if (!els) throw new Error(`miroir indisponible : ${endpoint}`);
+    return els;
+  });
+
+  try {
+    return await Promise.any(tentatives);
+  } catch {
+    return null; // tous les miroirs ont échoué
+  } finally {
+    // Succès comme échec : libère les requêtes encore en vol et les minuteries
+    // d'attente, pour ne pas garder la fonction serverless éveillée.
+    abandon.abort();
   }
-  return null;
+}
+
+/** `setTimeout` annulable — la minuterie est libérée dès que la course est finie. */
+function attendre(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true });
+  });
 }
 
 function classify(els: OverpassElement[], lat: number, lon: number): OsmBundle {
@@ -200,27 +306,21 @@ function elementLatLon(e: OverpassElement): { lat: number; lon: number } | null 
   return null;
 }
 
-async function queryOverpass(endpoint: string, query: string): Promise<OverpassElement[] | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 27000);
-  try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "comparateur-locatif-perso/1.0",
-      },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { elements?: OverpassElement[] };
-    return json.elements ?? [];
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+async function queryOverpass(
+  endpoint: string,
+  query: string,
+  signal: AbortSignal
+): Promise<OverpassElement[] | null> {
+  const json = await getJson<{ elements?: OverpassElement[] }>(
+    `${endpoint}?data=${encodeURIComponent(query)}`,
+    {
+      timeoutMs: TIMEOUT_MIROIR_MS,
+      revalidate: CACHE_SOURCES_S,
+      headers: { "User-Agent": "comparateur-locatif-perso/1.0" },
+      signal,
+    }
+  );
+  return json ? json.elements ?? [] : null;
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

@@ -27,6 +27,7 @@
  */
 
 import { ELASTICITE_SURFACE, type TypologieAnil } from "@/lib/anilReference";
+import { getJson } from "./http";
 import anilLoyersRaw from "../../anil_loyers.json";
 
 export interface LoyerReference {
@@ -184,23 +185,11 @@ export async function fetchLoyerReferenceLocal(
 }
 
 async function reverseGeoCodeInsee(lat: number, lon: number): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(
-      `https://api-adresse.data.gouv.fr/reverse/?lon=${lon}&lat=${lat}&limit=1`,
-      { signal: controller.signal, headers: { "User-Agent": "comparateur-locatif-perso/1.0" } }
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      features?: Array<{ properties?: { citycode?: string } }>;
-    };
-    return data.features?.[0]?.properties?.citycode ?? null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+  const data = await getJson<{ features?: Array<{ properties?: { citycode?: string } }> }>(
+    `https://api-adresse.data.gouv.fr/reverse/?lon=${lon}&lat=${lat}&limit=1`,
+    { timeoutMs: 5000, headers: { "User-Agent": "comparateur-locatif-perso/1.0" } }
+  );
+  return data?.features?.[0]?.properties?.citycode ?? null;
 }
 
 function round1(n: number): number {
