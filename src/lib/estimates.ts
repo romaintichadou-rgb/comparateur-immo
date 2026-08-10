@@ -1,4 +1,4 @@
-import { isImmeuble, type Apartment, type ChampEstimable } from "./types";
+import { isImmeuble, type ApartmentListItem, type ChampEstimable } from "./types";
 import { estimateTaxeFonciereLocale, getCoproEurM2 } from "./taxeFonciereData";
 
 /**
@@ -153,11 +153,39 @@ export function estimateAssurance(
  * simulation financière, Analyse IA. Ne pas dupliquer cette condition
  * localement : un champ manuel prime toujours (voir champs_manuels).
  */
-export function isAiEstimated(apt: Apartment, key: ChampEstimable): boolean {
+export function isAiEstimated(apt: ApartmentListItem, key: ChampEstimable): boolean {
   return apt[key] != null && !apt.champs_manuels.includes(key) && apt.champs_estimes_ia.includes(key);
 }
 
-export function applyLiveEstimates(apt: Apartment): Apartment {
+/**
+ * Bascule des champs dans l'état « estimé par IA » : ils sortent de
+ * `champs_manuels` et entrent dans `champs_estimes_ia`. C'est ce que fait une
+ * ré-estimation explicite — elle écrase une valeur saisie à la main, l'action
+ * ayant été demandée.
+ *
+ * `touches` distingue les champs RÉ-ESTIMÉS de ceux réellement portés par
+ * l'IA : la taxe foncière issue du taux communal réel (DGFiP) est
+ * recalculée — donc elle sort de `champs_manuels` — sans pour autant devenir
+ * une estimation IA. Par défaut, les deux listes sont identiques.
+ *
+ * Sans ce helper, la même gymnastique `filter` + `Set` était recopiée dans les
+ * routes loyer et charges, dans la ré-estimation d'assurance et dans le
+ * recalcul en chaîne — quatre occasions de diverger sur un cas limite.
+ */
+export function marquerEstimeIa(
+  apt: Pick<ApartmentListItem, "champs_manuels" | "champs_estimes_ia">,
+  estimesIa: ChampEstimable[],
+  touches: ChampEstimable[] = estimesIa
+): Pick<ApartmentListItem, "champs_manuels" | "champs_estimes_ia"> {
+  return {
+    champs_manuels: apt.champs_manuels.filter((c) => !touches.includes(c)),
+    champs_estimes_ia: Array.from(
+      new Set([...apt.champs_estimes_ia.filter((c) => !touches.includes(c)), ...estimesIa])
+    ),
+  };
+}
+
+export function applyLiveEstimates<T extends ApartmentListItem>(apt: T): T {
   const immeuble = isImmeuble(apt.type_bien);
   const fige = (champ: ChampEstimable) =>
     apt.champs_manuels.includes(champ) || apt.champs_estimes_ia.includes(champ);

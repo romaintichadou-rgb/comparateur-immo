@@ -1,7 +1,7 @@
 import "server-only";
 
 import { v4 as uuidv4 } from "uuid";
-import { Apartment, ApartmentInput, emptyApartment } from "./types";
+import { Apartment, ApartmentInput, ApartmentListItem, emptyApartment } from "./types";
 import { AppSettings, DEFAULT_SETTINGS, type FinancementMode } from "./settings";
 import { createClient } from "./supabase/server";
 import { requireUserId } from "./auth";
@@ -68,7 +68,23 @@ async function contexte() {
   return { supabase, userId };
 }
 
-export async function listApartments(): Promise<Apartment[]> {
+/**
+ * Liste des biens du compte, **analyse réduite à son résumé**.
+ *
+ * L'accueil ne lit que trois champs de `analyse_ia` (score, verdicts, bloc
+ * Prix pour la surcote) ; le reste — faits de tous les blocs, narrations,
+ * recommandations, empreinte, copie intégrale du profil investisseur — n'a de
+ * lecteur que sur la fiche du bien. Le laisser passer, c'est le sérialiser
+ * dans le payload RSC de l'accueil pour CHAQUE bien, à chaque chargement, sans
+ * que rien ne l'y lise.
+ *
+ * ⚠️ La colonne est toujours lue en base (`select("*")`) : le tri se fait ici,
+ * en mémoire. Énumérer les colonnes pour exclure `analyse_ia` côté SQL
+ * obligerait à tenir cette liste à jour à chaque nouvelle colonne — un oubli y
+ * serait silencieux (champ absent à l'affichage), alors que le gain
+ * supplémentaire ne porte que sur le trajet base → serveur.
+ */
+export async function listApartments(): Promise<ApartmentListItem[]> {
   const { supabase, userId } = await contexte();
   const { data, error } = await supabase
     .from("apartments")
@@ -76,7 +92,44 @@ export async function listApartments(): Promise<Apartment[]> {
     .eq("user_id", userId)
     .order("date_ajout", { ascending: true });
   if (error) throw new Error(error.message);
-  return (data ?? []) as Apartment[];
+  return ((data ?? []) as Apartment[]).map(avecAnalyseResumee);
+}
+
+function avecAnalyseResumee(row: Apartment): ApartmentListItem {
+  const analyse = row.analyse_ia;
+  return {
+    ...row,
+    analyse_ia: analyse && {
+      score_global: analyse.score_global,
+      // `?? []` / `?.` : une analyse écrite sous un schéma antérieur peut ne
+      // pas porter ces champs, que le type dit pourtant obligatoires
+      // (cf. AGENTS.md, causes de panne connues).
+      verdicts: analyse.verdicts ?? [],
+      genere_le: analyse.genere_le,
+      blocs: { prix: analyse.blocs?.prix },
+    },
+  };
+}
+
+/**
+ * Levée par `requireApartment` — traduite en 404 par `reponseErreur`.
+ *
+ * Une classe plutôt qu'un `NextResponse` construit sur place : les
+ * ré-estimations en chaîne (`reestimation.ts`) n'ont pas à savoir ce qu'est une
+ * réponse HTTP, et les routes n'ont pas à recopier le même `if (!apartment)`.
+ */
+export class ApartmentIntrouvableError extends Error {
+  constructor() {
+    super("Introuvable");
+    this.name = "ApartmentIntrouvableError";
+  }
+}
+
+/** `getApartment` + garde : le bien existe et appartient au compte courant. */
+export async function requireApartment(id: string): Promise<Apartment> {
+  const apartment = await getApartment(id);
+  if (!apartment) throw new ApartmentIntrouvableError();
+  return apartment;
 }
 
 /**

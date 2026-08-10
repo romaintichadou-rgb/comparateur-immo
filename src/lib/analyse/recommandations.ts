@@ -101,6 +101,33 @@ function arrondiLisible(n: number, sens: "bas" | "haut"): number {
   return (sens === "bas" ? Math.floor(n / pas) : Math.ceil(n / pas)) * pas;
 }
 
+/**
+ * Plus grande valeur de `[lo, hi]` qui satisfait encore `convient`, par
+ * dichotomie.
+ *
+ * ⚠️ Suppose le prédicat MONOTONE sur l'intervalle (vrai en dessous d'un seuil,
+ * faux au-dessus) — c'est le cas des deux usages : la décision s'améliore quand
+ * le prix baisse, le cash-flow quand le montant emprunté baisse. Sur un
+ * prédicat non monotone, la recherche converge vers un seuil arbitraire.
+ *
+ * 30 itérations : chacune divise l'intervalle par deux, donc même sur un
+ * capital de 1 M€ la précision finale est de l'ordre du millième d'euro — bien
+ * en deçà de l'arrondi lisible appliqué ensuite. Les deux copies précédentes
+ * (28 et 26 tours) différaient sans raison.
+ */
+function plusGrandQuiConvient(
+  lo: number,
+  hi: number,
+  convient: (valeur: number) => boolean
+): number {
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (convient(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
 const fmtEuros = (n: number) => `${Math.round(n).toLocaleString("fr-FR")} €`;
 
 const delta = (avant: number | null, apres: number | null): number =>
@@ -485,13 +512,11 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     // La décision s'améliore quand le prix baisse (monotone) → seuil unique.
     const prixTestBas = Math.round(apt.prix * 0.4);
     if (decisionAtPrice(prixTestBas) === "achete") {
-      let lo = prixTestBas;
-      let hi = apt.prix;
-      for (let i = 0; i < 28; i++) {
-        const mid = (lo + hi) / 2;
-        if (decisionAtPrice(mid) === "achete") lo = mid;
-        else hi = mid;
-      }
+      const lo = plusGrandQuiConvient(
+        prixTestBas,
+        apt.prix,
+        (prix) => decisionAtPrice(prix) === "achete"
+      );
       // `lo` est brut : `carte` applique l'arrondi lisible, toujours vers le
       // BAS — un prix plus bas que le seuil reste « Achète » (décision
       // monotone), donc la garantie tient. Ne pas pré-arrondir ici : ça faisait
@@ -672,7 +697,6 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       simulation: buildBlocSimulation(mod, ctx.settings),
     };
     const verdictApres = decisionOf(blocs, mod.rendement_net);
-    const pct = Math.round((loyerCible / apt.loyer_retenu - 1) * 100);
     return {
       levier: "loyer",
       titre: "Optimiser le loyer",
@@ -758,13 +782,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     if (cf(0) < 0) return null; // même au comptant le cash-flow reste négatif
 
     // Plus grand montant emprunté ramenant le cash-flow d'année 1 à l'équilibre.
-    let lo = 0;
-    let hi = capitalActuel;
-    for (let i = 0; i < 26; i++) {
-      const mid = (lo + hi) / 2;
-      if (cf(mid) >= 0) lo = mid;
-      else hi = mid;
-    }
+    const lo = plusGrandQuiConvient(0, capitalActuel, (montant) => cf(montant) >= 0);
     // L'apport est le MINIMUM qui ramène le cash-flow à l'équilibre : on
     // l'arrondit vers le HAUT, donc on emprunte d'autant moins. Arrondir
     // l'apport vers le bas repasserait sous l'équilibre et rendrait fausse la

@@ -27,6 +27,7 @@ import {
 import { formatAdressePostale, lienGoogleMaps } from "@/lib/adresse";
 import { formatApartmentTitle, formatDate, formatEuros, formatNote, sanitizeJustification } from "@/lib/format";
 import { redirectionQuota } from "@/lib/quota";
+import { computeRecalcNeeds, etapesRecalc } from "@/lib/recalc";
 import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
 import {
   AiEstimatedBadge,
@@ -49,7 +50,6 @@ import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
 import { facteursBaremeEffectifs, phraseSyntheseLoyer } from "@/lib/loyerSynthese";
 import { SectionHeader, TabHeader } from "@/components/SectionHeader";
 import { memeProfil, type AppSettings } from "@/lib/settings";
-import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
 import Skeleton from "@/components/Skeleton";
@@ -177,51 +177,15 @@ const TABS: { key: Tab; label: string; shortLabel: string; icon: React.Component
 // Enregistrer une modification de la description ou de la section Achat déclenche
 // un recalcul EN ARRIÈRE-PLAN (non bloquant) : loyer, charges et Analyse IA sont
 // rejoués côté serveur pendant que l'utilisateur garde la main, avec un skeleton
-// sur les seules données qui se rafraîchissent.
-//
-// Pipeline ÉLAGUÉ : on ne rejoue que les appels réellement impactés par les
-// champs modifiés (ci-dessous). Ex. changer le prix seul → seule l'Analyse IA
-// (DVF) est concernée ; le loyer et les charges n'en dépendent pas et ne sont
-// pas re-sollicités. Les retouches manuelles de Location/Charges (barre
-// "Enregistrer" via finPatch) restent hors de ce flux.
-//
-// - RENT   : champs qui changent l'estimation de loyer.
-// - CHARGES: champs qui changent les charges copro / la taxe foncière.
-// - ANALYSIS: champs qui changent un bloc de l'Analyse IA (prix/DVF, rendement,
-//   localisation, surface, DPE...).
-const RENT_FIELDS = [
-  "surface_m2", "type_bien", "nb_lots", "nb_pieces", "nb_chambres", "etage",
-  "ascenseur", "annee_construction", "etat_bien", "dpe", "ville", "quartier",
-  "code_postal", "adresse", "travaux",
-] as const;
-const CHARGES_FIELDS = [
-  "surface_m2", "ascenseur", "annee_construction", "type_bien", "nb_lots",
-  "ville", "quartier", "code_postal", "adresse",
-] as const;
-const ASSURANCE_FIELDS = [
-  "surface_m2", "type_bien", "nb_lots",
-] as const;
-const ANALYSIS_FIELDS = [
-  "prix", "travaux", "frais_notaire_estimes", "surface_m2", "type_bien",
-  "nb_lots", "nb_pieces", "nb_chambres", "etage", "ascenseur",
-  "annee_construction", "etat_bien", "dpe", "ges", "ville", "quartier",
-  "code_postal", "adresse",
-] as const;
+// sur les seules données qui se rafraîchissent. La chaîne elle-même vit dans
+// `/api/apartments/[id]/recalc` ; ici on n'allume que les skeletons, à partir de
+// la MÊME table de champs (`computeRecalcNeeds`, `lib/recalc.ts`). Les retouches
+// manuelles de Location/Charges (barre "Enregistrer" via finPatch) restent hors
+// de ce flux.
 
-function computeRecalcNeeds(patch: ApartmentPatch): {
-  rent: boolean;
-  charges: boolean;
-  assurance: boolean;
-  analysis: boolean;
-} {
-  const keys = Object.keys(patch);
-  const touches = (fields: readonly string[]) => keys.some((k) => fields.includes(k));
-  return {
-    rent: touches(RENT_FIELDS),
-    charges: touches(CHARGES_FIELDS),
-    assurance: touches(ASSURANCE_FIELDS),
-    analysis: touches(ANALYSIS_FIELDS),
-  };
+/** « loyer, charges et analyse IA » — énumération à la française. */
+function enumerer(mots: string[]): string {
+  return mots.join(", ").replace(/, ([^,]+)$/, " et $1");
 }
 
 type BannerPhase = "saving" | "success" | "error" | "outdated";
@@ -278,7 +242,6 @@ export default function ApartmentDetail({
   const router = useRouter();
   const seuilsRendement = seuilsRendementFromSettings(settings);
   const cashflowSeuils = cashflowSeuilsFromSettings(settings);
-  const { open: openRendementDetail } = useRendementDetail();
   const { open: openLoyerDetail } = useLoyerDetail();
   // Après suppression depuis la fiche, on quitte vers l'accueil (la fiche
   // n'existe plus) — au lieu du router.refresh() utilisé dans la liste.
@@ -329,12 +292,21 @@ export default function ApartmentDetail({
     [router, apt.id]
   );
 
-  useEffect(() => {
-    if (resolvedSpTab) {
-      setActiveTab(resolvedSpTab);
-      if (resolvedSpTab === "donnees" && spEdit) setEditingDesc(true);
-    }
-  }, [resolvedSpTab, spEdit]);
+  // L'URL (`?tab=…&edit=1`) pilote l'onglet : un lien externe ou un retour
+  // navigateur doit l'imposer, sans écraser une navigation par onglet faite
+  // ensuite à la main.
+  //
+  // Ajustement PENDANT LE RENDU plutôt que dans un effet — le motif que React
+  // recommande pour « synchroniser un état sur un changement de prop » : un
+  // effet aurait affiché l'ancien onglet pendant une frame avant de basculer.
+  // La garde `!==` est ce qui empêche la boucle : le second rendu ne change
+  // plus rien.
+  const [tabDepuisUrl, setTabDepuisUrl] = useState(resolvedSpTab);
+  if (resolvedSpTab && resolvedSpTab !== tabDepuisUrl) {
+    setTabDepuisUrl(resolvedSpTab);
+    setActiveTab(resolvedSpTab);
+    if (resolvedSpTab === "donnees" && spEdit) setEditingDesc(true);
+  }
 
   useEffect(() => {
     if (!pendingScroll) return;
@@ -484,34 +456,21 @@ export default function ApartmentDetail({
     setFinPatch((p) => { const { [key]: _, ...rest } = p as Record<string, unknown>; return rest; });
   }
 
-  function estimateFieldAI(key: "loyer_retenu" | "charges_copro_annuelles" | "taxe_fonciere" | "assurance_annuelle") {
+  const CHAMPS_ESTIMABLES_UI = {
+    loyer_retenu: { label: "loyer", url: "/api/estimate-rent" },
+    charges_copro_annuelles: { label: "charges copro", url: "/api/estimate-charges" },
+    taxe_fonciere: { label: "taxe foncière", url: "/api/estimate-charges" },
+    assurance_annuelle: { label: "assurance", url: "/api/estimate-assurance" },
+  } as const;
+
+  function estimateFieldAI(key: keyof typeof CHAMPS_ESTIMABLES_UI) {
     setEstimatingFields((prev) => new Set(prev).add(key));
 
-    if (key === "assurance_annuelle") {
-      const val = estimateAssurance(immeuble, merged.nb_lots, merged.surface_m2, merged.type_bien);
-      const champsManuels = apt.champs_manuels.filter((c) => c !== "assurance_annuelle");
-      const champsEstimesIa = Array.from(new Set([...apt.champs_estimes_ia, "assurance_annuelle" as const]));
-      showBanner("Estimation assurance en cours…");
-      void (async () => {
-        let ok = false;
-        try {
-          const res = await fetch(`/api/apartments/${apt.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ assurance_annuelle: val, champs_manuels: champsManuels, champs_estimes_ia: champsEstimesIa }),
-          });
-          if (res.ok) { setApt((await res.json()).apartment); ok = true; }
-        } catch {}
-        setEstimatingFields((prev) => { const next = new Set(prev); next.delete(key); return next; });
-        resolveBanner(ok, ok ? "Assurance recalculée" : "Échec — réessayez");
-      })();
-      return;
-    }
-
-    const url = key === "loyer_retenu" ? "/api/estimate-rent" : "/api/estimate-charges";
+    const { label, url } = CHAMPS_ESTIMABLES_UI[key];
+    // Le champ n'est passé qu'aux charges : les deux autres routes n'estiment
+    // qu'un seul champ, et un `field` inutile y serait ignoré en silence.
     const body: Record<string, string> = { apartmentId: apt.id };
-    if (key !== "loyer_retenu") body.field = key;
-    const label = key === "loyer_retenu" ? "loyer" : key === "charges_copro_annuelles" ? "charges copro" : "taxe foncière";
+    if (url === "/api/estimate-charges") body.field = key;
     showBanner(`Estimation IA ${label} en cours…`);
     void (async () => {
       let ok = false;
@@ -544,111 +503,73 @@ export default function ApartmentDetail({
         }
       } catch {}
       setEstimatingFields((prev) => { const next = new Set(prev); next.delete(key); return next; });
-      resolveBanner(ok, ok ? `${label.charAt(0).toUpperCase() + label.slice(1)} recalculé` : `Échec de l'estimation ${label} — réessayez`);
+      // Formulation invariable en genre : « Assurance recalculé » sortait d'un
+      // accord fait sur un libellé masculin par défaut.
+      resolveBanner(ok, ok ? `Estimation ${label} mise à jour` : `Échec de l'estimation ${label} — réessayez`);
     })();
   }
 
+  /**
+   * Enregistre le patch et rejoue la chaîne impactée — UN seul aller-retour.
+   *
+   * Le serveur enchaîne charges → loyer → assurance → analyse (voir
+   * `/api/apartments/[id]/recalc`). Les étapes sont nommées ici pour la
+   * bannière, à partir de la même table de champs que celle qu'il applique :
+   * annoncer une étape que le serveur ne joue pas (ou l'inverse) supposerait
+   * deux listes à tenir synchronisées, ce qui était exactement le montage
+   * précédent.
+   */
   async function runRecalc(patch: ApartmentPatch) {
     const needs = computeRecalcNeeds(patch);
     setRentPending(needs.rent);
     setChargesPending(needs.charges);
     setAnalysisPending(needs.analysis);
 
-    const steps = [
-      needs.rent && "loyer",
-      needs.charges && "charges",
-      needs.assurance && "assurance",
-      needs.analysis && "analyse IA",
-    ].filter(Boolean) as string[];
+    const etapes = etapesRecalc(needs);
+    showBanner(
+      etapes.length > 0
+        ? `Enregistrement, puis recalcul — ${enumerer(etapes)}…`
+        : "Enregistrement des modifications…"
+    );
 
-    showBanner("Enregistrement des modifications…");
-    let ok = true;
-
+    let ok = false;
     try {
-      const res = await fetch(`/api/apartments/${apt.id}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/apartments/${apt.id}/recalc`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (res.ok) setApt((await res.json()).apartment);
-      else ok = false;
-    } catch { ok = false; }
+      const data = await res.json();
+      if (res.ok) {
+        setApt(data.apartment);
+        ok = true;
+      } else {
+        // Quota d'analyses atteint : rien n'a été écrit (le quota est vérifié
+        // en tête de chaîne). L'écran dédié explique la limite, là où un
+        // bandeau rouge laisserait croire à un échec technique.
+        const versUpgrade = redirectionQuota(res, data);
+        if (versUpgrade) {
+          setRentPending(false);
+          setChargesPending(false);
+          setAnalysisPending(false);
+          router.push(versUpgrade);
+          return;
+        }
+      }
+    } catch {}
 
-    if (needs.charges) {
-      showBanner("Recalcul des charges et taxe foncière…");
-      try {
-        const res = await fetch("/api/estimate-charges", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apartmentId: apt.id }),
-        });
-        if (res.ok) setApt((await res.json()).apartment);
-        else ok = false;
-      } catch { ok = false; }
-    }
-    setChargesPending(false);
-
-    if (needs.rent) {
-      showBanner("Recalcul du loyer estimé…");
-      try {
-        const res = await fetch("/api/estimate-rent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apartmentId: apt.id }),
-        });
-        if (res.ok) setApt((await res.json()).apartment);
-        else ok = false;
-      } catch { ok = false; }
-    }
     setRentPending(false);
-
-    if (needs.assurance) {
-      try {
-        const freshRes = await fetch(`/api/apartments/${apt.id}`);
-        if (freshRes.ok) {
-          const fresh = (await freshRes.json()).apartment;
-          const imm = isImmeuble(fresh.type_bien);
-          const val = estimateAssurance(imm, fresh.nb_lots, fresh.surface_m2, fresh.type_bien);
-          const champsManuels = fresh.champs_manuels.filter((c: string) => c !== "assurance_annuelle");
-          const champsEstimesIa = Array.from(new Set([...fresh.champs_estimes_ia, "assurance_annuelle"]));
-          const patchRes = await fetch(`/api/apartments/${apt.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ assurance_annuelle: val, champs_manuels: champsManuels, champs_estimes_ia: champsEstimesIa }),
-          });
-          if (patchRes.ok) setApt((await patchRes.json()).apartment);
-          else ok = false;
-        }
-      } catch { ok = false; }
-    }
-
-    if (needs.analysis) {
-      showBanner("Relance de l'analyse IA — scores et narration…");
-      try {
-        const res = await fetch(`/api/analyse/${apt.id}`, { method: "POST" });
-        const data = await res.json();
-        if (res.ok) {
-          setApt(data.apartment);
-        } else {
-          // Quota atteint : l'édition qui précède est bien enregistrée, seule
-          // la relance d'analyse ne passe pas. On quitte vers l'écran qui
-          // l'explique plutôt que d'annoncer un échec sans raison lisible.
-          const versUpgrade = redirectionQuota(res, data);
-          if (versUpgrade) {
-            setAnalysisPending(false);
-            router.push(versUpgrade);
-            return;
-          }
-          ok = false;
-        }
-      } catch { ok = false; }
-    }
+    setChargesPending(false);
     setAnalysisPending(false);
 
-    const updated = steps.join(", ").replace(/, ([^,]+)$/, " et $1");
-    resolveBanner(ok,
-      ok ? `Tout est à jour — ${updated} recalculé${steps.length > 1 ? "s" : ""}`
-         : "Certaines mises à jour ont échoué — réessayez manuellement");
+    resolveBanner(
+      ok,
+      ok
+        ? etapes.length > 0
+          ? `Tout est à jour — ${enumerer(etapes)} recalculé${etapes.length > 1 ? "s" : ""}`
+          : "Modifications enregistrées"
+        : "La mise à jour a échoué — réessayez"
+    );
   }
 
   async function handleSaveDesc() {
@@ -761,8 +682,6 @@ export default function ApartmentDetail({
   }
 
   const finDirty = Object.keys(finPatch).length > 0;
-  const rendementPending = rentPending || chargesPending;
-  const recalcInFlight = rentPending || chargesPending || analysisPending || estimatingFields.size > 0;
   // Adresse la plus complète dont on dispose — « 12 rue des Lilas, 75020 Paris ».
   // L'ancien `apt.adresse || "quartier, ville"` faisait disparaître la ville dès
   // qu'une rue était renseignée : le `||` emportait le repli en entier.
@@ -1839,20 +1758,6 @@ function OptimiserSkeleton() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function TabLoadingSkeleton() {
-  return (
-    <div className="space-y-4">
-      {Array.from({ length: 3 }, (_, i) => (
-        <div key={i} className="space-y-3 rounded-xl border border-ink-100 bg-white p-5">
-          <Skeleton className="h-5 w-32 rounded" />
-          <Skeleton className="h-10 w-full rounded-md" />
-          <Skeleton className="h-10 w-full rounded-md" />
-        </div>
-      ))}
     </div>
   );
 }

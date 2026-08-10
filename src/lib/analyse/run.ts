@@ -21,7 +21,7 @@ import { fetchRevenuMedian, fetchProfilCommune } from "./sources/demographie";
 import { narrateAll, type NarrationStatus } from "./narration";
 import { buildVerdicts, seuilsRendementFromSettings, withScoreGlobal } from "./scoring";
 import { buildRecommandations } from "./recommandations";
-import { ANALYSE_VERSION, empreinteBien, type AnalyseIA } from "./types";
+import { ANALYSE_VERSION, empreinteBien, type AnalyseIA, type BlocAnalyse, type BlocKey } from "./types";
 
 /**
  * Assemble l'Analyse IA complète d'un bien.
@@ -180,12 +180,13 @@ export async function runAnalyse(
     : undefined;
 
   const narr = await narrateAll(scored, { quartier: apt.quartier, ville: apt.ville }, contexteBien);
-  prix.narration = narr.blocs.prix ?? "";
-  location.narration = narr.blocs.location ?? "";
-  risque.narration = narr.blocs.risque ?? "";
-  potentiel.narration = narr.blocs.potentiel ?? "";
-  quartier.narration = narr.blocs.quartier ?? "";
-  simulation.narration = narr.blocs.simulation ?? "";
+  // Les blocs sont mutés en place : `scored.blocs` porte les MÊMES objets, la
+  // narration y apparaît donc sans réassignation. Une boucle sur les clés
+  // plutôt que six lignes jumelles — ajouter un bloc ne demande plus d'y
+  // penser (l'oubli était silencieux : narration vide, aucune erreur).
+  for (const [cle, bloc] of Object.entries(scored.blocs) as [BlocKey, BlocAnalyse][]) {
+    bloc.narration = narr.blocs[cle] ?? "";
+  }
   scored.synthese = narr.synthese;
 
   return { analyse: scored, codeInsee, narrationStatus: narr.status };

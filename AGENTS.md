@@ -68,7 +68,7 @@ réellement leur domaine, pas systématiquement.
 | Taxe foncière + quote-part terrain | `docs/reference/taxe-fonciere.md` | `taxeFonciereCommune.ts`, `taxeFonciereData.ts`, `quote_part_terrain_pct` |
 | Couleurs sémantiques & scoring (tables tonalité complètes) | `docs/reference/couleurs-scoring.md` | tout chiffre coloré par un seuil, `scoring.ts`, bloc Risques/DPE |
 | Profil investisseur, simulation financière, héritage | `docs/reference/simulation-financiere.md` | `SimulationFinanciere.tsx`, `SettingsForm.tsx`, `simulation.ts`, `resolveInputs` |
-| Onglets Analyse + Optimiser, moteur de recommandations | `docs/reference/analyse-optimiser.md` | `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts`, `analyse/recommandations.ts` |
+| Onglets Analyse + Optimiser, moteur de recommandations, collecte des sources | `docs/reference/analyse-optimiser.md` | `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts`, `analyse/recommandations.ts`, `analyse/run.ts`, `analyse/sources/*`, `narration.ts`, `geocoding.ts` |
 | Page appartement (en-tête, onglets, ajout de bien) | `docs/reference/page-appartement-ui.md` | `ApartmentDetail.tsx` (en-tête/onglets/Description), `AddApartmentFlow.tsx` |
 | Bookmarklet (pipeline d'extraction par plateforme) | `docs/reference/bookmarklet.md` | `src/lib/bookmarklet.ts`, `src/lib/parsers/common.ts` |
 
@@ -457,21 +457,35 @@ Chaque champ estimé (loyer, charges copro, TF, assurance) a un bouton
 pending state, appel API, mise à jour `apt`, bannière.
 
 - **`estimatingFields`** (`Set<string>`) : un champ par estimation en cours.
-- **Loyer / Charges copro / TF** : appel vers `/api/estimate-rent` ou
-  `/api/estimate-charges?field=...`. L'API écrase la valeur manuelle et
-  bascule le champ dans `champs_estimes_ia`.
-- **Assurance** : pas d'appel IA — calcul déterministe local
-  (`estimateAssurance()`), puis PATCH direct. L'UI affiche "ESTIMATION IA"
-  comme les autres (choix UX volontaire).
+- Les quatre champs suivent le MÊME chemin : une route dédiée
+  (`/api/estimate-rent`, `/api/estimate-charges?field=…`,
+  `/api/estimate-assurance`) qui écrase la valeur manuelle et bascule le champ
+  dans `champs_estimes_ia`. L'assurance n'appelle aucune IA (calcul
+  déterministe) mais affiche « ESTIMATION IA » comme les autres — choix UX
+  volontaire.
 
-## Recalcul automatique (`runRecalc`)
+⚠️ **Le client n'écrit JAMAIS `champs_manuels` / `champs_estimes_ia`
+lui-même** : la bascule passe par `marquerEstimeIa` (`estimates.ts`), appelée
+côté serveur. L'assurance faisait exception, et sa copie de la manipulation
+avait déjà divergé.
 
-Quand les données du bien changent, `runRecalc` ré-estime automatiquement
-les champs impactés : `computeRecalcNeeds(patch)` détermine quoi recalculer
-(`RENT_FIELDS`, `CHARGES_FIELDS`, `ASSURANCE_FIELDS`, `ANALYSIS_FIELDS`),
-puis PATCH → loyer → charges → assurance → analyse IA, séquentiellement.
-**Les valeurs manuelles sont écrasées** : la nouvelle estimation est
-toujours prioritaire.
+## Recalcul automatique (`runRecalc` → `/api/apartments/[id]/recalc`)
+
+Quand les données du bien changent, la chaîne impactée est rejouée : charges →
+loyer → assurance → analyse IA, **côté serveur, en une seule requête**.
+`computeRecalcNeeds(patch)` (`lib/recalc.ts`) décide quoi rejouer ; le client
+importe la MÊME fonction pour allumer ses skeletons et nommer les étapes.
+**Les valeurs manuelles sont écrasées** : la nouvelle estimation prime.
+
+⚠️ L'ordre n'est pas interchangeable — le loyer lit les charges (conversion
+HC→CC), et l'analyse doit voir les deux à jour pour noter le rendement.
+
+⚠️ **Toute écriture d'un patch de formulaire passe par `appliquerPatch`**
+(`lib/patchApartment.ts`), jamais par `updateApartment` directement : trois
+effets de bord y sont attachés (retrait des badges « estimé », re-géocodage si
+l'adresse change, suivi du montant emprunté si le prix change). Ils vivaient
+dans le corps de la route PATCH — une seconde route écrivant le même patch les
+perdait en silence.
 
 Flags `*Pending` (`rentPending`, `chargesPending`, `analysisPending`) :
 contrôlent les skeletons pendant le recalcul.
@@ -486,6 +500,21 @@ contrôlent les skeletons pendant le recalcul.
 `fireEstimation(url, msgs, setPending, onSuccess?)` reste utilisé
 uniquement par `handleRelancerAnalyse` — les re-estimations par champ
 utilisent `estimateFieldAI`.
+
+# Deux types de bien : la fiche et la ligne de liste
+
+`Apartment` porte l'analyse COMPLÈTE ; `ApartmentListItem` (`types.ts`) porte un
+**`AnalyseResume`** — score, verdicts, bloc Prix, soit tout ce que l'accueil
+lit. `listApartments()` ne renvoie que le résumé : le reste (faits de tous les
+blocs, narrations, recommandations, copie du profil investisseur) partirait
+sinon dans le payload RSC de l'accueil pour chaque bien, sans lecteur.
+
+`Apartment` reste assignable à `ApartmentListItem` — une fiche complète peut
+alimenter un composant de liste, jamais l'inverse. Un composant de LISTE
+(`HomeView`, `ApartmentsTable`, `ApartmentsCardList`, `ApartmentsMap`,
+`RendementDetailPanel`) se type donc en `ApartmentListItemWithComputed` ; s'il
+lui faut un champ absent du résumé, c'est le signe qu'il appartient à la fiche,
+pas que le résumé doit grossir.
 
 # Pattern Display/Edit pour champs estimés
 

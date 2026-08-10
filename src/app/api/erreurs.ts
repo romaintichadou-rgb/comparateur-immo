@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { NonAuthentifieError } from "@/lib/auth";
-import { QuotaDepasseError } from "@/lib/db";
+import { ApartmentIntrouvableError, QuotaDepasseError } from "@/lib/db";
 
 /**
  * Traduction unique erreur → réponse HTTP, pour toutes les routes d'API.
@@ -27,6 +27,12 @@ export function reponseErreur(err: unknown): NextResponse {
       { error: err.message, redirection: err.redirection },
       { status: 403 }
     );
+  }
+
+  // Bien inexistant OU appartenant à un autre compte : indistinguables de
+  // l'extérieur, et c'est voulu (voir `getApartment`).
+  if (err instanceof ApartmentIntrouvableError) {
+    return NextResponse.json({ error: err.message }, { status: 404 });
   }
 
   return NextResponse.json(

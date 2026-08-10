@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reponseErreur } from "../erreurs";
 import { NonAuthentifieError } from "@/lib/auth";
-import { getApartment, updateApartment } from "@/lib/db";
+import { ApartmentIntrouvableError, requireApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
-import { estimateRent } from "@/lib/rentEstimation";
-import { fetchLoyerReference } from "@/lib/analyse/sources/loyers";
-import { typologieAnil } from "@/lib/anilReference";
-import { isImmeuble, type ChampEstimable } from "@/lib/types";
+import { reestimerLoyer } from "@/lib/reestimation";
 
+/**
+ * Ré-estime le loyer d'UN bien (bouton « Estimer avec IA »). Le corps métier
+ * vit dans `reestimation.ts`, partagé avec le recalcul en chaîne
+ * (`/api/apartments/[id]/recalc`) : une seule définition de ce qu'est une
+ * ré-estimation de loyer, quel que soit le geste qui la déclenche.
+ */
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const apartmentId = typeof body?.apartmentId === "string" ? body.apartmentId : "";
@@ -15,73 +18,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "apartmentId manquant" }, { status: 400 });
   }
 
-  const apartment = await getApartment(apartmentId);
-  if (!apartment) {
-    return NextResponse.json({ error: "Introuvable" }, { status: 404 });
-  }
-
   try {
-    // Charges ACTUELLEMENT retenues pour ce bien (formule déterministe, IA,
-    // ou saisie manuelle — computeDerived applique déjà cette priorité) :
-    // sert de base à la provision HC→CC du prompt, pour rester cohérent avec
-    // ce qu'affiche la section "Charges annuelles" au lieu d'une moyenne
-    // générique déconnectée du bien (voir buildConsigneCharges).
-    const chargesCoproAnnuelles = computeDerived(apartment).charges_copro_annuelles;
-
-    // La ressource ANIL dépend du bien : maison, T1-T2 ou T3+ n'ont ni le même
-    // loyer/m² ni la même surface de référence (voir `anilReference.ts`).
-    const loyerRef = apartment.code_insee
-      ? await fetchLoyerReference(
-          apartment.code_insee,
-          typologieAnil(apartment.type_bien, apartment.nb_pieces, isImmeuble(apartment.type_bien), apartment.surface_m2)
-        )
-      : null;
-
-    const { loyer, loyerHC, justification, calcul } = await estimateRent({
-      ville: apartment.ville,
-      quartier: apartment.quartier,
-      code_postal: apartment.code_postal,
-      surface_m2: apartment.surface_m2,
-      nb_pieces: apartment.nb_pieces,
-      nb_chambres: apartment.nb_chambres,
-      type_bien: apartment.type_bien,
-      nb_lots: apartment.nb_lots,
-      charges_copro_annuelles: chargesCoproAnnuelles,
-      etage: apartment.etage,
-      ascenseur: apartment.ascenseur,
-      annee_construction: apartment.annee_construction,
-      etat_bien: apartment.etat_bien,
-      dpe: apartment.dpe,
-      ges: apartment.ges,
-      travaux: apartment.travaux,
-      description: apartment.description,
-      precisionLocalisation: apartment.precision_localisation,
-    }, loyerRef, apartment.loyer_calcul);
-
-    // Ceci est l'action explicite "réestimer" : on écrase loyer_retenu même
-    // s'il avait été marqué manuel, et on le (re)marque comme estimé par IA
-    // (voir isAiEstimated dans estimates.ts) — même mécanique que
-    // /api/estimate-charges pour charges_copro_annuelles/taxe_fonciere.
-    const champsManuels = apartment.champs_manuels.filter((c) => c !== "loyer_retenu");
-    const champsEstimesIa: ChampEstimable[] = Array.from(
-      new Set([...apartment.champs_estimes_ia, "loyer_retenu"] as const)
-    );
-
-    const updated = await updateApartment(apartmentId, {
-      loyer_retenu: loyer,
-      loyer_hc: loyerHC,
-      loyer_justification: justification,
-      loyer_calcul: calcul,
-      champs_manuels: champsManuels,
-      champs_estimes_ia: champsEstimesIa,
-    });
-
+    const apartment = await requireApartment(apartmentId);
+    const updated = await reestimerLoyer(apartment);
     return NextResponse.json({ apartment: computeDerived(updated) });
   } catch (err) {
-    // Testé AVANT le message générique ci-dessous : sans ça, un utilisateur
-    // simplement déconnecté lirait « Vérifie GEMINI_API_KEY », et chercherait
-    // une panne de clé d'API là où il suffit de se reconnecter.
-    if (err instanceof NonAuthentifieError) return reponseErreur(err);
+    // Testés AVANT le message générique ci-dessous : sans ça, un utilisateur
+    // simplement déconnecté — ou un identifiant de bien périmé — lirait
+    // « Vérifie GEMINI_API_KEY », et chercherait une panne de clé d'API là où
+    // il suffit de se reconnecter ou de rafraîchir la page.
+    if (err instanceof NonAuthentifieError || err instanceof ApartmentIntrouvableError) {
+      return reponseErreur(err);
+    }
 
     // Ne jamais renvoyer un message d'erreur brut (SDK Gemini, JSON d'erreur
     // Google...) tel quel au client : loggé côté serveur pour le debug, mais

@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import Link from "next/link";
-import type { ApartmentWithComputed } from "@/lib/types";
+import type { ApartmentListItemWithComputed } from "@/lib/types";
 import { formatLocalisationCourte } from "@/lib/adresse";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import {
@@ -70,7 +70,7 @@ export default function ApartmentsMap({
   apartments,
   seuilsRendement,
 }: {
-  apartments: ApartmentWithComputed[];
+  apartments: ApartmentListItemWithComputed[];
   seuilsRendement: RendementSeuils;
 }) {
   const { open: openRendementDetail } = useRendementDetail();

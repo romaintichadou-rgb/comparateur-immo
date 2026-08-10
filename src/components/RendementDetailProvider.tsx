@@ -2,17 +2,17 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import type { ApartmentWithComputed } from "@/lib/types";
+import type { ApartmentListItemWithComputed } from "@/lib/types";
 import { SEUILS_RENDEMENT_DEFAUT, type RendementSeuils } from "@/lib/analyse/scoring";
 
 const RendementDetailPanel = dynamic(() => import("./RendementDetailPanel"));
 
 interface RendementDetailContextValue {
-  open: (apartment: ApartmentWithComputed, seuils?: RendementSeuils) => void;
+  open: (apartment: ApartmentListItemWithComputed, seuils?: RendementSeuils) => void;
 }
 
 interface RendementDetailState {
-  apartment: ApartmentWithComputed;
+  apartment: ApartmentListItemWithComputed;
   seuils: RendementSeuils;
 }
 
@@ -30,7 +30,7 @@ const RendementDetailContext = createContext<RendementDetailContextValue | null>
 export function RendementDetailProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<RendementDetailState | null>(null);
 
-  function open(apartment: ApartmentWithComputed, seuils: RendementSeuils = SEUILS_RENDEMENT_DEFAUT) {
+  function open(apartment: ApartmentListItemWithComputed, seuils: RendementSeuils = SEUILS_RENDEMENT_DEFAUT) {
     setState({ apartment, seuils });
   }
 

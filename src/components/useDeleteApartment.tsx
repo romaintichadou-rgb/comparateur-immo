@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ApartmentWithComputed } from "@/lib/types";
+import type { ApartmentListItemWithComputed } from "@/lib/types";
 import { formatApartmentTitle } from "@/lib/format";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -16,11 +16,11 @@ import ConfirmDialog from "@/components/ConfirmDialog";
  * seule fois dans le composant).
  */
 export function useDeleteApartment(onDeleted: () => void) {
-  const [target, setTarget] = useState<ApartmentWithComputed | null>(null);
+  const [target, setTarget] = useState<ApartmentListItemWithComputed | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function requestDelete(e: React.MouseEvent, apt: ApartmentWithComputed) {
+  function requestDelete(e: React.MouseEvent, apt: ApartmentListItemWithComputed) {
     e.preventDefault();
     e.stopPropagation();
     setError(null);

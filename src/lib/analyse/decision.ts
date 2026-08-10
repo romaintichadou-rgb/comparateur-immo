@@ -1,4 +1,5 @@
-import type { AnalyseIA, BlocAnalyse, Decision, Verdict } from "./types";
+import type { AnalyseResume } from "@/lib/types";
+import type { BlocAnalyse, Decision, Verdict } from "./types";
 
 /**
  * Décision d'achat à 3 niveaux — SOURCE UNIQUE, partagée par l'onglet Analyse
@@ -39,7 +40,13 @@ export function computeDecision(
 }
 
 /** Décision + écart marché dérivés d'une analyse complète. */
-export function decisionFromAnalyse(analyse: AnalyseIA): {
+/**
+ * Prend un `AnalyseResume` et non un `AnalyseIA` complet : la décision ne
+ * dépend que du score, des verdicts et du bloc Prix — c'est précisément ce que
+ * l'accueil charge (voir `listApartments`). Une analyse complète reste
+ * acceptée, elle satisfait ce contrat.
+ */
+export function decisionFromAnalyse(analyse: AnalyseResume): {
   decision: Decision;
   ecartPct: number | null;
 } {

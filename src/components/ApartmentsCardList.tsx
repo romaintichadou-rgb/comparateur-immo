@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
-import type { ApartmentWithComputed } from "@/lib/types";
+import type { ApartmentListItemWithComputed } from "@/lib/types";
 import { formatLocalisationCourte } from "@/lib/adresse";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import { RENDEMENT_HOVER_RING, TONE_TEXT_CLASS, rendementNetTone, type RendementSeuils } from "@/lib/analyse/scoring";
@@ -16,7 +16,7 @@ export default function ApartmentsCardList({
   sortKey,
   seuilsRendement,
 }: {
-  apartments: ApartmentWithComputed[];
+  apartments: ApartmentListItemWithComputed[];
   sortKey: SortKey;
   seuilsRendement: RendementSeuils;
 }) {

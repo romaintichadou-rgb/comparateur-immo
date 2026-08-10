@@ -1,8 +1,9 @@
 # Onglets "Analyse" et "Optimiser" — verdict, recommandations
 
 > Référence de domaine — chargée seulement quand la tâche touche
-> `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts` ou
-> `analyse/recommandations.ts`. Pointeur depuis `AGENTS.md`.
+> `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts`,
+> `analyse/recommandations.ts`, `analyse/run.ts` ou `analyse/sources/*`.
+> Pointeur depuis `AGENTS.md`.
 
 # Onglet "Analyse" — fusion Synthèse + Analyse IA
 
@@ -300,3 +301,84 @@ optimiste »** dans ce seul cas. Défaut `false` — n'appeler
 `OptimiserSkeleton` (dans `ApartmentDetail.tsx`) s'affiche quand
 `analysisPending`. Les recos font partie de la sortie de `runAnalyse` → se
 régénèrent à chaque « Relancer » / recalcul.
+
+# Collecte des sources (`analyse/run.ts`, `analyse/sources/*`)
+
+La latence d'une analyse est **géocodage + la source la plus lente + l'appel
+LLM** : les blocs sont des fonctions pures, le scoring et les ~54 itérations de
+dichotomie des recommandations pèsent moins de 50 ms au total. Toute
+optimisation utile porte donc sur les E/S, jamais sur le calcul.
+
+## Tout appel réseau d'une source passe par `sources/http.ts`
+
+`getJson(url, { timeoutMs, revalidate })` — timeout, dégradation en `null` et
+politique de cache en un seul endroit. Ne pas réintroduire de `fetch` +
+`AbortController` local : ils existaient en six copies (DVF, Géorisques, ADEME,
+délinquance, démographie, BAN), et le géocodage — le seul appel qui ne se
+recouvre avec rien — était resté **sans timeout du tout**.
+
+Le cache est le **Data Cache de Next** (`next: { revalidate }`), pas une `Map`
+de process. L'ancienne mémoïsation (`sources/memo.ts`, supprimée) mourait à
+chaque démarrage à froid et n'était partagée entre aucune instance. Trois
+propriétés du Data Cache remplacent son prédicat `cacheable` : seules les
+réponses **200** et les requêtes **GET/HEAD** sont mémorisées, et un en-tête
+`authorization`/`cookie` désactive le cache. Un échec reste donc retentable —
+c'est l'usage même du bouton « Relancer ».
+
+⚠️ **Overpass est interrogé en GET** (`?data=`) pour cette raison, alors que
+l'API accepte aussi le POST.
+
+## OSM : course de miroirs, et cache sur le bundle CLASSÉ
+
+Les trois miroirs Overpass ne sont **pas** essayés en série. Mesuré sur un
+point de Marseille : 7,6 s de 504, puis 40,8 s, puis 16,7 s de succès — ~51 s
+pour une analyse qui tenait sinon en 20 s. La saturation d'un miroir public est
+la norme, pas l'incident. `courseMiroirs` lance le suivant après 4 s
+(`DELAI_MIROIR_MS`) et garde le premier succès, timeout par miroir à 12 s.
+
+Le décalage de 4 s n'est pas cosmétique : un `Promise.any` immédiat sur les
+trois triplerait la charge imposée à des APIs publiques gratuites, alors que le
+premier miroir répond seul la plupart du temps.
+
+⚠️ Le cache d'OSM porte sur le **bundle classé** (`unstable_cache`), pas sur la
+réponse HTTP : les trois miroirs sont trois URLs, donc trois entrées distinctes
+— l'analyse suivante repartirait du miroir 1, le plus souvent saturé. Mémoriser
+le bundle rend le cache indifférent au miroir, et stocke quelques centaines
+d'octets au lieu des ~450 Ko de réponse brute. La fonction mémorisée **lève**
+au lieu de renvoyer `null` (`unstable_cache` mémoriserait le `null`, et une
+saturation passagère priverait le bien de son bloc Quartier pendant 30 jours).
+
+Mesuré de bout en bout sur la vague de sources (Marseille 6e, `next start`) :
+~20 s à froid, **~0,3 s** une fois le cache chaud ; un échec total d'Overpass
+n'est pas mémorisé et la relance suivante retente bien.
+
+## Dichotomies des recommandations
+
+Les deux leviers qui cherchent un seuil (prix qui bascule en « Achète », montant
+emprunté qui ramène le cash-flow à l'équilibre) passent par
+`plusGrandQuiConvient` — 30 itérations, précision très en deçà de l'arrondi
+lisible appliqué ensuite. ⚠️ Le prédicat doit être MONOTONE sur l'intervalle,
+sinon la recherche converge vers un seuil arbitraire.
+
+## Colonnes millésimées des jeux data.gouv
+
+⚠️ Piège rencontré : la colonne du code commune du jeu SSMSI porte l'année du
+découpage INSEE et est **renommée à chaque édition annuelle**
+(`CODGEO_2025` → `CODGEO_2026`). L'API répond alors 400, que `getJson` traduit
+en `null` : le bloc Potentiel perd sa composante sécurité **sans erreur
+visible**. Voir `COL_CODGEO` dans `sources/delinquance.ts` — et vérifier les
+colonnes réelles via l'endpoint `/profile/` de la ressource avant de conclure
+à une panne réseau.
+
+## Narration : un seul appel, une seule tentative
+
+`narrateAll` impose `SCHEMA_NARRATION` (`responseSchema`) — le format JSON est
+garanti par l'API, plus par une expression régulière de rattrapage suivie d'un
+second appel complet.
+
+⚠️ **Ne pas réintroduire de boucle de retry dans `narration.ts`.** `gemini.ts`
+a déjà tranché (`MAX_TENTATIVES = 1`, timeout 25 s) : ce qui compte est
+l'attente ressentie, pas le taux de succès par appel. La boucle qui vivait ici
+(2 tentatives séparées par 2,5 s) portait le pire cas à ~52 s pour un contenu
+que l'analyse sait afficher sans — les narrations vides laissent les blocs
+parfaitement exploitables.

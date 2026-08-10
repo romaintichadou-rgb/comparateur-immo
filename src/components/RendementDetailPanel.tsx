@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
-import type { ApartmentWithComputed } from "@/lib/types";
+import type { ApartmentListItemWithComputed } from "@/lib/types";
 import { formatApartmentTitle, formatEuros, formatPercent } from "@/lib/format";
 import { TONE_PANEL_STYLES, rendementNetTone, type RendementSeuils, type RendementTone } from "@/lib/analyse/scoring";
 import { isAiEstimated } from "@/lib/estimates";
@@ -17,7 +17,7 @@ export default function RendementDetailPanel({
   seuils,
   onClose,
 }: {
-  apartment: ApartmentWithComputed | null;
+  apartment: ApartmentListItemWithComputed | null;
   seuils: RendementSeuils;
   onClose: () => void;
 }) {
@@ -26,7 +26,7 @@ export default function RendementDetailPanel({
   // continuer à afficher son contenu le temps de glisser hors champ). Les
   // seuils sont mémorisés avec lui pour rester cohérents pendant cette
   // transition (au lieu de retomber sur des seuils par défaut).
-  const [displayed, setDisplayed] = useState<{ apartment: ApartmentWithComputed; seuils: RendementSeuils } | null>(
+  const [displayed, setDisplayed] = useState<{ apartment: ApartmentListItemWithComputed; seuils: RendementSeuils } | null>(
     null
   );
   const [show, setShow] = useState(false);

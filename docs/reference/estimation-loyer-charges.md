@@ -20,10 +20,17 @@ appel backend. Il n'y a plus de bouton "Réestimer" global — tout est par cham
 | **Charges copro** | Déterministe + IA blending | `src/lib/chargesEstimation.ts` | `/api/estimate-charges` | `field: "charges_copro_annuelles"` |
 | **Taxe foncière** (avec taux communal) | **100% déterministe** — pas d'appel IA | `src/lib/taxeFonciereCommune.ts` | idem | `field: "taxe_fonciere"` |
 | **Taxe foncière** (sans taux communal) | Déterministe + IA blending (fallback) | idem | idem | `field: "taxe_fonciere"` |
-| **Assurance PNO** | **100% déterministe** — pas d'appel IA | `src/lib/estimates.ts` | PATCH direct `/api/apartments/[id]` | — |
+| **Assurance PNO** | **100% déterministe** — pas d'appel IA | `src/lib/estimates.ts` | `/api/estimate-assurance` | — |
 
-Sans paramètre `field`, `/api/estimate-charges` estime les deux (charges copro
-+ TF) — utilisé par `runRecalc` lors d'un changement de données du bien.
+Sans paramètre `field`, les deux champs sont estimés (charges copro + TF) —
+c'est ce que fait le recalcul en chaîne après un changement de données du bien.
+
+⚠️ Le corps métier des trois ré-estimations vit dans `src/lib/reestimation.ts`,
+pas dans les routes : celles-ci ne sont qu'une enveloppe HTTP autour de
+`reestimerLoyer` / `reestimerCharges` / `reestimerAssurance`, que
+`/api/apartments/[id]/recalc` enchaîne sans repasser par le réseau. Modifier
+une ré-estimation dans une route seule la ferait diverger du recalcul
+automatique.
 
 ## Blending déterministe + IA (charges copro, TF fallback UNIQUEMENT)
 

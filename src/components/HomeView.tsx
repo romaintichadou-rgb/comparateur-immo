@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import type { ApartmentWithComputed } from "@/lib/types";
+import type { ApartmentListItemWithComputed } from "@/lib/types";
 import type { RendementSeuils } from "@/lib/analyse/scoring";
 import { PLAN_LABEL } from "@/lib/plans";
 import ApartmentsTable, { SortKey } from "./ApartmentsTable";
@@ -56,7 +56,7 @@ export default function HomeView({
   isPro,
   isTester,
 }: {
-  apartments: ApartmentWithComputed[];
+  apartments: ApartmentListItemWithComputed[];
   seuilsRendement: RendementSeuils;
   isPro: boolean;
   isTester: boolean;

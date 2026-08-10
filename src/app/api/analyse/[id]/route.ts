@@ -1,31 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { reponseErreur } from "../../erreurs";
 import { revalidatePath } from "next/cache";
-import { getApartment, updateApartment, checkAndIncrementAnalyseQuota } from "@/lib/db";
+import { reponseErreur } from "../../erreurs";
+import { checkAndIncrementAnalyseQuota, requireApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
 import { runAnalyse } from "@/lib/analyse/run";
 
 /**
- * Lance (ou relance) l'Analyse IA d'un bien : ré-estime le loyer (s'il est
- * d'origine IA) pour rester cohérent, géocode via BAN, interroge les sources
- * de données réelles, calcule les notes déterministes, fait rédiger la
- * narration, puis stocke le résultat (colonne analyse_ia) et le code INSEE
+ * Lance (ou relance) l'Analyse IA d'un bien : géocode via BAN, interroge les
+ * sources de données réelles, calcule les notes déterministes, fait rédiger la
+ * narration, puis stocke le résultat (colonne `analyse_ia`) et le code INSEE
  * éventuellement récupéré. Renvoie l'appartement à jour.
+ *
+ * Ne touche NI au loyer NI aux charges : les ré-estimer relève du recalcul en
+ * chaîne (`/api/apartments/[id]/recalc`), déclenché par une modification du
+ * bien. Ici, l'utilisateur demande une nouvelle lecture des mêmes données.
  */
-export async function POST(
-  _req: NextRequest,
-  { params }: RouteContext<"/api/analyse/[id]">
-) {
+export async function POST(_req: NextRequest, { params }: RouteContext<"/api/analyse/[id]">) {
   const { id } = await params;
   try {
-    // Vérifier le quota d'analyses IA avant l'appel Gemini
+    // Quota vérifié avant l'appel Gemini — et avant toute écriture.
     await checkAndIncrementAnalyseQuota();
 
-    let apartment = await getApartment(id);
-    if (!apartment) {
-      return NextResponse.json({ error: "Introuvable" }, { status: 404 });
-    }
-
+    const apartment = await requireApartment(id);
     const { analyse, codeInsee, narrationStatus } = await runAnalyse(apartment);
 
     const updated = await updateApartment(id, {
@@ -33,7 +29,7 @@ export async function POST(
       ...(codeInsee && codeInsee !== apartment.code_insee ? { code_insee: codeInsee } : {}),
     });
 
-    // narrationStatus est transitoire (non stocké) : sert à informer l'UI si
+    // `narrationStatus` est transitoire (non stocké) : sert à informer l'UI si
     // les résumés IA ont échoué (ex. quota Gemini), sans bloquer l'analyse.
     revalidatePath("/");
     return NextResponse.json({ apartment: computeDerived(updated), narrationStatus });

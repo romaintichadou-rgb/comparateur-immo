@@ -1,4 +1,4 @@
-import type { Apartment, ApartmentWithComputed } from "./types";
+import type { ApartmentListItem, ChampsCalcules } from "./types";
 import { applyLiveEstimates } from "./estimates";
 
 /**
@@ -10,7 +10,7 @@ import { applyLiveEstimates } from "./estimates";
  * recalculés en premier via applyLiveEstimates, pour ne jamais rester figés
  * sur leur valeur de création.
  */
-export function computeDerived(apartment: Apartment): ApartmentWithComputed {
+export function computeDerived<T extends ApartmentListItem>(apartment: T): T & ChampsCalcules {
   const apt = applyLiveEstimates(apartment);
 
   // Prix/m² tient compte du prix d'achat ET des travaux (coût réel total

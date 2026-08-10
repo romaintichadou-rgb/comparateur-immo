@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
-import type { ApartmentWithComputed } from "@/lib/types";
+import type { ApartmentListItemWithComputed } from "@/lib/types";
 import { formatLocalisationCourte } from "@/lib/adresse";
 import { formatApartmentTitle, formatEuros, formatNote, formatPercent } from "@/lib/format";
 import {
@@ -24,7 +24,7 @@ import { useDeleteApartment } from "@/components/useDeleteApartment";
  * « achetable ou pas », pas « bien noté ou pas ». Un 7,5 surcoté doit donc
  * apparaître en ambre ici, comme sur sa fiche.
  */
-export function decisionToneOf(apt: ApartmentWithComputed): DecisionTone {
+export function decisionToneOf(apt: ApartmentListItemWithComputed): DecisionTone {
   const analyse = apt.analyse_ia;
   if (!analyse || analyse.score_global == null) return "inconnu";
   return decisionFromAnalyse(analyse).decision;
@@ -55,9 +55,9 @@ export type SortKey =
 /** Même logique de tri utilisée par la table (desktop) et la liste de cartes
  * (mobile), pour ne jamais les laisser diverger. */
 export function sortApartments(
-  apartments: ApartmentWithComputed[],
+  apartments: ApartmentListItemWithComputed[],
   sortKey: SortKey
-): ApartmentWithComputed[] {
+): ApartmentListItemWithComputed[] {
   return [...apartments].sort((a, b) => {
     const av = a[sortKey];
     const bv = b[sortKey];
@@ -73,7 +73,7 @@ export default function ApartmentsTable({
   sortKey,
   seuilsRendement,
 }: {
-  apartments: ApartmentWithComputed[];
+  apartments: ApartmentListItemWithComputed[];
   sortKey: SortKey;
   seuilsRendement: RendementSeuils;
 }) {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AnalyseIA } from "./analyse/types";
+import type { AnalyseIA, BlocAnalyse, BlocKey } from "./analyse/types";
 import type { SimulationInputs } from "./simulation";
 import type { LoyerCalcul } from "./rentEstimation";
 
@@ -53,7 +53,6 @@ export const PRECISIONS_LOCALISATION = ["exacte", "arrondissement"] as const;
 export type PrecisionLocalisation = (typeof PRECISIONS_LOCALISATION)[number];
 
 export const DPE_GES_VALEURS = ["A", "B", "C", "D", "E", "F", "G"] as const;
-type DpeGesValeur = (typeof DPE_GES_VALEURS)[number];
 
 export const TYPES_BIEN = [
   "Studio",
@@ -402,9 +401,38 @@ export type ApartmentInput = z.infer<typeof apartmentInputSchema>;
 export const apartmentPatchSchema = z.object(apartmentBaseFields).partial();
 export type ApartmentPatch = z.infer<typeof apartmentPatchSchema>;
 
-export interface ApartmentWithComputed extends Apartment {
+/** Champs recalculés à l'affichage par `computeDerived` — jamais stockés. */
+export interface ChampsCalcules {
   prix_m2: number | null;
   budget_total: number | null;
   rendement_brut: number | null;
   rendement_net: number | null;
 }
+
+export interface ApartmentWithComputed extends Apartment, ChampsCalcules {}
+
+/**
+ * Ce que l'ACCUEIL a besoin de connaître de l'analyse d'un bien : le score, les
+ * verdicts et le bloc Prix (dont `ecartPrixMarche` tire la surcote) — soit
+ * trois champs sur la quinzaine que porte `AnalyseIA`.
+ *
+ * Le reste (faits de tous les blocs, narrations, recommandations, empreinte,
+ * copie intégrale du profil investisseur) ne sert QUE sur la fiche du bien.
+ * Le charger pour la liste, c'est le sérialiser dans le payload RSC de
+ * l'accueil pour chaque bien, à chaque chargement, sans que rien ne l'y lise.
+ */
+export type AnalyseResume = Pick<AnalyseIA, "score_global" | "verdicts" | "genere_le"> & {
+  blocs: Partial<Record<BlocKey, BlocAnalyse>>;
+};
+
+/**
+ * Ligne de LISTE : un bien complet, dont l'analyse est réduite à son résumé
+ * (voir `listApartments`). `Apartment` reste assignable à ce type — une fiche
+ * complète peut donc alimenter un composant de liste, jamais l'inverse, ce qui
+ * est exactement la garantie recherchée.
+ */
+export type ApartmentListItem = Omit<Apartment, "analyse_ia"> & {
+  analyse_ia: AnalyseResume | null;
+};
+
+export interface ApartmentListItemWithComputed extends ApartmentListItem, ChampsCalcules {}
