@@ -21,7 +21,7 @@ export default async function NouveauApartementPage() {
   await requireSession();
   const profil = await getUserProfile();
 
-  if (profil.plan === "free" && profil.nombreBiens >= LIMITE_BIENS_FREE) {
+  if (!profil.isTester && profil.plan === "free" && profil.nombreBiens >= LIMITE_BIENS_FREE) {
     redirect("/upgrade/bien-limite");
   }
 
