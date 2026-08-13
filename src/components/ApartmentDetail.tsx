@@ -1023,7 +1023,7 @@ export default function ApartmentDetail({
                 {editingAchat ? (
                   <div className="space-y-3">
                     <ul className="divide-y divide-ink-100/50 text-sm">
-                      <AchatEditRow label="Prix d'achat" value={value(achatPatch, "prix")} onChange={(v) => setAchatPatch((p) => ({ ...p, prix: v }))} />
+                      <AchatEditRow label="Prix d'achat" value={value(achatPatch, "prix")} onChange={(v) => setAchatPatch((p) => ({ ...p, prix: v }))} badge={<span className="text-red-500" title="Obligatoire">*</span>} />
                       <AchatEditRow
                         label="Frais de notaire"
                         value={fraisNotaireLive}
@@ -1323,9 +1323,9 @@ export default function ApartmentDetail({
             <FieldCard title="Localisation">
               {editingDesc ? (
                 <EditStack>
-                  <TextField label="Ville" value={value(descPatch, "ville")} onChange={(v) => setDescPatch((p) => ({ ...p, ville: v }))} />
+                  <TextField label="Ville" value={value(descPatch, "ville")} onChange={(v) => setDescPatch((p) => ({ ...p, ville: v }))} hint={<span className="text-red-500" title="Obligatoire">*</span>} />
                   <TextField label="Quartier" value={value(descPatch, "quartier")} onChange={(v) => setDescPatch((p) => ({ ...p, quartier: v }))} />
-                  <TextField label="Code postal" value={value(descPatch, "code_postal")} onChange={(v) => setDescPatch((p) => ({ ...p, code_postal: v }))} />
+                  <TextField label="Code postal" value={value(descPatch, "code_postal")} onChange={(v) => setDescPatch((p) => ({ ...p, code_postal: v }))} hint={<span className="text-red-500" title="Obligatoire">*</span>} />
                   <TextField label="Adresse" value={value(descPatch, "adresse")} onChange={(v) => setDescPatch((p) => ({ ...p, adresse: v }))} />
                 </EditStack>
               ) : (
@@ -1341,12 +1341,12 @@ export default function ApartmentDetail({
             <FieldCard title="Caractéristiques">
               {editingDesc ? (
                 <EditStack>
-                  <SelectField label="Type de bien" value={value(descPatch, "type_bien") as (typeof TYPES_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, type_bien: v }))} options={TYPES_BIEN} />
+                  <SelectField label="Type de bien" value={value(descPatch, "type_bien") as (typeof TYPES_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, type_bien: v }))} options={TYPES_BIEN} hint={<span className="text-red-500" title="Obligatoire">*</span>} />
                   {immeuble && (
                     <NumberField label="Nombre de lots" value={value(descPatch, "nb_lots")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_lots: v }))} hint={<span className="text-xs font-normal text-ink-400">logements de l&apos;immeuble</span>} />
                   )}
-                  <NumberField label={immeuble ? "Surface totale" : "Surface"} value={value(descPatch, "surface_m2")} onChange={(v) => setDescPatch((p) => ({ ...p, surface_m2: v }))} suffix="m²" />
-                  <NumberField label="Nb pièces" value={value(descPatch, "nb_pieces")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_pieces: v }))} />
+                  <NumberField label={immeuble ? "Surface totale" : "Surface"} value={value(descPatch, "surface_m2")} onChange={(v) => setDescPatch((p) => ({ ...p, surface_m2: v }))} suffix="m²" hint={<span className="text-red-500" title="Obligatoire">*</span>} />
+                  <NumberField label="Nb pièces" value={value(descPatch, "nb_pieces")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_pieces: v }))} hint={<span className="text-red-500" title="Obligatoire">*</span>} />
                   <NumberField label="Nb chambres" value={value(descPatch, "nb_chambres")} onChange={(v) => setDescPatch((p) => ({ ...p, nb_chambres: v }))} />
                 </EditStack>
               ) : (
@@ -1383,8 +1383,8 @@ export default function ApartmentDetail({
             <FieldCard title="État et diagnostics">
               {editingDesc ? (
                 <EditStack>
-                  <SelectField label="État du bien" value={value(descPatch, "etat_bien") as (typeof ETATS_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, etat_bien: v }))} options={ETATS_BIEN} />
-                  <SelectField label="DPE" value={value(descPatch, "dpe") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, dpe: v }))} options={DPE_GES_VALEURS} />
+                  <SelectField label="État du bien" value={value(descPatch, "etat_bien") as (typeof ETATS_BIEN)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, etat_bien: v }))} options={ETATS_BIEN} hint={<span className="text-red-500" title="Obligatoire">*</span>} />
+                  <SelectField label="DPE" value={value(descPatch, "dpe") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, dpe: v }))} options={DPE_GES_VALEURS} hint={<span className="text-red-500" title="Obligatoire">*</span>} />
                   <SelectField label="GES" value={value(descPatch, "ges") as (typeof DPE_GES_VALEURS)[number] | ""} onChange={(v) => setDescPatch((p) => ({ ...p, ges: v }))} options={DPE_GES_VALEURS} />
                 </EditStack>
               ) : (
