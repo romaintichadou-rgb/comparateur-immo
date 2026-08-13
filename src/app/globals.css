@@ -146,6 +146,21 @@ body {
   display: none;
 }
 
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-thumb {
+  margin-top: -4px;
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+}
+
 /* Accessibilité : on coupe les animations décoratives si l'utilisateur le
    demande (le skeleton reste un aplat neutre, la barre un segment figé). */
 @media (prefers-reduced-motion: reduce) {

@@ -45,7 +45,6 @@ interface ThresholdChartProps {
   yUnit: string;
   hoveredIndex: number | null;
   onHover: (index: number | null) => void;
-  invertColors?: boolean;
   ghostPoint?: { x: number; y: number | null };
   anilMarkers?: { min: number; max: number };
 }
@@ -227,11 +226,6 @@ const PAD = { top: 10, right: 12, bottom: 32, left: 44 };
 const PLOT_W = CHART_W - PAD.left - PAD.right;
 const PLOT_H = CHART_H - PAD.top - PAD.bottom;
 
-const ZONE_LABELS: Record<string, { text: string; color: string }> = {
-  vert: { text: "Vert", color: "#059669" },
-  ambre: { text: "Ambre", color: "#d97706" },
-  rouge: { text: "Rouge", color: "#dc2626" },
-};
 
 function ThresholdChart({
   data,
@@ -243,7 +237,6 @@ function ThresholdChart({
   title,
   hoveredIndex,
   onHover,
-  invertColors,
   ghostPoint,
   anilMarkers,
 }: ThresholdChartProps) {
@@ -285,26 +278,23 @@ function ThresholdChart({
   const hoverY = hoveredIndex != null && hoveredIndex < data.length ? getY(data[hoveredIndex]) : null;
   const hoverX = hoveredIndex != null && hoveredIndex < data.length ? data[hoveredIndex].x : null;
 
-  const yTicks = [thresholds.vert, thresholds.rouge];
   const yRange = yMax - yMin;
-  const topTick = yMin + yRange * 0.95;
-  const bottomTick = yMin + yRange * 0.05;
-  if (topTick > thresholds.vert + yRange * 0.08) yTicks.push(roundTo(topTick, thresholds.vert > 1 ? 50 : 0.005));
-  if (bottomTick < thresholds.rouge - yRange * 0.08) yTicks.push(roundTo(bottomTick, thresholds.vert > 1 ? 50 : 0.005));
+  const yTicks: number[] = [];
+  const nTicks = 4;
+  const rawStep = yRange / nTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.abs(rawStep) || 1)));
+  const nice = [1, 2, 2.5, 5, 10].find(m => m * mag >= rawStep) ?? 10;
+  const yStep = nice * mag;
+  const tickStart = Math.ceil(yMin / yStep) * yStep;
+  for (let v = tickStart; v <= yMax + yStep * 0.01; v += yStep) {
+    if (v >= yMin - yStep * 0.01 && v <= yMax + yStep * 0.01) yTicks.push(Math.round(v * 1000) / 1000);
+  }
 
   const xTicks: number[] = [];
   const xStep = (xMax - xMin) / 4;
   for (let i = 0; i <= 4; i++) xTicks.push(roundTo(xMin + xStep * i, data[0].x > 1000 ? 5000 : 10));
 
   const uid = title.replace(/\s/g, "");
-
-  // Gradient colors: for prix (higher X = higher price = worse), green→red (default)
-  // For loyer (higher X = higher rent = better), red→green (invertColors)
-  const gradLeft = invertColors ? "#dc2626" : "#059669";
-  const gradMid = "#d97706";
-  const gradRight = invertColors ? "#059669" : "#dc2626";
-  const fillLeft = invertColors ? "#dc2626" : "#059669";
-  const fillRight = invertColors ? "#059669" : "#dc2626";
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
@@ -326,12 +316,6 @@ function ThresholdChart({
 
   const ariaLabel = `${title} : ${validPoints.length > 0 ? formatY(validPoints[0].y) : "—"} à ${validPoints.length > 0 ? formatY(validPoints[validPoints.length - 1].y) : "—"} pour ${formatX(xMin)} à ${formatX(xMax)}. Valeur actuelle ${formatX(currentX)} : ${currentY != null ? formatY(currentY) : "—"}. Seuil vert : ${formatY(thresholds.vert)}, seuil rouge : ${formatY(thresholds.rouge)}.`;
 
-  const zoneVertMidY = PAD.top + Math.max(0, seuilVertY - PAD.top) / 2;
-  const zoneAmbreMidY = seuilVertY + Math.max(0, seuilRougeY - seuilVertY) / 2;
-  const zoneRougeMidY = seuilRougeY + Math.max(0, PAD.top + PLOT_H - seuilRougeY) / 2;
-  const zoneVertH = seuilVertY - PAD.top;
-  const zoneAmbreH = seuilRougeY - seuilVertY;
-  const zoneRougeH = PAD.top + PLOT_H - seuilRougeY;
 
   return (
     <div>
@@ -361,44 +345,32 @@ function ThresholdChart({
         }}
       >
         <defs>
-          <linearGradient id={`zg-${uid}`} x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0%" stopColor="#d1fae5" stopOpacity=".12" />
-            <stop offset="100%" stopColor="#d1fae5" stopOpacity=".35" />
-          </linearGradient>
-          <linearGradient id={`za-${uid}`} x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0%" stopColor="#fef3c7" stopOpacity=".3" />
-            <stop offset="100%" stopColor="#fef3c7" stopOpacity=".12" />
-          </linearGradient>
-          <linearGradient id={`zr-${uid}`} x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0%" stopColor="#fecaca" stopOpacity=".35" />
-            <stop offset="100%" stopColor="#fecaca" stopOpacity=".12" />
-          </linearGradient>
-          <linearGradient id={`fill-${uid}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={fillLeft} stopOpacity=".06" />
-            <stop offset="50%" stopColor="#d97706" stopOpacity=".04" />
-            <stop offset="100%" stopColor={fillRight} stopOpacity=".06" />
-          </linearGradient>
-          <linearGradient id={`stroke-${uid}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={gradLeft} />
-            <stop offset="50%" stopColor={gradMid} />
-            <stop offset="100%" stopColor={gradRight} />
+          {(() => {
+            const vertPct = Math.max(5, Math.min(95, ((seuilVertY - PAD.top) / PLOT_H) * 100));
+            const rougePct = Math.max(5, Math.min(95, ((seuilRougeY - PAD.top) / PLOT_H) * 100));
+            const blend = Math.min(8, (rougePct - vertPct) * 0.3);
+            return (
+              <linearGradient id={`zone-${uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#6ee7b7" stopOpacity=".4" />
+                <stop offset={`${Math.max(0, vertPct - blend)}%`} stopColor="#6ee7b7" stopOpacity=".25" />
+                <stop offset={`${Math.min(100, vertPct + blend)}%`} stopColor="#fcd34d" stopOpacity=".25" />
+                <stop offset={`${Math.max(0, rougePct - blend)}%`} stopColor="#fcd34d" stopOpacity=".25" />
+                <stop offset={`${Math.min(100, rougePct + blend)}%`} stopColor="#fca5a5" stopOpacity=".25" />
+                <stop offset="100%" stopColor="#fca5a5" stopOpacity=".4" />
+              </linearGradient>
+            );
+          })()}
+          <linearGradient id={`fill-${uid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3d3580" stopOpacity=".12" />
+            <stop offset="100%" stopColor="#3d3580" stopOpacity=".02" />
           </linearGradient>
         </defs>
 
-        <rect x={PAD.left} y={PAD.top} width={PLOT_W} height={Math.max(0, seuilVertY - PAD.top)} fill={`url(#zg-${uid})`} />
-        <rect x={PAD.left} y={seuilVertY} width={PLOT_W} height={Math.max(0, seuilRougeY - seuilVertY)} fill={`url(#za-${uid})`} />
-        <rect x={PAD.left} y={seuilRougeY} width={PLOT_W} height={Math.max(0, PAD.top + PLOT_H - seuilRougeY)} fill={`url(#zr-${uid})`} />
-
-        {zoneVertH > 16 && <text x={PAD.left + 4} y={zoneVertMidY + 3} fontSize="7" fill={ZONE_LABELS.vert.color} opacity=".5" fontWeight="600">{ZONE_LABELS.vert.text}</text>}
-        {zoneAmbreH > 16 && <text x={PAD.left + 4} y={zoneAmbreMidY + 3} fontSize="7" fill={ZONE_LABELS.ambre.color} opacity=".5" fontWeight="600">{ZONE_LABELS.ambre.text}</text>}
-        {zoneRougeH > 16 && <text x={PAD.left + 4} y={zoneRougeMidY + 3} fontSize="7" fill={ZONE_LABELS.rouge.color} opacity=".5" fontWeight="600">{ZONE_LABELS.rouge.text}</text>}
+        <rect x={PAD.left} y={PAD.top} width={PLOT_W} height={PLOT_H} fill={`url(#zone-${uid})`} />
 
         {yTicks.map((v) => (
           <line key={`grid-${v}`} x1={PAD.left} y1={scaleY(v)} x2={PAD.left + PLOT_W} y2={scaleY(v)} stroke="#ddd8ea" strokeWidth=".5" opacity=".3" />
         ))}
-
-        <line x1={PAD.left} y1={seuilVertY} x2={PAD.left + PLOT_W} y2={seuilVertY} stroke="#059669" strokeWidth="1" strokeDasharray="5 3" opacity=".5" />
-        <line x1={PAD.left} y1={seuilRougeY} x2={PAD.left + PLOT_W} y2={seuilRougeY} stroke="#dc2626" strokeWidth="1" strokeDasharray="5 3" opacity=".5" />
 
         {anilMarkers && (
           <>
@@ -410,12 +382,25 @@ function ThresholdChart({
         )}
 
         {fillD && <path d={fillD} fill={`url(#fill-${uid})`} />}
-        {pathD && <path d={pathD} fill="none" stroke={`url(#stroke-${uid})`} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+        {pathD && <path d={pathD} fill="none" stroke="#3d3580" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
 
         {ghostPoint && ghostPoint.y != null && (
           <>
             <line x1={scaleX(ghostPoint.x)} y1={PAD.top} x2={scaleX(ghostPoint.x)} y2={PAD.top + PLOT_H} stroke="#3d3580" strokeWidth=".8" strokeDasharray="2 3" opacity=".25" />
             <circle cx={scaleX(ghostPoint.x)} cy={scaleY(ghostPoint.y)} r="4.5" fill="none" stroke="#3d3580" strokeWidth="1.5" strokeDasharray="2 2" opacity=".5" />
+            {(() => {
+              const gx = Math.max(36, Math.min(CHART_W - 36, scaleX(ghostPoint.x)));
+              const gLabel = formatY(ghostPoint.y);
+              const gLabelW = Math.max(48, gLabel.length * 5.5 + 16);
+              return (
+                <>
+                  <rect x={gx - gLabelW / 2} y={scaleY(ghostPoint.y) - 22} width={gLabelW} height="18" rx="4" fill="white" stroke="#3d3580" strokeWidth=".8" strokeDasharray="2 2" opacity=".8" />
+                  <text x={gx} y={scaleY(ghostPoint.y) - 10} textAnchor="middle" fontSize="8" fontWeight="600" fill="#3d3580" fontFamily="'Geist Mono', monospace" opacity=".8">
+                    {gLabel}
+                  </text>
+                </>
+              );
+            })()}
           </>
         )}
 
@@ -467,17 +452,11 @@ function ThresholdChart({
           </>
         )}
 
-        {yTicks.map((v) => {
-          const isVert = v === thresholds.vert;
-          const isRouge = v === thresholds.rouge;
-          return (
-            <text key={v} x={PAD.left - 4} y={scaleY(v) + 3} textAnchor="end" fontSize="8"
-              fill={isVert ? "#059669" : isRouge ? "#dc2626" : "#8b8393"}
-              fontWeight={isVert || isRouge ? "600" : "400"}
-              fontFamily="'Geist Mono', monospace"
-            >{formatY(v)}</text>
-          );
-        })}
+        {yTicks.map((v) => (
+          <text key={v} x={PAD.left - 4} y={scaleY(v) + 3} textAnchor="end" fontSize="8"
+            fill="#8b8393" fontWeight="400" fontFamily="'Geist Mono', monospace"
+          >{formatY(v)}</text>
+        ))}
 
         {xTicks.map((v) => (
           <text key={v} x={scaleX(v)} y={PAD.top + PLOT_H + 14} textAnchor="middle" fontSize="8"
@@ -495,7 +474,7 @@ function ThresholdChart({
 // ComboSimulator
 // ---------------------------------------------------------------------------
 
-const SLIDER_THUMB = "[&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-accent-600 [&::-webkit-slider-thumb]:shadow-md";
+const SLIDER_THUMB = "[&::-webkit-slider-thumb]:size-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-[#3d3580] [&::-webkit-slider-thumb]:shadow-[0_0_0_3px_rgba(61,53,128,.15)] [&::-moz-range-thumb]:size-3.5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[#3d3580] [&::-moz-range-thumb]:shadow-[0_0_0_3px_rgba(61,53,128,.15)]";
 
 function ComboSimulator({
   apt,
@@ -558,21 +537,22 @@ function ComboSimulator({
 
   const prixPct = prixMax > prixMin ? ((comboPrix - prixMin) / (prixMax - prixMin)) * 100 : 0;
   const loyerPct = loyerMax > loyerMin ? ((comboLoyer - loyerMin) / (loyerMax - loyerMin)) * 100 : 0;
+  const origPrixPct = prixMax > prixMin ? (((apt.prix ?? 0) - prixMin) / (prixMax - prixMin)) * 100 : 50;
+  const origLoyerPct = loyerMax > loyerMin ? (((apt.loyer_retenu ?? 0) - loyerMin) / (loyerMax - loyerMin)) * 100 : 50;
 
   return (
     <div className="rounded-xl border border-ink-100 bg-white">
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_280px]">
-        {/* Left column: title + stacked sliders */}
+        {/* Left column: stacked sliders */}
         <div className="space-y-6 p-5 sm:p-6">
-          {/* Title row + scenario pills */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-            <h4 className="mr-auto font-display text-base font-semibold text-ink-900">
-              Combinez les leviers
-            </h4>
+          {/* Prix d'achat slider */}
+          <div>
+            <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <span className="text-sm font-medium text-ink-700">Prix d&apos;achat</span>
             {seuilVertPrix != null && Math.abs(comboPrix - Math.round(seuilVertPrix)) > 1000 && (
               <button
                 onClick={() => onComboPrixChange(roundTo(seuilVertPrix, 1000))}
-                className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-px text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
               >
                 Seuil vert · {formatEurosShort(roundTo(seuilVertPrix, 1000))}
               </button>
@@ -580,7 +560,7 @@ function ComboSimulator({
             {(apt.prix ?? 0) > 0 && Math.abs(ecartPrix + (apt.prix ?? 0) * 0.1) > 1000 && (
               <button
                 onClick={() => onComboPrixChange(roundTo((apt.prix ?? 0) * 0.9, 1000))}
-                className="rounded-full border border-ink-200 px-2.5 py-0.5 text-[11px] font-medium text-ink-500 hover:bg-ink-50"
+                className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
               >
                 −10 %
               </button>
@@ -588,7 +568,7 @@ function ComboSimulator({
             {(apt.prix ?? 0) > 0 && Math.abs(ecartPrix + (apt.prix ?? 0) * 0.2) > 1000 && (
               <button
                 onClick={() => onComboPrixChange(roundTo((apt.prix ?? 0) * 0.8, 1000))}
-                className="rounded-full border border-ink-200 px-2.5 py-0.5 text-[11px] font-medium text-ink-500 hover:bg-ink-50"
+                className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
               >
                 −20 %
               </button>
@@ -596,7 +576,7 @@ function ComboSimulator({
             {dvfPrix != null && Math.abs(comboPrix - dvfPrix) > 5000 && (
               <button
                 onClick={() => onComboPrixChange(roundTo(dvfPrix, 1000))}
-                className="rounded-full border border-ink-200 px-2.5 py-0.5 text-[11px] font-medium text-ink-500 hover:bg-ink-50"
+                className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
               >
                 DVF médian
               </button>
@@ -604,39 +584,39 @@ function ComboSimulator({
             {hasEcart && (
               <button
                 onClick={resetCombo}
-                className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-ink-400 hover:bg-ink-50 hover:text-ink-600"
+                className="flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] text-ink-400 hover:bg-ink-50 hover:text-ink-600"
                 aria-label="Réinitialiser"
               >
-                <RotateCcw className="size-3" />
+                <RotateCcw className="size-2.5" />
               </button>
             )}
-          </div>
-
-          {/* Prix d'achat slider */}
-          <div>
-            <div className="mb-2.5 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-ink-700">Prix d&apos;achat</span>
-              <div className="flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
+              <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
                 <button
-                  onClick={() => onComboPrixChange(Math.max(prixMin, comboPrix - 5000))}
+                  onClick={() => onComboPrixChange(Math.max(prixMin, comboPrix - 1000))}
                   className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
                 >&minus;</button>
                 <span className="min-w-[80px] text-center font-mono text-sm font-semibold tabular-nums text-ink-900">
                   {formatEuros(comboPrix)}
                 </span>
                 <button
-                  onClick={() => onComboPrixChange(Math.min(prixMax, comboPrix + 5000))}
+                  onClick={() => onComboPrixChange(Math.min(prixMax, comboPrix + 1000))}
                   className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
                 >+</button>
                 <span className="pr-1 text-xs text-ink-400">€</span>
               </div>
             </div>
-            <div className="relative">
-              <div className="pointer-events-none absolute top-1/2 h-1.5 w-full -translate-y-1/2 overflow-hidden rounded-full bg-ink-100">
+            <div className="relative h-6">
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
                 <div
                   className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
                   style={{ width: `${prixPct}%` }}
                 />
+              </div>
+              <div
+                className="pointer-events-none absolute top-0 z-[5] flex h-full -translate-x-1/2 flex-col items-center justify-center"
+                style={{ left: `${origPrixPct}%` }}
+              >
+                <div className="h-3.5 w-px bg-ink-300/60" />
               </div>
               <input
                 type="range"
@@ -645,11 +625,17 @@ function ComboSimulator({
                 step={1000}
                 value={comboPrix}
                 onChange={(e) => onComboPrixChange(Number(e.target.value))}
-                className={`relative z-10 h-6 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
+                className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
               />
             </div>
-            <div className="mt-0.5 flex justify-between text-[11px] text-ink-400">
+            <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
               <span>{formatEurosShort(prixMin)}</span>
+              <span
+                className="absolute -translate-x-1/2 text-[9px] text-ink-400"
+                style={{ left: `${origPrixPct}%` }}
+              >
+                Annonce
+              </span>
               <span>{formatEurosShort(prixMax)}</span>
             </div>
           </div>
@@ -673,12 +659,18 @@ function ComboSimulator({
                 <span className="pr-1 text-xs text-ink-400">€</span>
               </div>
             </div>
-            <div className="relative">
-              <div className="pointer-events-none absolute top-1/2 h-1.5 w-full -translate-y-1/2 overflow-hidden rounded-full bg-ink-100">
+            <div className="relative h-6">
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
                 <div
                   className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
                   style={{ width: `${loyerPct}%` }}
                 />
+              </div>
+              <div
+                className="pointer-events-none absolute top-0 z-[5] flex h-full -translate-x-1/2 flex-col items-center justify-center"
+                style={{ left: `${origLoyerPct}%` }}
+              >
+                <div className="h-3.5 w-px bg-ink-300/60" />
               </div>
               <input
                 type="range"
@@ -687,11 +679,17 @@ function ComboSimulator({
                 step={5}
                 value={comboLoyer}
                 onChange={(e) => onComboLoyerChange(Number(e.target.value))}
-                className={`relative z-10 h-6 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
+                className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
               />
             </div>
-            <div className="mt-0.5 flex justify-between text-[11px] text-ink-400">
+            <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
               <span>{formatEuros(loyerMin)}</span>
+              <span
+                className="absolute -translate-x-1/2 text-[9px] text-ink-400"
+                style={{ left: `${origLoyerPct}%` }}
+              >
+                Annonce
+              </span>
               <span>{formatEuros(loyerMax)}</span>
             </div>
           </div>
@@ -841,8 +839,6 @@ export default function PlaygroundView({
     [facteur],
   );
 
-  const isLoyerMode = facteur === "loyer";
-
   const getRendement = useCallback((d: DataPoint) => d.yRendement, []);
   const getCashflow = useCallback((d: DataPoint) => d.yCashflow, []);
 
@@ -891,36 +887,38 @@ export default function PlaygroundView({
         />
       )}
 
-      {/* Factor chips */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => switchFacteur("prix")}
-          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-            facteur === "prix"
-              ? "bg-accent-600 text-white"
-              : "border border-ink-200 text-ink-500 hover:text-ink-700"
-          }`}
-        >
-          Sensibilité au prix
-        </button>
-        <button
-          onClick={() => { if (hasLoyerFactor) switchFacteur("loyer"); }}
-          disabled={!hasLoyerFactor}
-          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-            facteur === "loyer"
-              ? "bg-accent-600 text-white"
-              : hasLoyerFactor
-                ? "border border-ink-200 text-ink-500 hover:text-ink-700"
-                : "border border-ink-100 text-ink-300 cursor-not-allowed"
-          }`}
-        >
-          Sensibilité au loyer
-        </button>
+      {/* Factor toggle */}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex rounded-lg border border-ink-200 bg-ink-50/50 p-0.5">
+          <button
+            onClick={() => switchFacteur("prix")}
+            className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
+              facteur === "prix"
+                ? "bg-white text-ink-900 shadow-sm"
+                : "text-ink-400 hover:text-ink-600"
+            }`}
+          >
+            Par prix
+          </button>
+          <button
+            onClick={() => { if (hasLoyerFactor) switchFacteur("loyer"); }}
+            disabled={!hasLoyerFactor}
+            className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
+              facteur === "loyer"
+                ? "bg-white text-ink-900 shadow-sm"
+                : hasLoyerFactor
+                  ? "text-ink-400 hover:text-ink-600"
+                  : "text-ink-300 cursor-not-allowed"
+            }`}
+          >
+            Par loyer
+          </button>
+        </div>
         {!hasLoyerFactor && apt.code_insee && !anilLoading && (
-          <span className="self-center text-xs text-ink-400">Fourchette loyer indisponible</span>
+          <span className="text-xs text-ink-400">Fourchette loyer indisponible</span>
         )}
         {!apt.code_insee && (
-          <span className="self-center text-xs text-ink-400">Ajoutez un code postal pour le loyer</span>
+          <span className="text-xs text-ink-400">Ajoutez un code postal pour le loyer</span>
         )}
       </div>
 
@@ -941,7 +939,7 @@ export default function PlaygroundView({
             yUnit="%"
             hoveredIndex={hoveredIndex}
             onHover={setHoveredIndex}
-            invertColors={isLoyerMode}
+
             ghostPoint={ghostRendement}
             anilMarkers={anilMarkers}
           />
@@ -956,7 +954,7 @@ export default function PlaygroundView({
             yUnit="€"
             hoveredIndex={hoveredIndex}
             onHover={setHoveredIndex}
-            invertColors={isLoyerMode}
+
             ghostPoint={ghostCashflow}
             anilMarkers={anilMarkers}
           />
