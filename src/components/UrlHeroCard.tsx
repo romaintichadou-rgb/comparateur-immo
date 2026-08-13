@@ -1,8 +1,15 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback } from "react";
 import { Link2, Loader2 } from "lucide-react";
 import { AppMark } from "@/components/Navbar";
+
+const URL_RE = /https?:\/\/[^\s"'<>]+/i;
+
+function extractUrl(text: string): string {
+  const match = text.match(URL_RE);
+  return match ? match[0] : text;
+}
 
 /**
  * Bloc "Coller l'URL d'une annonce" — dégradé + filigrane de marque, point
@@ -47,6 +54,13 @@ export default function UrlHeroCard({
             type="url"
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              if (pasted && pasted !== extractUrl(pasted)) {
+                e.preventDefault();
+                onChange(extractUrl(pasted));
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") onSubmit();
             }}
