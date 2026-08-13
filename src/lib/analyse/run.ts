@@ -11,7 +11,7 @@ import { buildBlocLocation } from "./blocs/location";
 import { buildBlocPotentiel } from "./blocs/potentiel";
 import { buildBlocQuartier } from "./blocs/quartier";
 import { buildBlocSimulation } from "./blocs/simulation";
-import { fetchDvf } from "./sources/dvf";
+import { fetchDvf, type DvfPerimetre } from "./sources/dvf";
 import { fetchOsmBundle } from "./sources/osm";
 import { fetchLoyerReference, fetchLoyerReferenceLocal } from "./sources/loyers";
 import { fetchDpe } from "./sources/ademe";
@@ -71,9 +71,22 @@ export async function runAnalyse(
   // référence que celle qui l'a produit.
   const typologie = typologieAnil(apt.type_bien, apt.nb_pieces, isImmeuble(apt.type_bien), apt.surface_m2);
 
+  // Périmètre DVF : piloté par `precision` (ce que les COORDONNÉES valent),
+  // pas par `adresseExacte` (ce que l'utilisateur a SAISI). Les deux divergent
+  // quand la BAN ne résout l'adresse qu'au niveau de la rue — un rayon de
+  // 500 m autour d'un centroïde de secteur ne renverrait qu'une fraction
+  // arbitraire du quartier. `buildBlocPrix` lit `dvf.rayonSerre`, donc le
+  // périmètre interrogé et celui annoncé ne peuvent pas diverger.
+  const coordsExactes = precision === "exacte";
+  const perimetreDvf: DvfPerimetre | null = coordsExactes && hasCoords
+    ? { type: "rayon500", lat: lat as number, lon: lon as number }
+    : codeInsee
+      ? { type: "commune", codeInsee }
+      : null;
+
   const [dvf, osm, settings, loyerRefResult, dpeData, georisques, delinq, delinqVille, revenu, profilCommune] =
     await Promise.all([
-      hasCoords ? fetchDvf({ lat: lat as number, lon: lon as number, surface: apt.surface_m2 }) : null,
+      perimetreDvf ? fetchDvf({ perimetre: perimetreDvf, surface: apt.surface_m2 }) : null,
       hasCoords ? fetchOsmBundle(lat as number, lon as number) : null,
       getSettings(),
       adresseExacte && hasCoords

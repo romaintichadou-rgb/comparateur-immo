@@ -12,9 +12,17 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } fro
  * Note /10 (10 = affaire) purement déterministe : elle dépend uniquement de
  * l'écart au prix médian réel du quartier.
  *
- * Sans adresse exacte, la comparaison DVF est trop incertaine (rayon centré
- * sur le quartier, pas sur l'immeuble) : on ne note pas le bloc et on invite
- * l'utilisateur à renseigner l'adresse.
+ * ⚠️ **Le bloc est noté avec ou sans adresse exacte** — c'est le PÉRIMÈTRE de
+ * comparaison qui change, pas la disponibilité de l'analyse. Avec l'adresse :
+ * rayon 500 m autour du bien. Sans : commune entière (arrondissement à Paris /
+ * Lyon / Marseille), via un autre endpoint DVF (voir `DvfPerimetre`).
+ * Ne pas revenir au blocage précédent (invite au lieu d'une note) : l'adresse
+ * exacte est absente de la grande majorité des annonces au moment de l'ajout,
+ * et le bloc le plus lourd de la note globale (poids 0,3) restait donc vide
+ * pour la plupart des biens — `BLOC_POIDS_SANS_PRIX` redistribuait alors le
+ * poids sur les autres blocs, et l'écran perdait sa métrique la plus décisive.
+ * La moindre finesse de la comparaison est portée par `FIABILITE_QUARTIER`
+ * (note rapprochée de la neutralité), pas par l'absence de note.
  *
  * Cas de l'immeuble : la source DVF ne contient que des ventes d'appartements
  * au détail (codtypbien 121). Un immeuble se vend EN BLOC, avec une décote
@@ -30,6 +38,19 @@ const SRC_DVF: Source = {
 
 const DECOTE_BLOC_ATTENDUE = 0.12;
 const NOTE_MAX_IMMEUBLE = 8;
+
+/**
+ * Poids gardé par la note quand la comparaison est au QUARTIER et non au rayon
+ * de 500 m ; le complément est ramené vers la neutralité (5).
+ *
+ * Une médiane de quartier ne dit rien de la rue : à l'intérieur d'un même
+ * quartier, l'écart de prix entre deux adresses atteint couramment ±20 %. La
+ * comparaison reste informative, mais elle ne justifie pas un 10 ni un 0 — le
+ * même traitement que celui déjà appliqué aux petits échantillons
+ * (`nbVentesRecent < 15`), et pour la même raison : une incertitude réelle se
+ * traduit par une note prudente, jamais par une note absente.
+ */
+const FIABILITE_QUARTIER = 0.65;
 
 export function buildBlocPrix(
   apt: Apartment,
@@ -58,15 +79,27 @@ export function buildBlocPrix(
   });
   if (prixM2Achat == null) donneesManquantes.push("prix ou surface du bien");
 
+  // Invite NON bloquante : le bloc est noté dans les deux cas, l'adresse ne
+  // fait que resserrer le périmètre de comparaison. Le texte doit donc
+  // proposer un gain de précision, jamais laisser croire que l'analyse est en
+  // attente de cette saisie.
   let invite: BlocAnalyse["invite"];
-
   if (!adresseExacte) {
     invite = {
-      text: "Renseigne l'adresse exacte du bien pour comparer son prix aux transactions réelles du quartier et obtenir une note sur ce bloc.",
+      text: "Cette comparaison porte sur l'ensemble de la commune (ou de l'arrondissement). Renseigne l'adresse exacte pour la resserrer sur les ventes à moins de 500 m du bien.",
       href: `/appartements/${apt.id}?tab=donnees&edit=1`,
       linkLabel: "Compléter l'adresse",
     };
-  } else if (dvf?.medianeRecente != null) {
+  }
+
+  // Périmètre RÉELLEMENT interrogé, lu sur la donnée plutôt que redéduit de
+  // `precision` : c'est `run.ts` qui arbitre (il retombe sur la commune si le
+  // code INSEE manque), et un libellé recalculé ici pourrait annoncer un
+  // périmètre que la requête n'a pas utilisé.
+  const perimetre = dvf?.perimetreLabel ?? "arrondissement/commune";
+  const rayonSerre = dvf?.rayonSerre ?? adresseExacte;
+
+  if (dvf?.medianeRecente != null) {
     sources.push(SRC_DVF);
 
     if (immeuble) {
@@ -85,7 +118,7 @@ export function buildBlocPrix(
       value: dvf.medianeRecente,
       unit: "€/m²",
       detail: `${dvf.nbVentesRecent} ventes · ${dvf.baseComparaison} · ${dvf.recentMin}–${dvf.recentMax}`,
-      perimetre: "rayon 500 m",
+      perimetre,
       source: SRC_DVF.label,
       gravite: "info",
     });
@@ -100,7 +133,7 @@ export function buildBlocPrix(
         value: `${ecartPct > 0 ? "+" : ""}${ecartPct}`,
         unit: "%",
         detail: immeuble ? "vs médiane appartements · décote de bloc attendue" : "vs médiane comparable",
-        perimetre: "rayon 500 m",
+        perimetre,
         source: SRC_DVF.label,
         gravite: ecartNote <= -0.05 ? "positif" : ecartNote <= 0.05 ? "info" : ecartNote <= 0.15 ? "attention" : "alerte",
       });
@@ -117,6 +150,13 @@ export function buildBlocPrix(
       if (dvf.nbVentesRecent < 15) {
         const fiab = dvf.nbVentesRecent / 15;
         rawNote = rawNote * fiab + 5 * (1 - fiab);
+      }
+      // Fiabilité du PÉRIMÈTRE : une médiane communale situe le secteur, pas
+      // la rue. Second facteur d'incertitude, indépendant de la taille de
+      // l'échantillon (une commune bien fournie en ventes reste une commune) —
+      // d'où deux atténuations qui se composent au lieu de s'exclure.
+      if (!rayonSerre) {
+        rawNote = rawNote * FIABILITE_QUARTIER + 5 * (1 - FIABILITE_QUARTIER);
       }
       note = clampNote(rawNote);
       if (immeuble) note = Math.min(note, NOTE_MAX_IMMEUBLE);

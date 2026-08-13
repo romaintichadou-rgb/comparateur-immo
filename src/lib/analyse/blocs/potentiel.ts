@@ -63,7 +63,10 @@ export function buildBlocPotentiel(
       value: `${e > 0 ? "+" : ""}${e}`,
       unit: "%",
       detail: `${dvf.ancienMin}–${dvf.ancienMax} → aujourd'hui`,
-      perimetre: adresseExacte ? "rayon 500 m" : "arrondissement",
+      // Périmètre lu sur la donnée DVF plutôt que redéduit de `precision` :
+      // même fait, même libellé que dans le bloc Prix, qui est affiché sur le
+      // même écran.
+      perimetre: dvf.perimetreLabel,
       source: SRC_DVF.label,
       gravite: e >= 15 ? "positif" : e >= 0 ? "info" : "attention",
     });

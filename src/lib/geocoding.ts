@@ -45,21 +45,49 @@ interface BanFeature {
   };
 }
 
-async function banSearch(query: string): Promise<BanResult | null> {
+/**
+ * @param codePostal restreint la recherche à ce code postal quand il est connu.
+ *
+ * ⚠️ **Sans ce filtre, la BAN apparie le quartier à une rue homonyme d'un autre
+ * arrondissement.** Cas réel : « Saint-Lambert, 13007 Marseille » (quartier du
+ * 7e) ressortait en « Boulevard Lambert, 13004 Marseille » — code INSEE 13204
+ * au lieu de 13207. La recherche en texte libre pondère la ressemblance du
+ * libellé et ne traite pas le code postal comme une contrainte, alors qu'il en
+ * est une.
+ *
+ * La portée du bug dépasse le pin de la carte : `code_insee` est la clé de
+ * jointure de la délinquance, du revenu médian, du profil de commune, de la
+ * référence de loyer ANIL et — depuis le passage au périmètre communal — de la
+ * comparaison de prix DVF. Un mauvais code fait analyser le bien contre un
+ * autre arrondissement, en silence et avec l'aplomb d'un chiffre exact.
+ *
+ * Repli sans filtre si la requête contrainte ne rend rien : un `code_postal`
+ * erroné ou obsolète doit dégrader vers l'ancien comportement, pas supprimer
+ * toute localisation.
+ */
+async function banSearch(query: string, codePostal?: string): Promise<BanResult | null> {
   if (!query.trim()) return null;
 
-  const url = `${BAN_URL}?limit=1&q=${encodeURIComponent(query)}`;
-  // Caché comme les autres sources : une même adresse re-géocodée à chaque
-  // relance d'analyse donne rigoureusement le même résultat. Le cache est
-  // porté par l'URL, donc par l'adresse — corriger l'adresse du bien
-  // re-géocode bien, ce qu'une colonne `ban_id` stockée n'aurait pas garanti.
-  const json = await getJson<{ features?: BanFeature[] }>(url, {
-    timeoutMs: TIMEOUT_MS,
-    headers: { "User-Agent": "comparateur-locatif-perso/1.0" },
-  });
-  const f = json?.features?.[0];
-  if (!f) return null;
+  const cp = (codePostal ?? "").trim();
+  const base = `${BAN_URL}?limit=1&q=${encodeURIComponent(query)}`;
+  const urls = cp ? [`${base}&postcode=${encodeURIComponent(cp)}`, base] : [base];
 
+  for (const url of urls) {
+    // Caché comme les autres sources : une même adresse re-géocodée à chaque
+    // relance d'analyse donne rigoureusement le même résultat. Le cache est
+    // porté par l'URL, donc par l'adresse — corriger l'adresse du bien
+    // re-géocode bien, ce qu'une colonne `ban_id` stockée n'aurait pas garanti.
+    const json = await getJson<{ features?: BanFeature[] }>(url, {
+      timeoutMs: TIMEOUT_MS,
+      headers: { "User-Agent": "comparateur-locatif-perso/1.0" },
+    });
+    const hit = json?.features?.[0];
+    if (hit) return versResultat(hit, query);
+  }
+  return null;
+}
+
+function versResultat(f: BanFeature, query: string): BanResult {
   const [lon, lat] = f.geometry.coordinates;
   return {
     latitude: lat,
@@ -86,11 +114,11 @@ export async function geocodeApartmentLocation(input: {
   code_postal: string;
 }): Promise<BanResult | null> {
   if (aAdressePrecise(input)) {
-    const hit = await banSearch(formatAdressePostale(input));
+    const hit = await banSearch(formatAdressePostale(input), input.code_postal);
     if (hit) return hit;
   }
 
-  const hit = await banSearch(formatSecteur(input));
+  const hit = await banSearch(formatSecteur(input), input.code_postal);
   if (hit) {
     // On ne présente jamais un repli quartier/ville comme une adresse exacte.
     return { ...hit, precision_localisation: "arrondissement" };

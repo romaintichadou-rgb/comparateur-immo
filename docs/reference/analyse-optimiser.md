@@ -370,6 +370,112 @@ visible**. Voir `COL_CODGEO` dans `sources/delinquance.ts` — et vérifier les
 colonnes réelles via l'endpoint `/profile/` de la ressource avant de conclure
 à une panne réseau.
 
+## Bloc Prix : deux périmètres DVF, jamais d'absence de note
+
+L'adresse exacte est absente de la grande majorité des annonces au moment de
+l'ajout. Le bloc Prix ne doit donc PAS conditionner sa note à cette saisie :
+c'est le **périmètre de comparaison** qui s'adapte, pas la disponibilité du
+bloc. Il pèse 0,3 dans la note globale — le laisser vide déclenchait
+`BLOC_POIDS_SANS_PRIX` et privait l'écran de sa métrique la plus décisive pour
+presque tous les biens.
+
+| `precision_localisation` | Endpoint DVF | Périmètre | Libellé affiché |
+|---|---|---|---|
+| `"exacte"` | `geomutations/` (`in_bbox`) | rayon 500 m | `rayon 500 m` |
+| sinon | `mutations/` (`code_insee`) | commune, arrondissement à PLM | `arrondissement/commune` |
+
+Le choix se fait dans `run.ts` (`DvfPerimetre`), **d'après `precision`** — ce
+que valent les COORDONNÉES — et non d'après `aAdressePrecise()`, qui ne dit que
+ce que l'utilisateur a saisi. Les deux divergent quand la BAN ne résout
+l'adresse qu'au niveau de la rue. `buildBlocPrix` lit ensuite
+`dvf.perimetreLabel` / `dvf.rayonSerre` plutôt que de redéduire le périmètre :
+le périmètre interrogé et le périmètre annoncé ne peuvent pas diverger.
+
+⚠️ **Élargir le rayon n'est PAS une alternative** : `geomutations/` plafonne
+l'emprise à **0,02° × 0,02°** et répond 400 au-delà, ce qui borne le rayon
+utilisable à ~730 m à la latitude de Paris — à peine plus que les 500 m
+actuels. D'où le changement d'endpoint plutôt qu'un simple rayon plus grand.
+
+**Fiabilité, pas indisponibilité** : une médiane communale situe le secteur,
+pas la rue (±20 % d'écart courant entre deux adresses d'un même quartier). La
+note garde `FIABILITE_QUARTIER = 0.65` de son poids, le reste étant ramené vers
+la neutralité (5) — même idiome que l'atténuation déjà appliquée aux petits
+échantillons (`nbVentesRecent < 15`), et les deux se composent. L'invite reste
+affichée mais devient une proposition d'affiner, jamais une condition.
+
+Mesuré contre l'API (Paris 11e, bien de 45 m²) : rayon 500 m → 9 824 €/m² sur
+160 comparables ; commune entière → 9 951 €/m² sur 513 comparables, soit 1 %
+d'écart. Le périmètre communal est un proxy fiable, pas un pis-aller.
+
+⚠️ **Requête par ANNÉE, jamais par fenêtre pluriannuelle.** L'API rend les
+mutations de la plus ancienne à la plus récente et n'honore pas le tri
+décroissant : une fenêtre de 3 ans qui sature la pagination ne renverrait que
+ses premières années, donc une médiane calculée sur les prix les plus vieux —
+le bien paraîtrait mécaniquement surcoté. Le découpage par année borne la
+troncature à l'intérieur d'une année.
+
+Budget de pagination volontairement plus serré côté commune
+(`MAX_PAGES_COMMUNE = 2` contre `MAX_PAGES_RAYON = 4`) : `mutations/` ignore le
+paramètre `fields` et renvoie l'objet complet (~245 Ko/page). Mille ventes par
+an suffisent à une médiane stable — mesuré sur 2023 : Paris 11e 2 329 ventes,
+Le Mans 1 116, Marseille 1er 679.
+
+## `evolutionPct` : même cohorte de surface des deux côtés
+
+Le prix au m² dépend fortement de la surface (un studio se vend structurellement
+plus cher au m² qu'un T4). La fenêtre récente est filtrée sur la surface du bien
+(±20 %, repli ±40 %) ; la fenêtre ancienne l'était **pas du tout**. L'écart
+mesuré mélangeait donc la hausse réelle des prix et un simple **effet de
+composition** — on ne comparait pas les mêmes logements.
+
+`dansTolerance` applique désormais aux deux fenêtres la tolérance **choisie par
+la fenêtre récente**. Deux raisons de ne jamais inverser ce sens :
+
+1. La médiane récente porte la comparaison de prix (bloc de poids 0,3). La
+   laisser s'élargir parce que 2014-2016 manque de ventes comparables
+   dégraderait la métrique principale de l'écran au profit d'une sous-note.
+2. Le levier « marché en recul » (`recommandations.ts`) affiche la paire de
+   médianes **et** le pourcentage dans une seule phrase : les trois nombres
+   doivent se réconcilier arithmétiquement. Cela interdit de calculer
+   `evolutionPct` sur une cohorte différente de celle des médianes exposées.
+
+Si la fenêtre ancienne n'a pas 3 ventes à cette tolérance, `medianeAncienne`
+devient nulle et l'évolution n'est pas affichée — ne pas mesurer vaut mieux que
+mesurer deux populations différentes.
+
+⚠️ **Ampleur réelle, mesurée avant de corriger** : −2 pts à Marseille 7e, −1 à
+Paris 11e, +7 au Mans. Le biais n'a **pas de direction systématique** (il dépend
+de la position de la cohorte du bien dans le mix local des surfaces) et ne
+franchissait aucun seuil de sous-note du bloc Potentiel (0 / 15 / 30 %) dans les
+cas mesurés. Correction de justesse méthodologique sur un chiffre affiché, pas
+un correctif de verdict — ne pas la présenter comme telle.
+
+⚠️ Les hausses à ~50 % sur dix ans ne sont **pas** un artefact : elles sont
+réelles (Marseille 7e +59 %, Le Mans +45 %, Paris 11e +24 % en like-for-like).
+
+## Géocodage : le code postal est une CONTRAINTE, pas un mot-clé
+
+`banSearch` (`src/lib/geocoding.ts`) passe le `code_postal` en **filtre**
+`postcode=` de l'API BAN, avec repli sur la requête non filtrée si elle ne rend
+rien (un code postal erroné doit dégrader, pas supprimer toute localisation).
+
+⚠️ **Sans ce filtre, la BAN apparie le quartier à une rue homonyme d'un autre
+arrondissement.** Cas réel : « Saint-Lambert, 13007 Marseille » (quartier du
+7e) ressortait en « Boulevard Lambert, 13004 Marseille », code INSEE 13204 au
+lieu de 13207. La recherche en texte libre pondère la ressemblance du libellé
+et ne traite pas le code postal comme une contrainte.
+
+La portée dépasse le pin de la carte : `code_insee` est la clé de jointure de
+la délinquance, du revenu médian, du profil de commune, de la référence de
+loyer ANIL et — depuis le passage au périmètre communal — de la comparaison de
+prix DVF. Le bien ci-dessus était comparé au marché du 4e (médiane
+2 778 €/m²) au lieu du 7e (4 652 €/m²) : « +53 % au-dessus du marché » affiché
+avec l'aplomb d'un chiffre exact, là où le bien est en réalité 9 % EN DESSOUS.
+
+Toute nouvelle source indexée sur `code_insee` hérite de cette correction — et
+de sa fragilité : un quartier mal orthographié reste un mauvais appariement,
+le filtre ne fait que le contenir dans le bon arrondissement.
+
 ## Narration : un seul appel, une seule tentative
 
 `narrateAll` impose `SCHEMA_NARRATION` (`responseSchema`) — le format JSON est

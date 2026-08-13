@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, RotateCcw, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
+import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
 import {
   DPE_GES_VALEURS,
   ETATS_BIEN,
@@ -40,10 +40,11 @@ import {
   TextField,
 } from "@/components/form/Fields";
 
-const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"));
-const OptimiserView = dynamic(() => import("@/components/OptimiserView"));
-const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"));
-const FinancementSection = dynamic(() => import("@/components/FinancementSection"));
+const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"), { ssr: false });
+const OptimiserView = dynamic(() => import("@/components/OptimiserView"), { ssr: false });
+const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"), { ssr: false });
+const FinancementSection = dynamic(() => import("@/components/FinancementSection"), { ssr: false });
+const PlaygroundView = dynamic(() => import("@/components/PlaygroundView"), { ssr: false });
 import { DECISION_CHIP, cashflowSeuilsFromSettings, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
 import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
@@ -164,7 +165,7 @@ function EditableValue({
   );
 }
 
-type Tab = "ia" | "optimiser" | "donnees" | "financiere" | "simulation";
+type Tab = "ia" | "optimiser" | "donnees" | "financiere" | "simulation" | "playground";
 
 const TABS: { key: Tab; label: string; shortLabel: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { key: "ia", label: "Analyse", shortLabel: "Analyse", icon: Sparkles },
@@ -172,6 +173,7 @@ const TABS: { key: Tab; label: string; shortLabel: string; icon: React.Component
   { key: "donnees", label: "Description du bien", shortLabel: "Bien", icon: Home },
   { key: "financiere", label: "Détails de l'opération", shortLabel: "Opération", icon: HandCoins },
   { key: "simulation", label: "Simulation financière", shortLabel: "Simulation", icon: Calculator },
+  { key: "playground", label: "Playground", shortLabel: "Play.", icon: SlidersHorizontal },
 ];
 
 // Enregistrer une modification de la description ou de la section Achat déclenche
@@ -900,6 +902,7 @@ export default function ApartmentDetail({
             className="relative isolate hidden h-28 w-72 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400 sm:block"
           >
             <ApartmentLocationMap
+              key={`map-${apt.id}`}
               latitude={apt.latitude!}
               longitude={apt.longitude!}
               approximatif={localisationApproximative}
@@ -1268,6 +1271,7 @@ export default function ApartmentDetail({
             subtitle="Crédit, fiscalité LMNP au réel et cash-flow année par année."
           />
           <SimulationFinanciere
+            key={`sim-${apt.id}`}
             apartment={live}
             settings={settings}
             onSaved={setApt}
@@ -1543,6 +1547,10 @@ export default function ApartmentDetail({
         </aside>
       </div>
       </>
+      )}
+
+      {activeTab === "playground" && (
+        <PlaygroundView apartment={live} settings={settings} />
       )}
     </div>
     {deleteDialog}
