@@ -47,6 +47,7 @@ interface ThresholdChartProps {
   onHover: (index: number | null) => void;
   ghostPoint?: { x: number; y: number | null };
   anilMarkers?: { min: number; max: number };
+  annonceX?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +138,7 @@ function computeDataPoints(
   settings: AppSettings,
   facteur: Facteur,
   xValues: number[],
+  fixedOverride?: { prix?: number; loyer?: number },
 ): DataPoint[] {
   const inputs = resolveInputs(apt.simulation_inputs, settings);
   return xValues.map((x) => {
@@ -144,8 +146,13 @@ function computeDataPoints(
     if (facteur === "prix") {
       modified.prix = x;
       modified.frais_notaire_estimes = estimateFraisNotaire(x, apt.etat_bien ?? "ancien") ?? 0;
+      if (fixedOverride?.loyer != null) modified.loyer_retenu = fixedOverride.loyer;
     } else {
       modified.loyer_retenu = x;
+      if (fixedOverride?.prix != null) {
+        modified.prix = fixedOverride.prix;
+        modified.frais_notaire_estimes = estimateFraisNotaire(fixedOverride.prix, apt.etat_bien ?? "ancien") ?? 0;
+      }
     }
     const derived = computeDerived(modified);
     const simResult = simulate(derived, inputs);
@@ -222,7 +229,7 @@ function interpolateY(data: DataPoint[], getY: (d: DataPoint) => number | null, 
 
 const CHART_W = 380;
 const CHART_H = 200;
-const PAD = { top: 10, right: 12, bottom: 32, left: 44 };
+const PAD = { top: 18, right: 12, bottom: 32, left: 44 };
 const PLOT_W = CHART_W - PAD.left - PAD.right;
 const PLOT_H = CHART_H - PAD.top - PAD.bottom;
 
@@ -239,6 +246,7 @@ function ThresholdChart({
   onHover,
   ghostPoint,
   anilMarkers,
+  annonceX,
 }: ThresholdChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const reducedMotion = useReducedMotion();
@@ -257,6 +265,25 @@ function ThresholdChart({
   const seuilVertY = scaleY(thresholds.vert);
   const seuilRougeY = scaleY(thresholds.rouge);
 
+  const findCrossingX = (threshold: number): number | null => {
+    for (let i = 0; i < data.length - 1; i++) {
+      const y0 = getY(data[i]);
+      const y1 = getY(data[i + 1]);
+      if (y0 == null || y1 == null) continue;
+      if ((y0 <= threshold && y1 >= threshold) || (y0 >= threshold && y1 <= threshold)) {
+        const t = (threshold - y0) / (y1 - y0);
+        return data[i].x + t * (data[i + 1].x - data[i].x);
+      }
+    }
+    return null;
+  };
+  const crossVertX = findCrossingX(thresholds.vert);
+  const crossRougeX = findCrossingX(thresholds.rouge);
+
+  const firstY = getY(data[0]);
+  const lastY = getY(data[data.length - 1]);
+  const isIncreasing = firstY != null && lastY != null && lastY > firstY;
+
   const validPoints = data
     .map((d, i) => ({ x: d.x, y: getY(d), i }))
     .filter((p): p is { x: number; y: number; i: number } => p.y != null);
@@ -272,8 +299,22 @@ function ThresholdChart({
         ` L${scaleX(validPoints[0].x).toFixed(1)},${(PAD.top + PLOT_H).toFixed(1)} Z`
       : "";
 
-  const currentIdx = data.findIndex((d) => d.x === currentX);
-  const currentY = currentIdx >= 0 ? getY(data[currentIdx]) : null;
+  const currentY = (() => {
+    const exact = data.find((d) => d.x === currentX);
+    if (exact) return getY(exact);
+    if (currentX <= data[0].x) return getY(data[0]);
+    if (currentX >= data[data.length - 1].x) return getY(data[data.length - 1]);
+    for (let i = 1; i < data.length; i++) {
+      if (data[i].x >= currentX) {
+        const prev = getY(data[i - 1]);
+        const curr = getY(data[i]);
+        if (prev == null || curr == null) return curr ?? prev;
+        const t = (currentX - data[i - 1].x) / (data[i].x - data[i - 1].x);
+        return prev + t * (curr - prev);
+      }
+    }
+    return null;
+  })();
 
   const hoverY = hoveredIndex != null && hoveredIndex < data.length ? getY(data[hoveredIndex]) : null;
   const hoverX = hoveredIndex != null && hoveredIndex < data.length ? data[hoveredIndex].x : null;
@@ -345,28 +386,42 @@ function ThresholdChart({
         }}
       >
         <defs>
-          {(() => {
-            const vertPct = Math.max(5, Math.min(95, ((seuilVertY - PAD.top) / PLOT_H) * 100));
-            const rougePct = Math.max(5, Math.min(95, ((seuilRougeY - PAD.top) / PLOT_H) * 100));
-            const blend = Math.min(8, (rougePct - vertPct) * 0.3);
-            return (
-              <linearGradient id={`zone-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#6ee7b7" stopOpacity=".4" />
-                <stop offset={`${Math.max(0, vertPct - blend)}%`} stopColor="#6ee7b7" stopOpacity=".25" />
-                <stop offset={`${Math.min(100, vertPct + blend)}%`} stopColor="#fcd34d" stopOpacity=".25" />
-                <stop offset={`${Math.max(0, rougePct - blend)}%`} stopColor="#fcd34d" stopOpacity=".25" />
-                <stop offset={`${Math.min(100, rougePct + blend)}%`} stopColor="#fca5a5" stopOpacity=".25" />
-                <stop offset="100%" stopColor="#fca5a5" stopOpacity=".4" />
-              </linearGradient>
-            );
-          })()}
           <linearGradient id={`fill-${uid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3d3580" stopOpacity=".12" />
-            <stop offset="100%" stopColor="#3d3580" stopOpacity=".02" />
+            <stop offset="0%" stopColor="#3d3580" stopOpacity=".18" />
+            <stop offset="100%" stopColor="#3d3580" stopOpacity=".03" />
           </linearGradient>
         </defs>
 
-        <rect x={PAD.left} y={PAD.top} width={PLOT_W} height={PLOT_H} fill={`url(#zone-${uid})`} />
+        {(() => {
+          const C = { green: "#bbf7d0", amber: "#fef08a", red: "#fecaca" };
+          const zoneOf = (y: number) => y >= thresholds.vert ? C.green : y >= thresholds.rouge ? C.amber : C.red;
+
+          const edges = [PAD.left];
+          const crossVert = crossVertX != null ? scaleX(crossVertX) : null;
+          const crossRouge = crossRougeX != null ? scaleX(crossRougeX) : null;
+          if (crossVert != null && crossVert > PAD.left && crossVert < PAD.left + PLOT_W) edges.push(crossVert);
+          if (crossRouge != null && crossRouge > PAD.left && crossRouge < PAD.left + PLOT_W) edges.push(crossRouge);
+          edges.push(PAD.left + PLOT_W);
+          edges.sort((a, b) => a - b);
+
+          return edges.slice(0, -1).map((left, i) => {
+            const right = edges[i + 1];
+            const midX = xMin + (((left + right) / 2 - PAD.left) / PLOT_W) * (xMax - xMin);
+            let midY = 0;
+            for (let j = 0; j < validPoints.length - 1; j++) {
+              if (validPoints[j].x <= midX && validPoints[j + 1].x >= midX) {
+                const t = (midX - validPoints[j].x) / (validPoints[j + 1].x - validPoints[j].x);
+                midY = validPoints[j].y + t * (validPoints[j + 1].y - validPoints[j].y);
+                break;
+              }
+            }
+            if (midY === 0 && validPoints.length > 0) midY = validPoints[0].y;
+            return (
+              <rect key={i} x={left} y={PAD.top} width={right - left} height={PLOT_H}
+                fill={zoneOf(midY)} opacity=".22" />
+            );
+          });
+        })()}
 
         {yTicks.map((v) => (
           <line key={`grid-${v}`} x1={PAD.left} y1={scaleY(v)} x2={PAD.left + PLOT_W} y2={scaleY(v)} stroke="#ddd8ea" strokeWidth=".5" opacity=".3" />
@@ -383,6 +438,13 @@ function ThresholdChart({
 
         {fillD && <path d={fillD} fill={`url(#fill-${uid})`} />}
         {pathD && <path d={pathD} fill="none" stroke="#3d3580" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+
+        {annonceX != null && annonceX !== currentX && (
+          <>
+            <line x1={scaleX(annonceX)} y1={PAD.top} x2={scaleX(annonceX)} y2={PAD.top + PLOT_H} stroke="#8b8393" strokeWidth=".8" strokeDasharray="2 3" opacity=".4" />
+            <text x={scaleX(annonceX)} y={PAD.top - 5} textAnchor="middle" fontSize="7.5" fill="#8b8393" fontFamily="sans-serif">Annonce</text>
+          </>
+        )}
 
         {ghostPoint && ghostPoint.y != null && (
           <>
@@ -404,7 +466,7 @@ function ThresholdChart({
           </>
         )}
 
-        {hoveredIndex != null && hoverX != null && hoverY != null && hoveredIndex !== currentIdx && (
+        {hoveredIndex != null && hoverX != null && hoverY != null && (
           <>
             <line x1={scaleX(hoverX)} y1={PAD.top} x2={scaleX(hoverX)} y2={PAD.top + PLOT_H} stroke="#c4b9ec" strokeWidth="1" strokeDasharray="3 3" opacity=".6" />
             <circle cx={scaleX(hoverX)} cy={scaleY(hoverY)} r="3.5" fill="#b3a9e8" stroke="white" strokeWidth="1.5" />
@@ -424,9 +486,10 @@ function ThresholdChart({
           </>
         )}
 
-        {currentIdx >= 0 && currentY != null && (
+        {currentY != null && (
           <>
-            <line x1={scaleX(currentX)} y1={PAD.top} x2={scaleX(currentX)} y2={PAD.top + PLOT_H} stroke="#c4b9ec" strokeWidth="1" strokeDasharray="3 3" opacity=".3" />
+            <line x1={scaleX(currentX)} y1={PAD.top} x2={scaleX(currentX)} y2={PAD.top + PLOT_H} stroke="#8478c9" strokeWidth="1" strokeDasharray="3 3" opacity=".5" />
+            <line x1={PAD.left} y1={scaleY(currentY)} x2={scaleX(currentX)} y2={scaleY(currentY)} stroke="#8478c9" strokeWidth="1" strokeDasharray="3 3" opacity=".5" />
             <circle cx={scaleX(currentX)} cy={scaleY(currentY)} r="5" fill="#3d3580" />
             {!reducedMotion && (
               <circle cx={scaleX(currentX)} cy={scaleY(currentY)} r="9" fill="none" stroke="#3d3580" strokeWidth="1.2" opacity=".3">
@@ -631,7 +694,7 @@ function ComboSimulator({
             <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
               <span>{formatEurosShort(prixMin)}</span>
               <span
-                className="absolute -translate-x-1/2 text-[9px] text-ink-400"
+                className="absolute -translate-x-1/2 text-[10px] text-ink-400"
                 style={{ left: `${origPrixPct}%` }}
               >
                 Annonce
@@ -685,7 +748,7 @@ function ComboSimulator({
             <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
               <span>{formatEuros(loyerMin)}</span>
               <span
-                className="absolute -translate-x-1/2 text-[9px] text-ink-400"
+                className="absolute -translate-x-1/2 text-[10px] text-ink-400"
                 style={{ left: `${origLoyerPct}%` }}
               >
                 Annonce
@@ -800,27 +863,30 @@ export default function PlaygroundView({
     return [];
   }, [facteur, apt.prix, apt.loyer_retenu, loyerRange, hasPrix, hasLoyer]);
 
+  const fixedOverride = useMemo(() => {
+    if (facteur === "prix") return { loyer: comboLoyer };
+    return { prix: comboPrix };
+  }, [facteur, comboPrix, comboLoyer]);
+
   const dataPoints = useMemo(
-    () => xValues.length > 0 ? computeDataPoints(apt, settings, facteur, xValues) : [],
-    [apt, settings, facteur, xValues],
+    () => xValues.length > 0 ? computeDataPoints(apt, settings, facteur, xValues, fixedOverride) : [],
+    [apt, settings, facteur, xValues, fixedOverride],
   );
 
-  const currentX = facteur === "prix" ? (apt.prix ?? 0) : (apt.loyer_retenu ?? 0);
+  const currentX = facteur === "prix" ? comboPrix : comboLoyer;
 
-  const comboHasEcart = comboPrix !== (apt.prix ?? 0) || comboLoyer !== (apt.loyer_retenu ?? 0);
+  const origX = facteur === "prix" ? (apt.prix ?? 0) : (apt.loyer_retenu ?? 0);
+  const xAxisMoved = currentX !== origX;
+
   const ghostRendement = useMemo(() => {
-    if (!comboHasEcart || dataPoints.length === 0) return undefined;
-    const comboX = facteur === "prix" ? comboPrix : comboLoyer;
-    const y = interpolateY(dataPoints, (d) => d.yRendement, comboX);
-    return { x: comboX, y };
-  }, [facteur, comboPrix, comboLoyer, comboHasEcart, dataPoints]);
+    if (!xAxisMoved || dataPoints.length === 0) return undefined;
+    return { x: origX, y: interpolateY(dataPoints, (d) => d.yRendement, origX) };
+  }, [xAxisMoved, origX, dataPoints]);
 
   const ghostCashflow = useMemo(() => {
-    if (!comboHasEcart || dataPoints.length === 0) return undefined;
-    const comboX = facteur === "prix" ? comboPrix : comboLoyer;
-    const y = interpolateY(dataPoints, (d) => d.yCashflow, comboX);
-    return { x: comboX, y };
-  }, [facteur, comboPrix, comboLoyer, comboHasEcart, dataPoints]);
+    if (!xAxisMoved || dataPoints.length === 0) return undefined;
+    return { x: origX, y: interpolateY(dataPoints, (d) => d.yCashflow, origX) };
+  }, [xAxisMoved, origX, dataPoints]);
 
   const anilMarkers = useMemo(() => {
     if (facteur !== "loyer" || !loyerRange) return undefined;
@@ -942,6 +1008,7 @@ export default function PlaygroundView({
 
             ghostPoint={ghostRendement}
             anilMarkers={anilMarkers}
+            annonceX={origX}
           />
           <ThresholdChart
             data={dataPoints}
@@ -957,6 +1024,7 @@ export default function PlaygroundView({
 
             ghostPoint={ghostCashflow}
             anilMarkers={anilMarkers}
+            annonceX={origX}
           />
         </div>
       )}
