@@ -96,8 +96,15 @@ export async function reestimerCharges(
       prix: apartment.prix,
       code_insee: apartment.code_insee,
     },
-    field
+    field,
+    apartment.charges_calcul,
   );
+
+  if (result.chargesCalcul?.reutilise) {
+    return updateApartment(apartment.id, {
+      charges_calcul: result.chargesCalcul,
+    });
+  }
 
   const wantCopro = field !== "taxe_fonciere";
   const wantTf = field !== "charges_copro_annuelles";
@@ -110,6 +117,9 @@ export async function reestimerCharges(
   if (wantTf) {
     patch.taxe_fonciere = result.taxeFonciere;
     patch.taxe_fonciere_justification = result.taxeJustification;
+  }
+  if (result.chargesCalcul) {
+    patch.charges_calcul = result.chargesCalcul;
   }
 
   const touches: ChampEstimable[] = [];

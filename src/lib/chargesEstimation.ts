@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { generateGeminiText, getGeminiApiKey } from "./gemini";
 import { isImmeuble } from "./types";
 import { formatSecteur } from "./adresse";
@@ -25,6 +26,40 @@ export interface ChargesEstimationResult {
   chargesJustification: string;
   taxeFonciere: number | null;
   taxeJustification: string;
+  chargesCalcul?: ChargesCalcul | null;
+}
+
+export interface ChargesCalcul {
+  empreinte: string;
+  reutilise: boolean;
+  echecIa: boolean;
+}
+
+const CHARGES_PROMPT_VERSION = 1;
+
+function calculerEmpreinteCharges(
+  input: ChargesEstimationInput,
+  wantCopro: boolean,
+  wantTf: boolean,
+): string {
+  const cle = JSON.stringify([
+    CHARGES_PROMPT_VERSION,
+    input.ville,
+    input.quartier,
+    input.code_postal,
+    input.type_bien,
+    input.surface_m2,
+    input.nb_lots,
+    input.annee_construction,
+    input.etage,
+    input.ascenseur,
+    input.etat_bien,
+    input.prix,
+    input.code_insee,
+    wantCopro,
+    wantTf,
+  ]);
+  return createHash("sha256").update(cle).digest("hex");
 }
 
 function requireApiKey(): string {
@@ -79,14 +114,6 @@ function buildTfJustificationDeterministe(input: ChargesEstimationInput): string
   const tauxFr = taux.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
   const ville = input.ville?.trim();
   const villePrefix = ville ? `${ville}, ` : "";
-  // Le texte DOIT commencer par TF_JUSTIF_COMMUNE_PREFIX : applyLiveEstimates et
-  // ApartmentDetail s'en servent pour reconnaître (et figer) une TF communale —
-  // ne pas désynchroniser cette constante avec l'ouverture ci-dessous.
-  //
-  // Cohérence avec le calcul (estimateTaxeFonciereCommune) : SEUL le taux est
-  // réel (DGFiP) ; la base cadastrale (RC/m²) est estimée à partir des moyennes
-  // DÉPARTEMENTALES, et le calcul n'utilise PAS l'année de construction — ne
-  // rien affirmer sur l'âge du bâtiment, ce serait un ajustement fantôme.
   return (
     `${TF_JUSTIF_COMMUNE_PREFIX} : ${tauxFr} % ` +
     `(${villePrefix}source DGFiP 2025 — communal, intercommunal et taxes annexes). ` +
@@ -95,47 +122,47 @@ function buildTfJustificationDeterministe(input: ChargesEstimationInput): string
   );
 }
 
-const FORMAT_JSON_BOTH = `Réponds UNIQUEMENT avec un objet JSON strict, sans texte avant ni après, de la forme exacte:
-{"charges_copro_eur_an": <nombre entier ou null>, "charges_justification": "<texte>", "taxe_fonciere_eur_an": <nombre entier ou null>, "taxe_justification": "<texte>"}
+const CONSIGNE_RECENCE =
+  "N'utilise QUE des données datant de la DERNIÈRE ANNÉE — écarte toute source plus ancienne.";
 
-Chaque justification : 2-4 phrases COURTES et FACTUELLES.
+const AI_WEIGHT = 0.4;
+
+const SCHEMA_BOTH = {
+  type: "OBJECT",
+  properties: {
+    charges_copro_eur_an: { type: "NUMBER" },
+    charges_justification: { type: "STRING" },
+    taxe_fonciere_eur_an: { type: "NUMBER" },
+    taxe_justification: { type: "STRING" },
+  },
+  required: ["charges_copro_eur_an", "charges_justification", "taxe_fonciere_eur_an", "taxe_justification"],
+};
+
+const SCHEMA_COPRO_ONLY = {
+  type: "OBJECT",
+  properties: {
+    charges_copro_eur_an: { type: "NUMBER" },
+    charges_justification: { type: "STRING" },
+  },
+  required: ["charges_copro_eur_an", "charges_justification"],
+};
+
+const SCHEMA_TF_ONLY = {
+  type: "OBJECT",
+  properties: {
+    taxe_fonciere_eur_an: { type: "NUMBER" },
+    taxe_justification: { type: "STRING" },
+  },
+  required: ["taxe_fonciere_eur_an", "taxe_justification"],
+};
+
+const CONSIGNE_JUSTIFICATION = `Chaque justification : 2-4 phrases COURTES et FACTUELLES.
 - Cite uniquement les facteurs qui MODIFIENT la référence (ascenseur, ancienneté, chauffage collectif, gardien, taux communal élevé/bas…) avec leur impact en %.
 - Ne répète PAS le montant de référence (il est déjà affiché) : n'écris jamais "la référence de X €/an", "X €/an est proche de…", etc.
 - Ne termine PAS par "Résultat : X €/an".
 - NE CITE PAS de prix au m² (€/m², €/m²/an). Tout en €/an.
 - JAMAIS de "moyenne nationale" : utilise toujours l'échelle la plus locale possible (quartier > arrondissement > ville > département).
-- Pas de sources, pas de formules, pas de détails de calcul.
-
-Si aucune donnée exploitable, mets la valeur à null avec une justification courte.`;
-
-const FORMAT_JSON_COPRO_ONLY = `Réponds UNIQUEMENT avec un objet JSON strict, sans texte avant ni après, de la forme exacte:
-{"charges_copro_eur_an": <nombre entier ou null>, "charges_justification": "<texte>"}
-
-Justification : 2-4 phrases COURTES et FACTUELLES.
-- Cite uniquement les facteurs qui MODIFIENT la référence (ascenseur, ancienneté, chauffage collectif, gardien…) avec leur impact en %.
-- Ne répète PAS le montant de référence (il est déjà affiché) : n'écris jamais "la référence de X €/an", "X €/an est proche de…", etc.
-- Ne termine PAS par "Résultat : X €/an".
-- NE CITE PAS de prix au m² (€/m², €/m²/an). Tout en €/an.
-- JAMAIS de "moyenne nationale" : utilise toujours l'échelle la plus locale possible (quartier > arrondissement > ville > département).
-
-Si aucune donnée exploitable, mets la valeur à null avec une justification courte.`;
-
-const FORMAT_JSON_TF_ONLY = `Réponds UNIQUEMENT avec un objet JSON strict, sans texte avant ni après, de la forme exacte:
-{"taxe_fonciere_eur_an": <nombre entier ou null>, "taxe_justification": "<texte>"}
-
-Justification : 2-4 phrases COURTES et FACTUELLES.
-- Cite uniquement les facteurs qui MODIFIENT la référence (taux communal élevé/bas, zone tendue, exonérations…) avec leur impact en %.
-- Ne répète PAS le montant de référence (il est déjà affiché) : n'écris jamais "la référence de X €/an", "X €/an est proche de…", etc.
-- Ne termine PAS par "Résultat : X €/an".
-- NE CITE PAS de prix au m² (€/m², €/m²/an). Tout en €/an.
-- JAMAIS de "moyenne nationale" : utilise toujours l'échelle la plus locale possible (commune > département).
-
-Si aucune donnée exploitable, mets la valeur à null avec une justification courte.`;
-
-const CONSIGNE_RECENCE =
-  "N'utilise QUE des données datant de la DERNIÈRE ANNÉE — écarte toute source plus ancienne.";
-
-const AI_WEIGHT = 0.4;
+- Pas de sources, pas de formules, pas de détails de calcul.`;
 
 
 function etageNum(etage: string | null): number | null {
@@ -175,16 +202,34 @@ export type ChargesField = "charges_copro_annuelles" | "taxe_fonciere";
 export async function estimateCharges(
   input: ChargesEstimationInput,
   field?: ChargesField,
+  previousCalcul?: ChargesCalcul | null,
 ): Promise<ChargesEstimationResult> {
   const hasTauxCommune = input.code_insee != null && getTauxCommune(input.code_insee) != null;
 
-  // TF-only with commune rate: purely deterministic, no Gemini call needed.
   if (field === "taxe_fonciere" && hasTauxCommune) {
     return {
       chargesCoproAnnuelles: null,
       chargesJustification: "",
       taxeFonciere: computeDeterministicTaxe(input),
       taxeJustification: buildTfJustificationDeterministe(input),
+    };
+  }
+
+  const wantCopro = field !== "taxe_fonciere";
+  const wantTf = field !== "charges_copro_annuelles" && !hasTauxCommune;
+
+  const empreinte = calculerEmpreinteCharges(input, wantCopro, wantTf);
+  if (
+    previousCalcul &&
+    previousCalcul.empreinte === empreinte &&
+    !previousCalcul.echecIa
+  ) {
+    return {
+      chargesCoproAnnuelles: null,
+      chargesJustification: "",
+      taxeFonciere: null,
+      taxeJustification: "",
+      chargesCalcul: { empreinte, reutilise: true, echecIa: false },
     };
   }
 
@@ -196,24 +241,21 @@ export async function estimateCharges(
   const anneeTxt = input.annee_construction != null ? `${input.annee_construction}` : "année inconnue";
   const prixTxt = input.prix != null ? `, ${input.prix.toLocaleString("fr-FR")} €` : "";
 
-  const wantCopro = field !== "taxe_fonciere";
-  const wantTf = field !== "charges_copro_annuelles" && !hasTauxCommune;
-
   const ancreDeterministe = buildAncreDeterministe(input, wantTf);
 
   let consigne: string;
-  let format: string;
+  let schema: Record<string, unknown>;
   if (wantCopro && wantTf) {
     consigne = `Estime deux montants ANNUELS :
 1) CHARGES COPRO/EXPLOITATION : affine la référence selon les spécificités locales (chauffage collectif, gardien, prestations du quartier).
-2) TAXE FONCIÈRE : affine selon le taux communal exact si tu le trouves sur le web.`;
-    format = FORMAT_JSON_BOTH;
+2) TAXE FONCIÈRE : affine selon le taux communal.`;
+    schema = SCHEMA_BOTH;
   } else if (wantTf) {
-    consigne = `Estime le montant ANNUEL de la TAXE FONCIÈRE : affine selon le taux communal exact si tu le trouves sur le web.`;
-    format = FORMAT_JSON_TF_ONLY;
+    consigne = `Estime le montant ANNUEL de la TAXE FONCIÈRE : affine selon le taux communal.`;
+    schema = SCHEMA_TF_ONLY;
   } else {
     consigne = `Estime le montant ANNUEL des CHARGES COPRO/EXPLOITATION : affine la référence selon les spécificités locales (chauffage collectif, gardien, prestations du quartier).`;
-    format = FORMAT_JSON_COPRO_ONLY;
+    schema = SCHEMA_COPRO_ONLY;
   }
 
   const prompt = `Bien situé à ${secteur} : ${input.type_bien || "bien"}, ${input.surface_m2 ?? "?"} m², ${anneeTxt}, ${[etageTxt, ascenseurTxt].filter(Boolean).join(" ")}, état ${input.etat_bien || "inconnu"}${prixTxt}.
@@ -225,18 +267,30 @@ ${ancreDeterministe}
 ${consigne}
 
 ${CONSIGNE_RECENCE}
-${format}`;
+${CONSIGNE_JUSTIFICATION}`;
 
-  const text = await generateGeminiText({
-    apiKey: requireApiKey(),
-    model,
-    prompt,
-    googleSearch: true,
-    thinkingBudget: 512,
-    temperature: 0,
-  });
+  let parsed: {
+    charges_copro_eur_an?: number | null;
+    charges_justification?: string;
+    taxe_fonciere_eur_an?: number | null;
+    taxe_justification?: string;
+  } | null = null;
+  let echecIa = false;
 
-  const parsed = extractJson(text);
+  try {
+    const text = await generateGeminiText({
+      apiKey: requireApiKey(),
+      model,
+      prompt,
+      thinkingBudget: 0,
+      temperature: 0,
+      responseSchema: schema,
+    });
+    parsed = JSON.parse(text.trim());
+  } catch (err) {
+    console.error("[charges] Gemini error:", err instanceof Error ? err.message : err);
+    echecIa = true;
+  }
 
   let finalCopro: number | null = null;
   let chargesJustif = "";
@@ -284,21 +338,6 @@ ${format}`;
     chargesJustification: chargesJustif,
     taxeFonciere: finalTaxe,
     taxeJustification: taxeJustif,
+    chargesCalcul: { empreinte, reutilise: false, echecIa },
   };
-}
-
-function extractJson(
-  text: string
-): { charges_copro_eur_an?: number | null; charges_justification?: string; taxe_fonciere_eur_an?: number | null; taxe_justification?: string } | null {
-  try {
-    return JSON.parse(text.trim());
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
-    }
-  }
 }

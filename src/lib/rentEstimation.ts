@@ -365,18 +365,40 @@ const ETAT_COEF_NEUF = ETAT_COEF["Neuf"];
 const TRAVAUX_SATURATION_M2 = 900;
 
 /**
+ * Bonus rénovation lourde : au-delà de RENO_SEUIL_M2, les travaux poussent
+ * le coefficient AU-DELÀ du plafond "Neuf" (1,10). Une rénovation complète
+ * (isolation, DPE A/B, prestations haut de gamme) justifie un loyer
+ * significativement supérieur au marché médian. Progression linéaire entre
+ * le seuil et la saturation, bonus max +18 %.
+ */
+const RENO_SEUIL_M2 = 400;
+const RENO_SATURATION_M2 = 1200;
+const RENO_BONUS_MAX = 0.18;
+
+/**
  * État et travaux FUSIONNÉS en un seul facteur (2.6) — ils décrivent la même
  * chose (l'état du bien une fois loué) : les compter séparément revenait à
  * compter deux fois le même effet. Les travaux font PROGRESSER l'état actuel
  * vers "Neuf", de façon saturante — rénover un bien déjà neuf ne rapporte
  * rien, et aucun montant de travaux ne peut dépasser ce plafond.
+ *
+ * Au-delà de RENO_SEUIL_M2 (400 €/m²), un bonus additionnel pousse le
+ * coefficient au-delà de "Neuf" — une rénovation lourde crée un bien
+ * supérieur au neuf promoteur standard.
  */
 function facteurEtatTravaux(input: RentEstimationInput, surface: number): number {
   const base = ETAT_COEF[input.etat_bien] ?? 1.0;
   if (input.travaux == null || input.travaux <= 0 || surface <= 0) return base;
   const trM2 = input.travaux / surface;
   const progression = Math.min(1, trM2 / TRAVAUX_SATURATION_M2);
-  return base + progression * (ETAT_COEF_NEUF - base);
+  let coef = base + progression * (ETAT_COEF_NEUF - base);
+
+  if (trM2 > RENO_SEUIL_M2) {
+    const progressionBonus = Math.min(1, (trM2 - RENO_SEUIL_M2) / (RENO_SATURATION_M2 - RENO_SEUIL_M2));
+    coef += progressionBonus * RENO_BONUS_MAX;
+  }
+
+  return coef;
 }
 
 /**
@@ -394,14 +416,13 @@ function facteurDpe(input: RentEstimationInput): number {
   return input.dpe ? DPE_ADJUST[input.dpe.toUpperCase()] ?? 1.0 : 1.0;
 }
 
-// Les facteurs sont multiplicatifs : ils composent. Sans ce plafond, le pire
-// cas cumulé côté positif (Neuf/Très bon état × ≥3e avec ascenseur,
-// 1,10 × 1,04 = 1,144) dépasserait déjà +14,4 % avant même le résidu IA ;
-// côté négatif (À rénover × RDC × DPE G, 0,92 × 0,92 × 0,95 ≈ 0,804) MORD
-// déjà sur ce plancher — ce garde-fou n'est pas symbolique, il s'applique
-// réellement des deux côtés. Borne posée EN PLUS de la fourchette ANIL (2.8).
+// Les facteurs sont multiplicatifs : ils composent. Le plafond haut a été
+// relevé de 1,20 à 1,35 pour laisser passer le bonus rénovation lourde
+// (coef état+travaux jusqu'à ~1,28, × étage avec ascenseur 1,04 = ~1,33).
+// Côté négatif (À rénover × RDC × DPE G, 0,92 × 0,92 × 0,95 ≈ 0,804) MORD
+// toujours sur ce plancher. Borne posée EN PLUS de la fourchette ANIL (2.8).
 const FACTEUR_DETERMINISTE_MIN = 0.85;
-const FACTEUR_DETERMINISTE_MAX = 1.20;
+const FACTEUR_DETERMINISTE_MAX = 1.35;
 
 function facteurDeterministeGlobal(input: RentEstimationInput, surface: number): number {
   const brut = facteurEtage(input) * facteurEtatTravaux(input, surface) * facteurDpe(input);
@@ -452,17 +473,30 @@ function detailFacteursDeterministes(
     facteurs.push({ libelle, pct: pctEtage });
   }
 
-  // État et travaux sont FUSIONNÉS en un seul coefficient (2.6) : les séparer
-  // ici recréerait visuellement le double comptage que la fusion a supprimé.
-  const pctEtat = enPct(facteurEtatTravaux(input, surface));
+  // État et travaux de base fusionnés (progression vers "Neuf"), puis bonus
+  // rénovation lourde affiché SÉPARÉMENT pour que l'investisseur voie l'impact.
+  const travauxPrevus = input.travaux != null && input.travaux > 0;
+  const trM2 = travauxPrevus && surface > 0 ? input.travaux! / surface : 0;
+
+  const base = ETAT_COEF[input.etat_bien] ?? 1.0;
+  const progression = trM2 > 0 ? Math.min(1, trM2 / TRAVAUX_SATURATION_M2) : 0;
+  const coefBase = trM2 > 0 ? base + progression * (ETAT_COEF_NEUF - base) : base;
+  const pctEtat = enPct(coefBase);
   if (pctEtat !== 0) {
-    const travauxPrevus = input.travaux != null && input.travaux > 0;
     const libelle = input.etat_bien
       ? travauxPrevus
         ? `${input.etat_bien} + travaux`
         : input.etat_bien
       : "Travaux prévus";
     facteurs.push({ libelle, pct: pctEtat });
+  }
+
+  if (trM2 > RENO_SEUIL_M2) {
+    const progressionBonus = Math.min(1, (trM2 - RENO_SEUIL_M2) / (RENO_SATURATION_M2 - RENO_SEUIL_M2));
+    const pctBonus = Math.round(progressionBonus * RENO_BONUS_MAX * 100);
+    if (pctBonus > 0) {
+      facteurs.push({ libelle: "Rénovation lourde", pct: pctBonus });
+    }
   }
 
   const pctDpe = enPct(facteurDpe(input));
@@ -824,7 +858,7 @@ Rends un ajustement entre ${RESIDU_MIN} et ${RESIDU_MAX}, et 3 à 5 critères OR
  * amplifié, puisque l'empreinte ne dépend que des DONNÉES du bien, jamais de
  * la façon dont le résultat est ensuite interprété.
  */
-const PROMPT_RESIDU_VERSION = 8;
+const PROMPT_RESIDU_VERSION = 9;
 
 function calculerEmpreinteResidu(
   input: RentEstimationInput,

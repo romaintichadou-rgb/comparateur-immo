@@ -39,13 +39,39 @@ blend » ci-dessous) — seulement aux charges copro et à la TF fallback.
 
 1. **Calcul déterministe** à partir de barèmes connus (barèmes départementaux
    pour les charges) ajusté par les caractéristiques.
-2. **Appel Gemini + Google Search** (temperature 0) avec prompt structuré
-   qui injecte l'ancrage déterministe comme référence.
+2. **Appel Gemini** (temperature 0, `thinkingBudget: 0`, `responseSchema`) avec
+   prompt structuré qui injecte l'ancrage déterministe comme référence.
 3. **Blending** : `final = 0.6 × déterministe + 0.4 × IA`, clampé à ±30 % du
    déterministe (0.7–1.4).
 
-Le poids IA (`AI_WEIGHT = 0.4`) est identique dans `chargesEstimation.ts` et
-l'ancienne version de `rentEstimation.ts`. Ne pas le changer dans un seul.
+Le poids IA (`AI_WEIGHT = 0.4`) est dans `chargesEstimation.ts`.
+
+### Optimisations alignées sur le loyer (v2)
+
+Quatre changements appliqués à `chargesEstimation.ts`, inspirés du pattern
+loyer :
+
+1. **Google Search supprimé** — le taux communal TF est déjà en local
+   (`taux_tfpb_communes.json`). L'IA cherchait sur le web un taux qu'on
+   avait déjà, pour un coût en latence (~3 s) et en tokens sans retour.
+   Suppression débloque `responseSchema` (les deux sont incompatibles côté
+   API Gemini).
+2. **`responseSchema` activé** — JSON garanti par l'API au lieu du parsing
+   regex fragile (`extractJson`, supprimé). Trois schémas selon la
+   combinaison demandée (copro+TF, copro seul, TF seul).
+3. **`thinkingBudget` abaissé de 512 à 0** — mesuré gagnant sur le loyer
+   (~2-4× plus rapide, 0 % d'échec vs 27 %). Le prompt charges est plus
+   simple que le prompt loyer résidu.
+4. **Cache par empreinte** (`ChargesCalcul.empreinte`) — même pattern que
+   `LoyerCalcul.empreinteResidu` : SHA-256 des inputs + version du prompt,
+   comparé au calcul précédent. Si identique et pas d'échec IA, Gemini est
+   sauté. `CHARGES_PROMPT_VERSION` à incrémenter à chaque changement du
+   prompt/schéma. Migration `0014_charges_calcul.sql` (colonne `jsonb`).
+
+⚠️ **Le blend 60/40 reste en place**, contrairement au loyer qui l'a
+supprimé. Pour le loyer, le passage au résidu était motivé par le fait que
+déterministe et IA portaient sur des facteurs DISJOINTS. Pour les charges,
+les deux estiment le même total global — le blend a du sens ici.
 
 ## Loyer — résidu IA SANS blend, SANS Google Search (Phase 2)
 
@@ -113,6 +139,36 @@ FONT PROGRESSER l'état actuel vers « Neuf », de façon saturante :
 facteur = ETAT_COEF[etat_bien] + progression × (ETAT_COEF["Neuf"] − ETAT_COEF[etat_bien])
 progression = min(1, travaux_par_m2 / 900)   ← TRAVAUX_SATURATION_M2, conventionnel
 ```
+
+#### Bonus rénovation lourde (v9)
+
+Au-delà de **400 €/m²** (`RENO_SEUIL_M2`), un bonus additionnel pousse le
+coefficient AU-DELÀ du plafond « Neuf » (1,10). Une rénovation complète
+(isolation, DPE A/B, prestations haut de gamme) crée un bien supérieur au
+neuf promoteur standard — le loyer le reflète.
+
+```
+bonus = min(1, (travaux_par_m2 − 400) / (1200 − 400)) × 0,18
+facteur_total = facteur_base + bonus
+```
+
+| Constante | Valeur | Rôle |
+|---|---|---|
+| `RENO_SEUIL_M2` | 400 €/m² | Seuil d'activation du bonus |
+| `RENO_SATURATION_M2` | 1 200 €/m² | Saturation (bonus max atteint) |
+| `RENO_BONUS_MAX` | 0,18 (+18 %) | Amplitude maximale du bonus |
+
+Exemples : 538 €/m² → bonus +3,1 % ; 1 000 €/m² → bonus +13,5 % ;
+≥ 1 200 €/m² → bonus +18 % (saturé). Le coef total max théorique (~1,28)
+nécessite un relèvement de `FACTEUR_DETERMINISTE_MAX` de 1,20 à **1,35**.
+
+CONVENTIONNEL : les trois constantes ne sont pas mesurées, elles sont
+calibrées sur le jugement investisseur (un bien rénové à 1 000 €/m² se loue
+~20 % au-dessus du marché médian). À ajuster si les audits montrent un
+décalage. Le bonus est affiché séparément dans le panneau de détail
+(pastille « rénovation lourde ») pour que l'investisseur voie l'impact.
+
+`PROMPT_RESIDU_VERSION` bumpé v8 → v9 (l'ancre déterministe change).
 
 `ETAT_COEF` : Neuf 1,10 · Très bon état 1,10 · Bon état 1,03 · À rafraîchir
 0,96 · À rénover 0,92. `etat_bien` vide → 1,0 neutre (donnée manquante = pas

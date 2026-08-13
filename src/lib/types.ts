@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AnalyseIA, BlocAnalyse, BlocKey } from "./analyse/types";
 import type { SimulationInputs } from "./simulation";
 import type { LoyerCalcul } from "./rentEstimation";
+import type { ChargesCalcul } from "./chargesEstimation";
 
 // Les quatre champs du profil emprunteur sont `.nullable().optional()` : `null`
 // comme l'absence de clé valent « hérité du Profil investisseur » (la migration
@@ -168,6 +169,7 @@ export interface Apartment {
   charges_justification: string;
   taxe_fonciere: number | null;
   taxe_fonciere_justification: string;
+  charges_calcul: ChargesCalcul | null;
   assurance_annuelle: number | null;
   hypothese_gestion_pct: number;
 
@@ -244,6 +246,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     charges_justification: "",
     taxe_fonciere: null,
     taxe_fonciere_justification: "",
+    charges_calcul: null,
     assurance_annuelle: null,
     loyer_retenu: null,
     loyer_hc: null,

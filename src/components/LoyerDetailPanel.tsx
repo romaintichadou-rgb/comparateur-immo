@@ -220,7 +220,11 @@ export default function LoyerDetailPanel({
   if (apt.ascenseur === true) caracteristiquesBien.push({ label: "ascenseur", tone: toneAscenseur });
   if (apt.etat_bien) caracteristiquesBien.push({ label: apt.etat_bien, tone: toneEtat });
   if (apt.dpe) caracteristiquesBien.push({ label: `DPE ${apt.dpe}`, tone: toneDpe });
-  if (apt.travaux != null && apt.travaux > 0) caracteristiquesBien.push({ label: "travaux prévus", tone: toneEtat });
+  if (apt.travaux != null && apt.travaux > 0) {
+    caracteristiquesBien.push({ label: "travaux prévus", tone: toneEtat });
+    const toneReno = toneFacteurPour(facteursBareme, ["Rénovation lourde"]);
+    if (toneReno !== "neutre") caracteristiquesBien.push({ label: "rénovation lourde", tone: toneReno });
+  }
 
   return (
     <div className="fixed inset-0 z-[2000]">
