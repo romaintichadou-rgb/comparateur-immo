@@ -1,6 +1,8 @@
 import { formatNombre } from "@/lib/format";
 import type { RevenuCommune, ProfilCommune } from "../sources/demographie";
 import type { GareInfo, LanduseInfo, VieQuartierInfo } from "../sources/osm";
+import type { Apartment, PrecisionLocalisation } from "@/lib/types";
+import { inviteAdresse } from "../perimetre";
 import { BLOC_LABELS, type BlocAnalyse, type Fait, type Source } from "../types";
 
 /**
@@ -31,15 +33,23 @@ const SRC_COMMUNE: Source = {
 const SRC_OSM: Source = { label: "OpenStreetMap", url: "https://www.openstreetmap.org/" };
 
 export function buildBlocQuartier(data: {
+  apt: Pick<Apartment, "id" | "adresse">;
+  precision: PrecisionLocalisation | null;
   revenu: RevenuCommune | null;
   profilCommune: ProfilCommune | null;
   gare: GareInfo | null;
   landuse: LanduseInfo | null;
   vieQuartier: VieQuartierInfo | null;
-  /** false = bien non géolocalisé : les données OSM n'ont pas pu être interrogées. */
+  /**
+   * false = les coordonnées ne valent pas au moins la voie, donc OSM n'a PAS
+   * été interrogé (voir `coordsDansLeSecteur`). Distingue « mesuré, rien
+   * trouvé » de « pas mesurable » : seul le premier cas est une donnée
+   * manquante à signaler, le second a une CAUSE et un remède, portés par
+   * l'invite.
+   */
   geoDisponible: boolean;
 }): BlocAnalyse {
-  const { revenu, profilCommune, gare, landuse, vieQuartier, geoDisponible } = data;
+  const { apt, precision, revenu, profilCommune, gare, landuse, vieQuartier, geoDisponible } = data;
   const faits: Fait[] = [];
   const sources: Source[] = [];
   const donneesManquantes: string[] = [];
@@ -170,9 +180,14 @@ export function buildBlocQuartier(data: {
     donneesManquantes.push("vie de quartier, espaces verts et équipements (OpenStreetMap)");
   }
 
-  if (!geoDisponible) {
-    donneesManquantes.push("accessibilité, caractère et vie de quartier (bien non géolocalisé)");
-  }
+  // ⚠️ Quatrième bloc dépendant de l'adresse — il ne l'annonçait pas.
+  // Depuis que OSM est conditionné à la précision, ce bloc perd la moitié de
+  // ses faits sans un mot d'explication : il devenait simplement silencieux.
+  // Même formulation que les trois autres (voir `inviteAdresse`).
+  const invite = inviteAdresse(apt, precision, {
+    requiert: "rue",
+    gain: "décrire le quartier autour du bien (accessibilité, commerces, espaces verts)",
+  });
 
   const disponible = faits.length > 0;
   return {
@@ -185,6 +200,14 @@ export function buildBlocQuartier(data: {
     sources,
     narration: "",
     donneesManquantes,
-    messageIndisponible: disponible ? undefined : "Données de quartier indisponibles pour ce bien.",
+    invite,
+    // Message d'indisponibilité distinct selon la CAUSE : sans position
+    // exploitable, « données indisponibles pour ce bien » laisse croire à une
+    // panne de source alors que le remède est dans les mains du lecteur.
+    messageIndisponible: disponible
+      ? undefined
+      : geoDisponible
+        ? "Données de quartier indisponibles pour ce bien."
+        : "Le quartier ne peut pas être décrit tant que le bien n'est situé qu'au niveau de la commune.",
   };
 }

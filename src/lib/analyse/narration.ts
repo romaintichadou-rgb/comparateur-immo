@@ -1,4 +1,5 @@
 import { generateGeminiText, getGeminiApiKey } from "@/lib/gemini";
+import type { PrecisionLocalisation } from "@/lib/types";
 import type { AnalyseIA, BlocAnalyse, BlocKey } from "./types";
 
 /**
@@ -50,10 +51,29 @@ export interface Narrations {
   status: NarrationStatus;
 }
 
+/**
+ * Garde-fou de localisation du prompt, par niveau de précision.
+ *
+ * ⚠️ Le prompt ne recevait AUCUNE indication de précision. Les faits mesurés
+ * autour du bien (commodités, gare, vie de quartier) disparaissent maintenant
+ * quand la position ne vaut pas la voie — mais rien ne disait au modèle
+ * POURQUOI, et un conseiller à qui l'on retire les données du quartier a toute
+ * latitude pour les reconstituer de mémoire. Même parade que dans
+ * `rentEstimation.ts` (`CAVEAT_LOCALISATION_*`), à laquelle celle-ci doit
+ * rester cohérente.
+ */
+const CAVEAT_NARRATION: Record<PrecisionLocalisation, string> = {
+  exacte: "",
+  rue: "PRÉCISION DE LOCALISATION : le bien est situé au niveau de la RUE, pas du bâtiment. N'affirme rien sur le vis-à-vis, l'exposition, la vue ou l'étage réel — tu ne les connais pas.",
+  arrondissement:
+    "PRÉCISION DE LOCALISATION : le bien n'est situé qu'au niveau de la COMMUNE. Les données de quartier (commodités, transports, espaces verts, ambiance) n'ont PAS pu être mesurées et sont absentes des faits ci-dessous — ne les invente pas, ne décris pas le quartier de mémoire, et n'affirme rien sur la rue. Si un bloc manque de données, dis-le au lieu de combler.",
+};
+
 export async function narrateAll(
   analyse: AnalyseIA,
   localisation?: { quartier: string; ville: string },
-  contexteBien?: string
+  contexteBien?: string,
+  precision?: PrecisionLocalisation | null
 ): Promise<Narrations> {
   if (!getGeminiApiKey()) return { blocs: {}, synthese: "", status: "unavailable" };
 
@@ -83,13 +103,16 @@ export async function narrateAll(
     : "Aucun point rédhibitoire détecté.";
 
   const nomQuartier = [localisation?.quartier, localisation?.ville].filter(Boolean).join(", ");
+  // `precision` absente (analyse d'un bien jamais géocodé) : on applique le
+  // garde-fou le plus strict, jamais aucun.
+  const caveatLocalisation = CAVEAT_NARRATION[precision ?? "arrondissement"];
 
   const prompt = `Tu es un conseiller en investissement locatif chevronné (15 ans de transactions et de gestion), mandaté par ton client pour lui dire s'il doit acheter ce bien. Son objectif : la RENTABILITÉ RÉELLE, cash-flow après crédit et fiscalité inclus. Tu écris comme à un client que tu respectes : franc, précis, orienté décision — jamais de langue de bois.
 
 RÈGLE CARDINALE : les chiffres (prix/m², rendement, cash-flow, notes, fourchettes, %) sont DÉJÀ AFFICHÉS à l'écran juste au-dessus de tes textes. Le lecteur les VOIT. Ton rôle est EXCLUSIVEMENT l'interprétation : ce que ces chiffres IMPLIQUENT pour la décision d'achat, les risques cachés, les leviers d'action. NE CITE AUCUN CHIFFRE qui est déjà affiché dans les faits du bloc. Si tu dois référencer une valeur pour porter un raisonnement, utilise des termes relatifs ("au-dessus du marché", "positif la première année mais négatif sur la durée") au lieu de re-copier le nombre.
 
 Note globale pondérée : ${analyse.score_global}/10.
-${nomQuartier ? `\nLOCALISATION DU BIEN : ${nomQuartier}\n` : ""}${contexteBien ? `\n${contexteBien}\n` : ""}
+${nomQuartier ? `\nLOCALISATION DU BIEN : ${nomQuartier}\n` : ""}${caveatLocalisation ? `\n${caveatLocalisation}\n` : ""}${contexteBien ? `\n${contexteBien}\n` : ""}
 VERDICTS PRIORITAIRES (points rédhibitoires / de vigilance) :
 ${verdictsTexte}
 

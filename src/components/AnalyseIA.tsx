@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Clock, Info, Loader2, Sparkles } from "lucide-react";
-import { StatCard, type StatCardTone } from "@/components/StatCard";
+import { StatCard } from "@/components/StatCard";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, VerdictNiveau } from "@/lib/analyse/types";
@@ -13,20 +13,17 @@ import {
   NOTE_TEXT_CLASS,
   SEUILS_RENDEMENT_DEFAUT,
   blocCategorie,
-  cashflowTone,
   noteTone,
-  scoreCategorie,
-  rendementNetTone,
+  DECISION_CHIP,
   type CashflowSeuils,
   type RendementSeuils,
   type ScoreTone,
 } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/decision";
-import { simulate, resolveInputs } from "@/lib/simulation";
 import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
-import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatNote, formatPercent } from "@/lib/format";
+import { formatDateTime, formatEuros, formatNombre, formatNote } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderMarkdownBold } from "@/components/richText";
 import { TITRE_SECTION } from "@/components/SectionHeader";
@@ -160,17 +157,6 @@ const GRAVITE_STYLES: Record<FaitGravite, { dot: string; value: string }> = {
 };
 
 
-function dpeInfo(dpe: string): { sub: string; tone: StatCardTone } {
-  switch (dpe.trim().toUpperCase()) {
-    case "G": return { sub: "Interdit à la location", tone: "alerte" };
-    case "F": return { sub: "Interdit dès 2028", tone: "alerte" };
-    case "E": return { sub: "Interdit dès 2034", tone: "attention" };
-    case "D": return { sub: "OK, pas d'échéance proche", tone: "neutral" };
-    case "A": case "B": case "C": return { sub: "Aucune restriction", tone: "positif" };
-    default: return { sub: "Non renseigné", tone: "neutral" };
-  }
-}
-
 type GoTab = (tab: "ia" | "optimiser" | "donnees" | "financiere" | "simulation", anchor?: string) => void;
 
 export default function AnalyseIA({
@@ -197,8 +183,6 @@ export default function AnalyseIA({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const { open: openCashflowDetail } = useCashflowDetail();
-  const { open: openRendementDetail } = useRendementDetail();
   const analyse = apartment.analyse_ia;
   const immeuble = isImmeuble(apartment.type_bien);
 
@@ -272,24 +256,7 @@ export default function AnalyseIA({
   const score = analyse.score_global;
   const verdicts = analyse.verdicts ?? [];
 
-  const faits = analyse.blocs?.prix?.faits ?? [];
-  const faitEcart = faits.find((f) => f.label === "Écart au prix de marché");
   const ecartPct = ecartPrixMarche(analyse.blocs?.prix);
-
-  const simu = simulate(apartment, resolveInputs(apartment.simulation_inputs, settings));
-  const cashflow = simu?.cashflowMensuelMoyenLMNP ?? null;
-  const anneesExo = simu?.anneesExonerees ?? 0;
-  const netTone = rendementNetTone(apartment.rendement_net, seuilsRendement);
-  const dpe = dpeInfo(apartment.dpe);
-
-  const cfTone: StatCardTone = cashflowTone(cashflow, cashflowSeuils);
-
-  const ecartTone: StatCardTone =
-    faitEcart?.gravite === "positif" ? "positif"
-      : faitEcart?.gravite === "attention" ? "attention"
-        : faitEcart?.gravite === "alerte" ? "alerte" : "neutral";
-
-  const ecartDisponible = ecartPct != null;
 
   // --- Decision --------------------------------------------------------------
   const decision: Decision = score != null ? computeDecision(score, verdicts, ecartPct) : "passe";
@@ -352,8 +319,16 @@ export default function AnalyseIA({
                 et le bouton « Relancer » se retrouvait affiché PAR-DESSUS la
                 jauge. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${CATEGORIE_TAG_STYLES[scoreCategorie(score).tone]}`}>
-                {scoreCategorie(score).label}
+              {/* ⚠️ Pastille pilotée par la DÉCISION, pas par la tranche de
+                  note. Elle lisait `scoreCategorie(score)`, dont le libellé de
+                  la tranche 5–7 est littéralement « À négocier » — le même mot
+                  que la décision `negocie`. Deux classements concurrents à
+                  quarante pixels l'un de l'autre : un bien à 6,6 avec une
+                  alerte affichait la pastille « À négocier » sous le titre
+                  « Passe ton chemin ». `DECISION_CHIP` est la même puce que
+                  celle des listes — un bien se lit pareil partout. */}
+              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${DECISION_CHIP[decision].className}`}>
+                {DECISION_CHIP[decision].label}
               </span>
               <span className="whitespace-nowrap text-[10px] text-ink-400">
                 {formatDateTime(analyse.genere_le)}
@@ -376,7 +351,7 @@ export default function AnalyseIA({
 
         {blocsNotes.length > 0 && (
           <div className="mt-6 flex flex-wrap items-baseline gap-x-8 gap-y-2 pt-1">
-            {blocsNotes.map((b) => {
+            {blocsNotes.filter((b): b is BlocAnalyse & { note: number } => b.note != null).map((b) => {
               const colorClass = NOTE_TEXT_CLASS[noteTone(b.note)];
               return (
                 <span key={b.cle} className="text-xs text-ink-400">
@@ -388,7 +363,7 @@ export default function AnalyseIA({
                     {b.titre}
                   </button>
                   <span className={`ml-1.5 font-bold tabular-nums ${colorClass}`}>
-                    {b.note != null ? formatNote(b.note) : "—"}
+                    {formatNote(b.note)}
                   </span>
                 </span>
               );
@@ -413,39 +388,7 @@ export default function AnalyseIA({
         )}
       </section>
 
-      {/* ── 2. MetricCards ── */}
-      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard
-          label="Cash-flow mensuel"
-          value={formatEurosSigned(cashflow)}
-          sub={cashflow == null ? "Données manquantes" : anneesExo > 1 ? `Moyen sur ${anneesExo} ans sans impôt` : "Net après impôt"}
-          tone={cfTone}
-          onClick={() => openCashflowDetail(apartment, cashflowSeuils, settings)}
-        />
-        <StatCard
-          label="Rendement net"
-          value={apartment.rendement_net == null ? "—" : formatPercent(apartment.rendement_net)}
-          sub="Net après charges et impôts"
-          tone={netTone === "neutral" ? "neutral" : netTone}
-          onClick={() => openRendementDetail(apartment, seuilsRendement)}
-        />
-        <StatCard
-          label="Prix au m²"
-          value={apartment.prix_m2 == null ? "—" : `${formatEuros(apartment.prix_m2)}/m²`}
-          sub={ecartDisponible
-            ? `${ecartPct! > 0 ? "+" : ""}${ecartPct} % vs marché local`
-            : "Pas de donnée de marché"}
-          tone={ecartDisponible ? ecartTone : "neutral"}
-        />
-        <StatCard
-          label="DPE"
-          value={apartment.dpe.trim() === "" ? "—" : apartment.dpe.trim().toUpperCase()}
-          sub={dpe.sub}
-          tone={dpe.tone}
-        />
-      </div>
-
-      {/* ── 3. Synthesis block (option 3 — after MetricCards) ── */}
+      {/* ── 2. Synthesis block ── */}
       {analyse.synthese && (
         <div className="mt-6 rounded-xl bg-ink-100/40 px-5 py-4 text-sm leading-relaxed text-ink-700">
           {renderMarkdownBold(analyse.synthese)}
@@ -571,7 +514,7 @@ function FlatSection({
               {categ.label}
             </span>
           )}
-          {!categ && isQuartier && (
+          {!categ && (isQuartier || bloc.cle === "simulation") && (
             <span className="text-sm font-medium italic text-ink-400">Informatif</span>
           )}
         </div>
@@ -584,6 +527,23 @@ function FlatSection({
           </div>
         )}
       </div>
+
+      {/* Invite — juste SOUS le titre, pas en pied de section : elle explique le
+          périmètre sur lequel tout le reste du bloc est calculé, donc elle doit
+          être lue AVANT les chiffres qu'elle qualifie. Volontairement hors du
+          test `disponible` : un bloc sans données est précisément le cas où
+          l'invite a le plus à dire. */}
+      {bloc.invite && (
+        <div className="mt-3 rounded-lg border border-dashed border-ink-300 bg-ink-50/50 px-4 py-3 text-sm text-ink-500">
+          {bloc.invite.text}{" "}
+          <Link
+            href={bloc.invite.href}
+            className="font-medium text-accent-600 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
+          >
+            {bloc.invite.linkLabel}
+          </Link>
+        </div>
+      )}
 
       {!bloc.disponible ? (
         <p className="mt-3 text-sm text-ink-400">{bloc.messageIndisponible}</p>
@@ -599,7 +559,11 @@ function FlatSection({
               {renderMarkdownBold(bloc.narration)}
             </p>
           )}
-          {isQuartier && !bloc.narration && (
+          {/* « Relancer » ne se propose QUE si relancer peut aider. Quand le
+              bloc est muet faute de position exploitable, l'invite rendue sous
+              le titre porte déjà la cause et le remède — inviter à relancer
+              enverrait le lecteur répéter une opération sans effet. */}
+          {isQuartier && !bloc.narration && !bloc.invite && (
             <p className="text-sm text-ink-400">
               Description indisponible — clique sur « Relancer ».
             </p>
@@ -634,19 +598,6 @@ function FlatSection({
                 <FaitRow key={i} fait={f} />
               ))}
             </ul>
-          )}
-
-          {/* Invite */}
-          {bloc.invite && (
-            <div className="rounded-lg border border-dashed border-ink-300 bg-ink-50/50 px-4 py-3 text-sm text-ink-500">
-              {bloc.invite.text}{" "}
-              <Link
-                href={bloc.invite.href}
-                className="font-medium text-accent-600 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
-              >
-                {bloc.invite.linkLabel}
-              </Link>
-            </div>
           )}
 
           {/* Missing data */}

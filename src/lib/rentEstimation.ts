@@ -605,6 +605,18 @@ function buildDescriptionResidu(input: RentEstimationInput): string {
  * quartier, pas le bâtiment (voir `precisionLocalisation`). L'IA n'a alors
  * pas le droit de deviner un niveau de précision qu'elle n'a pas.
  */
+/**
+ * Deux caveats, un par niveau de précision réellement atteint.
+ *
+ * ⚠️ Interdire « toute affirmation sur la rue » à un bien dont on CONNAÎT la
+ * rue bride le modèle sans raison — c'est ce que faisait le caveat unique, qui
+ * traitait « milieu de la rue de Thumesnil » comme « centre de Lille ». Ce qui
+ * manque au niveau `rue`, c'est le bâtiment : étage réel, vis-à-vis,
+ * exposition, cour ou façade sur rue.
+ */
+const CAVEAT_LOCALISATION_RUE =
+  "⚠️ La localisation de ce bien est connue au niveau de la RUE, pas du bâtiment : tu peux tenir compte de la rue et de son environnement immédiat, mais ne fais AUCUNE affirmation sur le vis-à-vis, l'exposition, la vue ou le calme propres à ce logement — ils dépendent du bâtiment et de l'étage, que tu ne connais pas.";
+
 const CAVEAT_LOCALISATION_APPROX =
   "⚠️ La localisation de ce bien n'est connue qu'au niveau du quartier ou de la commune (pas l'adresse exacte) : ne fais AUCUNE affirmation sur la rue, le vis-à-vis, l'exposition précise ou les nuisances de voisinage immédiat — tu ne peux pas les connaître à cette précision.";
 
@@ -739,8 +751,12 @@ function buildPromptResidu(
   const mx = Math.round(refCC.maxM2 * surface);
   const carac = buildCaracteristiques(input);
   const desc = buildDescriptionResidu(input);
-  const positionExacte = input.precisionLocalisation === "exacte";
-  const caveatLocalisation = positionExacte ? "" : CAVEAT_LOCALISATION_APPROX;
+  const caveatLocalisation =
+    input.precisionLocalisation === "exacte"
+      ? ""
+      : input.precisionLocalisation === "rue"
+        ? CAVEAT_LOCALISATION_RUE
+        : CAVEAT_LOCALISATION_APPROX;
   const consigneQuartier = buildConsigneQuartier(input);
   const consigneMicroLogement = buildConsigneMicroLogement(input);
 

@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { reponseErreur } from "../../erreurs";
 import { checkAndIncrementAnalyseQuota, requireApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
-import { runAnalyse } from "@/lib/analyse/run";
+import { patchLocalisation, runAnalyse } from "@/lib/analyse/run";
 
 /**
  * Lance (ou relance) l'Analyse IA d'un bien : géocode via BAN, interroge les
@@ -22,11 +22,11 @@ export async function POST(_req: NextRequest, { params }: RouteContext<"/api/ana
     await checkAndIncrementAnalyseQuota();
 
     const apartment = await requireApartment(id);
-    const { analyse, codeInsee, narrationStatus } = await runAnalyse(apartment);
+    const { analyse, localisation, narrationStatus } = await runAnalyse(apartment);
 
     const updated = await updateApartment(id, {
       analyse_ia: analyse,
-      ...(codeInsee && codeInsee !== apartment.code_insee ? { code_insee: codeInsee } : {}),
+      ...patchLocalisation(apartment, localisation),
     });
 
     // `narrationStatus` est transitoire (non stocké) : sert à informer l'UI si

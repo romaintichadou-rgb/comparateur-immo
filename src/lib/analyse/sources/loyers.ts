@@ -27,6 +27,7 @@
  */
 
 import { ELASTICITE_SURFACE, type TypologieAnil } from "@/lib/anilReference";
+import type { PerimetreAnalyse } from "../perimetre";
 import { getJson } from "./http";
 import anilLoyersRaw from "../../anil_loyers.json";
 
@@ -107,33 +108,69 @@ function depuisLigneBrute(ligne: LigneBrute, annee: number, elasticiteLocale: nu
   };
 }
 
-export async function fetchLoyerReference(
-  codeInsee: string,
+const RAYON_LOCAL = 500;
+
+export interface LoyerData {
+  ref: LoyerReference;
+  /** Libellé du périmètre réellement agrégé (`Fait.perimetre`). */
+  perimetreLabel: string;
+}
+
+/**
+ * ⚠️ **L'ANIL ne descend jamais sous la commune** (arrondissement à PLM) : le
+ * rayon de 500 m ne resserre rien, il ne fait que repérer les communes que le
+ * disque traverse. Tant qu'une seule en ressort — cas de la quasi-totalité des
+ * biens hors limite communale — la valeur est RIGOUREUSEMENT celle de la
+ * commune, et l'annoncer « rayon 500 m » promettait une finesse que la donnée
+ * n'a pas. Le libellé suit donc l'agrégation réelle, pas le périmètre demandé.
+ */
+export async function fetchLoyerRef(
+  perimetre: PerimetreAnalyse,
   typologie: TypologieAnil
-): Promise<LoyerReference | null> {
+): Promise<LoyerData | null> {
+  const LABEL_COMMUNE = "arrondissement/commune";
+
+  if (perimetre.type === "commune") {
+    const ref = loyerReferenceCommune(perimetre.codeInsee, typologie);
+    return ref ? { ref, perimetreLabel: LABEL_COMMUNE } : null;
+  }
+
+  const local = await agregerAutourDuPoint(perimetre, typologie);
+  if (!local) return null;
+  return {
+    ref: local.ref,
+    perimetreLabel: local.nbCommunes > 1 ? `rayon ${RAYON_LOCAL} m` : LABEL_COMMUNE,
+  };
+}
+
+/**
+ * Référence ANIL de la commune (ou de l'arrondissement à PLM) — simple lecture
+ * du JSON figé au build, sans réseau ni périmètre à arbitrer.
+ *
+ * ⚠️ **Volontairement NON exportée** : c'est le repli interne de
+ * `fetchLoyerRef`, pas une porte d'entrée. Tous les appelants passent par un
+ * `PerimetreAnalyse`, sans quoi ils re-choisissent leur échelle dans leur coin —
+ * la divergence exacte que ce module a servi à supprimer (l'analyse agrégeait
+ * pendant que l'estimation de loyer et le panneau de détail lisaient la
+ * commune).
+ */
+function loyerReferenceCommune(codeInsee: string, typologie: TypologieAnil): LoyerReference | null {
   if (!codeInsee) return null;
   const ligne = anilLoyers[typologie][codeInsee];
   if (!ligne) return null;
   return depuisLigneBrute(ligne, anilLoyers.annee[typologie], elasticitePour(codeInsee, typologie));
 }
 
-const RAYON_LOCAL = 500;
-
 /**
- * Loyer de référence « local » dans un rayon de ~500 m autour du bien.
- * On reverse-géocode 5 points (centre + 4 cardinaux à 500 m) via la BAN
- * pour identifier les communes/arrondissements traversés, puis on calcule
- * une moyenne pondérée par nombre d'observations des loyers ANIL.
- * Si une seule commune ressort (cas courant hors PLM), le résultat est
- * identique à fetchLoyerReference. Retourne aussi le nombre de communes
- * agrégées pour adapter le libellé UI.
+ * Moyenne pondérée des références ANIL des communes traversées par un disque
+ * de ~500 m : on reverse-géocode 5 points (centre + 4 cardinaux) via la BAN
+ * pour identifier les communes/arrondissements concernés.
  */
-export async function fetchLoyerReferenceLocal(
-  lat: number,
-  lon: number,
-  fallbackCodeInsee: string,
+async function agregerAutourDuPoint(
+  p: Extract<PerimetreAnalyse, { type: "rayon500" }>,
   typologie: TypologieAnil
 ): Promise<{ ref: LoyerReference; nbCommunes: number } | null> {
+  const { lat, lon, codeInsee } = p;
   const dLat = RAYON_LOCAL / 111000;
   const dLon = RAYON_LOCAL / (111000 * Math.cos((lat * Math.PI) / 180));
 
@@ -147,7 +184,7 @@ export async function fetchLoyerReferenceLocal(
 
   const codes = await Promise.all(points.map(([la, lo]) => reverseGeoCodeInsee(la, lo)));
   const uniqueCodes = [...new Set(codes.filter((c): c is string => c != null))];
-  if (uniqueCodes.length === 0 && fallbackCodeInsee) uniqueCodes.push(fallbackCodeInsee);
+  if (uniqueCodes.length === 0 && codeInsee) uniqueCodes.push(codeInsee);
 
   const table = anilLoyers[typologie];
   const annee = anilLoyers.annee[typologie];

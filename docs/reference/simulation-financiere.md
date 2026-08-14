@@ -4,6 +4,12 @@
 > `SimulationFinanciere.tsx`, `SettingsForm.tsx`, `simulation.ts`, ou le
 > mécanisme d'héritage `resolveInputs`. Pointeur depuis `AGENTS.md`.
 
+**Le bloc Simulation est informatif (poids 0, pas de verdict).** Le cash-flow
+dépend du montage financier personnel (apport, taux, durée) — il ne doit pas
+influencer la note d'opportunité intrinsèque du bien. Le bloc reste affiché
+avec sa note propre, mais n'alimente ni le score global ni la décision
+achète/négocie/passe. Voir `BLOC_POIDS` dans `types.ts`.
+
 ## Profil investisseur — seuils + profil emprunteur (héritage)
 
 `AppSettings` (`src/lib/settings.ts`, table `app_settings`, une seule ligne)

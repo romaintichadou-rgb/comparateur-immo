@@ -18,7 +18,7 @@ import {
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fait, type Source } from "../types";
 
 /**
- * Bloc "Potentiel locatif" — données réelles :
+ * Bloc "Rendement" — données réelles :
  *  - Carte des loyers (ANIL) : loyer d'annonce médian réel de l'arrondissement,
  *    **déjà charges comprises**, pour un logement de référence non meublé. La
  *    conversion vers un loyer meublé CC comparable (majoration meublé +
@@ -59,7 +59,11 @@ export function buildBlocLocation(
   apt: Apartment,
   loyerRef: LoyerReference | null,
   seuils: RendementSeuils = SEUILS_RENDEMENT_DEFAUT,
-  perimetre: "rayon500" | "arrondissement" = "arrondissement",
+  // Libellé du périmètre réellement agrégé, produit par `fetchLoyerRef` — pas
+  // un code à retraduire ici. Deux traductions jumelles (celle-ci et celle des
+  // recommandations) avaient déjà de quoi diverger, et aucune des deux ne
+  // pouvait savoir combien de communes l'agrégat avait réellement couvertes.
+  perimetreLabel: string = "arrondissement/commune",
   // `renovePremium` : hypothèse "rénovation haut de gamme" (moteur de
   // recommandations uniquement). Un bien refait à neuf justifie un loyer au-
   // dessus de la fourchette ANIL sans que ce soit un signal d'excès — on
@@ -145,7 +149,6 @@ export function buildBlocLocation(
     const median = Math.round(marcheM2CC * surface);
     const min = Math.round(refCC.minM2 * surface);
     const max = Math.round(refCC.maxM2 * surface);
-    const perimetreLabel = perimetre === "rayon500" ? "rayon 500 m" : "arrondissement";
     faits.push({
       label: immeuble ? "Loyer de marché à surface équivalente" : "Loyer de marché médian",
       value: median,

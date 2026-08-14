@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { reponseErreur } from "../../../erreurs";
 import { checkAndIncrementAnalyseQuota, requireApartment, updateApartment } from "@/lib/db";
 import { computeDerived } from "@/lib/calculations";
-import { runAnalyse } from "@/lib/analyse/run";
+import { patchLocalisation, runAnalyse } from "@/lib/analyse/run";
 import { computeRecalcNeeds } from "@/lib/recalc";
 import { appliquerPatch } from "@/lib/patchApartment";
 import { reestimerAssurance, reestimerCharges, reestimerLoyer } from "@/lib/reestimation";
@@ -70,9 +70,7 @@ export async function POST(req: NextRequest, { params }: RouteContext<"/api/apar
       const analyse: AnalyseIA = resultat.analyse;
       apartment = await updateApartment(id, {
         analyse_ia: analyse,
-        ...(resultat.codeInsee && resultat.codeInsee !== apartment.code_insee
-          ? { code_insee: resultat.codeInsee }
-          : {}),
+        ...patchLocalisation(apartment, resultat.localisation),
       });
     }
 

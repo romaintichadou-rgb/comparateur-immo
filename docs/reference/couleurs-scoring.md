@@ -60,7 +60,7 @@ Utilisé uniquement pour le **tag du verdict global** (en-tête de l'Analyse IA)
 
 Utilisé pour les **tags des sections individuelles** (Prix d'achat, Potentiel
 locatif, etc.). Les labels décrivent la qualité du thème évalué, pas le profil
-d'investissement — ex. un Potentiel locatif à 5 est "Moyen", pas "À négocier".
+d'investissement — ex. un Rendement à 5 est "Moyen", pas "À négocier".
 
 | Score  | Label                 | Tone    |
 |--------|-----------------------|---------|
@@ -125,12 +125,12 @@ l'onglet Analyse.
 les biens analysés avant ce changement gardent un `cashflowAvant` calculé sur
 la moyenne jusqu'à la prochaine relance d'analyse.
 
-## Scoring bloc Simulation financière (`blocs/simulation.ts`)
+## Bloc Simulation financière (`blocs/simulation.ts`)
 
-Note /10 adaptée au profil investisseur (seuils cash-flow personnels) :
-- **Facteur principal (70 %)** : CF année 1 situé vs seuils profil (vert/rouge)
-- **Facteur secondaire (30 %)** : soutenabilité (dégradation CF moyen vs an1)
-- **Ajustement** : avantage fiscal LMNP (années sans impôt : +0.5 si ≥ 10 ans)
+Bloc **informatif** (`note: null`, poids 0). Le cash-flow dépend du montage
+financier personnel — il ne contribue ni au score global ni aux verdicts.
+Les faits et highlights (cash-flow, mensualité, apport, années sans impôt)
+sont toujours affichés.
 
 ## `ecartTone(pct)` — écart loyer (perspective investisseur)
 
@@ -341,13 +341,14 @@ Voir « Pages d'erreur » dans `AGENTS.md`.
 
 ## Pondérations des blocs (`BLOC_POIDS`)
 
-| Bloc       | Poids normal | Sans Prix |
-|------------|-------------|-----------|
-| Prix       | 30 %        | 0 %       |
-| Location   | 20 %        | 35 %      |
-| Risques    | 15 %        | 15 %      |
-| Potentiel  | 15 %        | 15 %      |
-| Simulation | 20 %        | 35 %      |
+| Bloc       | Poids normal | Sans Prix | Note |
+|------------|-------------|-----------|------|
+| Prix       | 30 %        | 0 %       | |
+| Location   | 30 %        | 40 %      | |
+| Risques    | 20 %        | 20 %      | |
+| Potentiel  | 20 %        | 20 %      | |
+| Simulation | 0 %         | 0 %       | informatif — le cash-flow dépend du montage personnel |
+| Quartier   | 0 %         | 0 %       | informatif |
 
 ## Analyse IA — bloc Risques et scoring DPE/GES
 
@@ -393,16 +394,18 @@ Ces caps garantissent qu'un DPE catastrophique ne peut jamais être
 ### Verdicts de blocs faibles/forts (`buildVerdicts`)
 
 Tout bloc noté ≤ 5 génère un verdict (≤ 4 = alerte, 5 = attention) avec un
-libellé orienté investisseur — **jamais de score brut** dans le titre :
+libellé orienté investisseur — **jamais de score brut** dans le titre.
+Les blocs informatifs (`simulation`, `quartier`) sont **exclus** des verdicts
+car ils ne reflètent pas la qualité intrinsèque du bien.
 
-| Bloc | Titre (faible) | Titre (fort, ≥ 9) |
-|------|----------------|-------------------|
-| prix | Prix trop élevé | Prix d'achat très compétitif |
-| location | Faible potentiel locatif | Forte demande locative |
-| simulation | Mauvais cash-flow mensuel | Cash-flow confortable |
-| potentiel | Peu de potentiel | Fort potentiel de valorisation |
-| risque | Risques élevés | Profil de risque très sain |
-| quartier | Quartier défavorable | Quartier attractif |
+| Bloc | Titre (faible) | Titre (fort, ≥ 9) | Verdict |
+|------|----------------|-------------------|---------|
+| prix | Prix trop élevé | Prix d'achat très compétitif | oui |
+| location | Faible rendement | Rendement élevé | oui |
+| potentiel | Peu de potentiel | Fort potentiel de valorisation | oui |
+| risque | Risques élevés | Profil de risque très sain | oui |
+| simulation | Mauvais cash-flow mensuel | Cash-flow confortable | **non** (informatif) |
+| quartier | Quartier défavorable | Quartier attractif | **non** (informatif) |
 
 Les cartes alertes dans le verdict affichent **tous les verdicts** (critère +
 bloc), triés par priorité (alerte > attention, critère > bloc), max 3.

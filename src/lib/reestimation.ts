@@ -5,7 +5,8 @@ import { computeDerived } from "@/lib/calculations";
 import { estimateCharges, type ChargesField } from "@/lib/chargesEstimation";
 import { estimateRent } from "@/lib/rentEstimation";
 import { getTauxCommune } from "@/lib/taxeFonciereCommune";
-import { fetchLoyerReference } from "@/lib/analyse/sources/loyers";
+import { fetchLoyerRef } from "@/lib/analyse/sources/loyers";
+import { perimetreAnalyse } from "@/lib/analyse/perimetre";
 import { typologieAnil } from "@/lib/anilReference";
 import { estimateAssurance, marquerEstimeIa } from "@/lib/estimates";
 import { isImmeuble, type Apartment, type ChampEstimable } from "@/lib/types";
@@ -35,11 +36,31 @@ export async function reestimerLoyer(apartment: Apartment): Promise<Apartment> {
 
   // La ressource ANIL dépend du bien : maison, T1-T2 ou T3+ n'ont ni le même
   // loyer/m² ni la même surface de référence (voir `anilReference.ts`).
-  const loyerRef = apartment.code_insee
-    ? await fetchLoyerReference(
-        apartment.code_insee,
-        typologieAnil(apartment.type_bien, apartment.nb_pieces, isImmeuble(apartment.type_bien), apartment.surface_m2)
-      )
+  //
+  // ⚠️ **Même périmètre que l'analyse**, via `perimetreAnalyse()` — pas la
+  // simple ligne communale. `buildBlocLocation` juge ce loyer contre SA
+  // référence et en tire le « +X % vs marché » : deux périmètres différents
+  // faisaient comparer le loyer à une autre référence que celle qui l'a
+  // produit. Invisible tant qu'une seule commune est traversée (la quasi-
+  // totalité des biens), faux dès qu'un bien géocodé au bâtiment est à moins
+  // de 500 m d'une limite communale.
+  //
+  // Le coût réseau est amorti : les reverse-géocodages BAN passent par le Data
+  // Cache de Next (`CACHE_SOURCES_S`, 30 jours), donc seule la toute première
+  // estimation d'un bien les paie.
+  const perimetre = perimetreAnalyse({
+    lat: apartment.latitude,
+    lon: apartment.longitude,
+    codeInsee: apartment.code_insee,
+    precision: apartment.precision_localisation,
+  });
+  const loyerRef = perimetre
+    ? (
+        await fetchLoyerRef(
+          perimetre,
+          typologieAnil(apartment.type_bien, apartment.nb_pieces, isImmeuble(apartment.type_bien), apartment.surface_m2)
+        )
+      )?.ref ?? null
     : null;
 
   const { loyer, loyerHC, justification, calcul } = await estimateRent(

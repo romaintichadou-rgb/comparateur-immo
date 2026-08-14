@@ -3,7 +3,8 @@ import type { Apartment, PrecisionLocalisation } from "@/lib/types";
 import type { DvfData } from "../sources/dvf";
 import type { Commodites } from "../sources/osm";
 import type { DelinquanceData } from "../sources/delinquance";
-import { clampNote } from "../scoring";
+import { inviteAdresse, precisionAuMoins } from "../perimetre";
+import { clampNote, interpole } from "../scoring";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } from "../types";
 
 /**
@@ -48,15 +49,30 @@ export function buildBlocPotentiel(
   // pèsent davantage que commodités et sécurité (facteurs de confort).
   let scoreSum = 0;
   let weightSum = 0;
-  const adresseExacte = precision === "exacte";
+  // Les commodités (OSM) exigent un point proche du bien ; la liquidité, non
+  // (voir plus bas). Un seul booléen servait aux deux et coupait les deux.
+  const coordsFines = precisionAuMoins(precision, "rue");
 
-  let invite: BlocAnalyse["invite"];
+  // Formulation commune aux trois blocs concernés — voir `inviteAdresse`.
+  const invite = inviteAdresse(apt, precision, {
+    requiert: "rue",
+    gain: "mesurer les commodités autour du bien",
+  });
 
   // --- Évolution des prix du quartier (DVF) ---
   if (dvf?.evolutionPct != null) {
     if (!sources.includes(SRC_DVF)) sources.push(SRC_DVF);
     const e = dvf.evolutionPct;
-    const evoNote = e >= 30 ? 5 : e >= 15 ? 4 : e >= 0 ? 3 : e >= -10 ? 2 : 1;
+    // Ancrages repris À L'IDENTIQUE de l'ancien escalier : on ne change pas la
+    // sévérité, on supprime seulement les marches. Entre 0 % et +14 %, la note
+    // ne bougeait PAS, puis sautait de 0,8 point à +15 %.
+    const evoNote = interpole(e, [
+      [-20, 1], // secteur qui décroche
+      [-10, 2],
+      [0, 3], //   marché stable
+      [15, 4],
+      [30, 5], //  forte dynamique
+    ]);
     scoreSum += evoNote * 0.35; weightSum += 0.35;
     faits.push({
       label: "Évolution des prix",
@@ -72,23 +88,44 @@ export function buildBlocPotentiel(
     });
   }
 
-  if (adresseExacte) {
-    // --- Liquidité : volume réel de ventes d'appartements du secteur ---
-    if (dvf && dvf.nbVentesTotal > 0) {
-      if (!sources.includes(SRC_DVF)) sources.push(SRC_DVF);
-      const v = dvf.nbVentesTotal;
-      const liqNote = v >= 150 ? 5 : v >= 80 ? 4 : v >= 40 ? 3 : v >= 15 ? 2 : 1;
-      scoreSum += liqNote * 0.30; weightSum += 0.30;
-      faits.push({
-        label: "Liquidité du marché (revente)",
-        value: v,
-        unit: "ventes",
-        detail: `appartements · ${dvf.recentMin}–${dvf.recentMax}`,
-        perimetre: "rayon 500 m",
-        source: SRC_DVF.label,
-        gravite: v >= 80 ? "positif" : v >= 40 ? "info" : "attention",
-      });
-    }
+  // --- Liquidité : volume réel de ventes d'appartements du secteur ---
+  //
+  // ⚠️ **Aucune garde de précision ici.** Un volume de ventes se lit tout aussi
+  // bien à l'échelle communale — c'est même sa maille naturelle. La garde
+  // `adresseExacte` qui existait supprimait ce critère (poids 0,30) dès qu'il
+  // manquait un numéro de voie, alors que la donnée était disponible : la note
+  // du bloc se renormalisait en silence sur les seuls critères restants.
+  // Seuils inchangés : la comparaison porte sur un ordre de grandeur, pas sur
+  // une frontière fine.
+  if (dvf && dvf.nbVentesTotal > 0) {
+    if (!sources.includes(SRC_DVF)) sources.push(SRC_DVF);
+    const v = dvf.nbVentesTotal;
+    // Ancrages d'origine, espacés de façon quasi logarithmique : c'est le bon
+    // profil pour un COMPTAGE (passer de 15 à 40 ventes change beaucoup plus
+    // la liquidité que passer de 150 à 175).
+    const liqNote = interpole(v, [
+      [0, 1], //    marché atone
+      [15, 2],
+      [40, 3],
+      [80, 4],
+      [150, 5], //  marché très liquide
+    ]);
+    scoreSum += liqNote * 0.30; weightSum += 0.30;
+    faits.push({
+      label: "Liquidité du marché (revente)",
+      value: v,
+      unit: "ventes",
+      // `volumeLabel`, PAS `recentLabel` : la liquidité compte les ventes de
+      // toute la fenêtre collectée, quand la médiane peut n'en retenir qu'une
+      // partie (fenêtre adaptative). Deux populations, deux libellés.
+      detail: ["appartements", dvf.volumeLabel].filter(Boolean).join(" · "),
+      // Comme l'évolution des prix plus haut : libellé lu sur la donnée, jamais
+      // codé en dur — il annonçait « rayon 500 m » quel que soit l'endpoint
+      // réellement interrogé.
+      perimetre: dvf.perimetreLabel,
+      source: SRC_DVF.label,
+      gravite: v >= 80 ? "positif" : v >= 40 ? "info" : "attention",
+    });
   }
 
   // --- Sécurité (SSMSI), comparée à la ville pour Paris/Lyon/Marseille ---
@@ -101,7 +138,16 @@ export function buildBlocPotentiel(
     if (delinqVille && delinqVille.tauxAtteintesBiens > 0) {
       const ratio = delinq.tauxAtteintesBiens / delinqVille.tauxAtteintesBiens;
       const ecartPct = Math.round((ratio - 1) * 100);
-      const secNote = ratio <= 0.8 ? 5 : ratio <= 1.1 ? 4 : ratio <= 1.5 ? 3 : ratio <= 2.5 ? 2 : 1;
+      // ⚠️ Critère INVERSÉ : un ratio bas est bon. Les ancrages décroissent
+      // donc en note quand le ratio monte — `interpole` exige seulement un `x`
+      // croissant, pas un `y`.
+      const secNote = interpole(ratio, [
+        [0.8, 5], // nettement moins exposé que la ville
+        [1.1, 4],
+        [1.5, 3],
+        [2.5, 2],
+        [3.5, 1], // très au-dessus de la moyenne de la ville
+      ]);
       scoreSum += secNote * 0.15; weightSum += 0.15;
       faits.push({
         label: "Sécurité — atteintes aux biens",
@@ -127,13 +173,24 @@ export function buildBlocPotentiel(
     donneesManquantes.push("statistiques de délinquance (SSMSI)");
   }
 
-  if (adresseExacte) {
+  // Commodités : mesurées dans un rayon autour du point, donc conditionnées à
+  // des coordonnées proches du bien (`coordsFines`). `commodites` est de toute
+  // façon nul en dessous de ce niveau — `run.ts` n'interroge plus OSM.
+  if (coordsFines) {
     // --- Commodités (OSM) — restituées en NIVEAU qualitatif, pas en chiffre brut.
     if (commodites) {
       sources.push(SRC_OSM);
       const total = commodites.transports + commodites.education + commodites.commerces;
       const niveau = total >= 300 ? "Excellent" : total >= 120 ? "Bon" : total >= 50 ? "Moyen" : "Mauvais";
-      const comNote = total >= 300 ? 5 : total >= 120 ? 4 : total >= 50 ? 3 : 2;
+      // Plancher à 2 conservé : un secteur sans commodité recensée reste
+      // habitable, et OSM sous-recense les zones rurales — le plancher amortit
+      // ce biais de couverture plutôt que de le prendre pour un fait.
+      const comNote = interpole(total, [
+        [0, 2],
+        [50, 3],
+        [120, 4],
+        [300, 5],
+      ]);
       scoreSum += comNote * 0.20; weightSum += 0.20;
       faits.push({
         label: "Commodités",
@@ -146,14 +203,6 @@ export function buildBlocPotentiel(
     } else {
       donneesManquantes.push("commodités (OpenStreetMap momentanément indisponible)");
     }
-  }
-
-  if (!adresseExacte) {
-    invite = {
-      text: "Renseigne l'adresse exacte du bien pour analyser la liquidité du marché et les commodités du quartier.",
-      href: `/appartements/${apt.id}?tab=donnees&edit=1`,
-      linkLabel: "Compléter l'adresse",
-    };
   }
 
   const note = weightSum > 0 ? clampNote((scoreSum / weightSum) * 2) : null;

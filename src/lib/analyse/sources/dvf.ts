@@ -9,15 +9,27 @@
  * On ne garde que les mutations "un appartement" (codtypbien 121) et on calcule
  * des médianes de prix/m², robustes aux valeurs aberrantes. Aucune estimation.
  *
+ * ⚠️ **La maille temporelle de l'API est l'ANNÉE, pas le mois.** `datemut_min`
+ * / `datemut_max` sont acceptés puis IGNORÉS (vérifié : même `count` avec et
+ * sans, Paris 11e 2025 → 2 386 dans les deux cas) ; seul `anneemut_min/max`
+ * filtre. Une fenêtre glissante de 12 mois devrait donc se faire côté client
+ * sur `datemut` — sans gain réel : la publication DVF a ~8 mois de retard
+ * (au 15/08/2026, l'année 2026 renvoie 0 vente et les données s'arrêtent au
+ * 31/12/2025), si bien que « les 12 derniers mois » désignent en pratique le
+ * dernier millésime complet. C'est ce que fait la fenêtre adaptative.
+ *
  * ── Deux périmètres, deux endpoints ──────────────────────────────────────
  *
- * Le périmètre suit la PRÉCISION de localisation du bien (voir `DvfPerimetre`).
+ * Le périmètre suit la PRÉCISION de localisation du bien — il est construit en
+ * amont par `perimetreAnalyse()` (`analyse/perimetre.ts`), source unique
+ * partagée avec la Carte des loyers ANIL.
  * Sans adresse exacte, les coordonnées ne sont que le centroïde du secteur
  * renvoyé par la BAN : chercher dans un rayon de 500 m autour de ce point
  * renvoie une fraction arbitraire du quartier, dans laquelle le bien réel n'est
  * même pas forcément situé. On bascule alors sur l'endpoint communal.
  */
 
+import type { PerimetreAnalyse } from "../perimetre";
 import { getJson } from "./http";
 
 /** Emprise géographique (`in_bbox`) — exige des coordonnées fiables. */
@@ -51,21 +63,44 @@ const EMPRISE_MAX_DEG = 0.02;
 const MAX_PAGES_RAYON = 4;
 const MAX_PAGES_COMMUNE = 2;
 
+/**
+ * Budget de collecte DVF, toutes fenêtres et toutes pages confondues.
+ *
+ * ⚠️ **C'est la source la plus lente ET la moins fiable de l'analyse** —
+ * `apidf-preprod.cerema.fr`, une instance de PRÉPRODUCTION. Mesuré sur données
+ * froides : 38 s sur Bordeaux, 60 s sans réponse du tout sur Toulouse, contre
+ * ~300 ms une fois le cache serveur chaud. Comme les autres sources partent en
+ * parallèle avec elle, DVF dicte à lui seul la durée de l'analyse.
+ *
+ * Sans plafond, le pire cas était `maxPages × TIMEOUT_PAGE_MS` par année, soit
+ * une minute d'attente pour l'utilisateur. La dégradation est GRACIEUSE : on
+ * garde les pages déjà obtenues et on cesse d'en demander. Une médiane sur 500
+ * ventes vaut celle sur 3 000 — c'est le nombre de pages qui devient
+ * négociable, jamais leur contenu.
+ */
+const BUDGET_MS = 12000;
+const TIMEOUT_PAGE_MS = 15000;
+
 const PM2_MIN = 300; // garde anti-aberrations (viager, nue-propriété, erreurs)
 const PM2_MAX = 30000;
 const ANCIEN_MIN = 2014;
 const ANCIEN_MAX = 2016;
 
 /**
- * Périmètre de comparaison, choisi par l'appelant selon `precision_localisation`.
+ * Taille d'échantillon au-delà de laquelle une médiane est jugée fiable.
  *
- * ⚠️ Union discriminée volontaire : passer à la fois un point et un code INSEE
- * laisserait le choix du périmètre à cette fonction, alors que seul l'appelant
- * sait si les coordonnées désignent le bâtiment ou un centroïde de secteur.
+ * ⚠️ **Un seul seuil pour deux décisions couplées**, d'où l'export : ici il
+ * arrête la fenêtre adaptative (on cesse de remonter dans le temps), et dans
+ * `blocs/prix.ts` il arrête l'atténuation de la note vers la neutralité. Les
+ * laisser diverger produirait le pire des deux mondes — une fenêtre élargie
+ * jusqu'à un volume que le bloc juge encore trop mince, ou l'inverse.
  */
-export type DvfPerimetre =
-  | { type: "rayon500"; lat: number; lon: number }
-  | { type: "commune"; codeInsee: string };
+export const SEUIL_ECHANTILLON_FIABLE = 15;
+
+/** Volume minimal pour conserver une tolérance de surface donnée. */
+const SEUIL_TOLERANCE = 8;
+const TOL_STRICTE = 0.2;
+const TOL_LARGE = 0.4;
 
 interface Vente {
   prixM2: number;
@@ -74,12 +109,33 @@ interface Vente {
 
 export interface DvfData {
   nbVentesRecent: number;
-  /** Volume total de ventes d'appartements récentes (avant filtre surface). */
+  /**
+   * Volume de ventes d'appartements sur TOUTE la fenêtre collectée (avant
+   * filtre de surface ET avant resserrement de la fenêtre adaptative).
+   *
+   * ⚠️ **Ne pas le réaligner sur la fenêtre adaptative.** Ce compteur alimente
+   * le critère « liquidité du marché » du bloc Potentiel, dont les seuils
+   * (15 / 40 / 80 / 150) sont calibrés sur le volume PLURIANNUEL collecté. Le
+   * brancher sur une fenêtre qui se resserre à un an en zone dense diviserait
+   * le comptage par deux ou trois et ferait chuter la note d'un secteur devenu
+   * … plus liquide. La médiane et la liquidité lisent volontairement deux
+   * populations différentes, et donc deux libellés différents.
+   */
   nbVentesTotal: number;
   /** Base de comparaison retenue pour la médiane récente (surface). */
   baseComparaison: string;
-  recentMin: number | null;
-  recentMax: number | null;
+  /**
+   * Millésimes réellement retenus pour la médiane récente, déjà mis en forme
+   * (« 2025 » ou « 2023–2025 ») — la fenêtre étant adaptative, sa profondeur
+   * varie d'un bien à l'autre et doit être affichée telle qu'elle a servi.
+   */
+  recentLabel: string | null;
+  /**
+   * Millésimes couverts par `nbVentesTotal` — TOUTE la fenêtre collectée, donc
+   * plus large que `recentLabel` dès que la fenêtre adaptative se resserre.
+   * Les deux libellés ne sont pas interchangeables (voir `nbVentesTotal`).
+   */
+  volumeLabel: string | null;
   /** Médiane prix/m² récente (surfaces comparables si assez d'échantillons). */
   medianeRecente: number | null;
   medianeAncienne: number | null;
@@ -111,22 +167,32 @@ interface Page {
 }
 
 export async function fetchDvf(params: {
-  perimetre: DvfPerimetre;
+  perimetre: PerimetreAnalyse;
   surface: number | null;
 }): Promise<DvfData> {
   const { perimetre, surface } = params;
   const rayonSerre = perimetre.type === "rayon500";
   const { prefixe, maxPages, perimetreLabel } = requete(perimetre);
 
-  // Fenêtre récente : 3 dernières années glissantes (inclut l'année en cours,
-  // souvent vide selon le décalage de publication DVF — sans conséquence).
+  // Fenêtre COLLECTÉE : 3 dernières années glissantes. Elle inclut l'année en
+  // cours, vide la majeure partie de l'année vu le retard de publication DVF —
+  // la requête n'est pas perdue pour autant : c'est par elle qu'arrive le
+  // millésime partiel dès sa publication (DVF paraît deux fois par an).
+  //
+  // ⚠️ Collecter ≠ retenir. La fenêtre RETENUE pour la médiane est choisie plus
+  // bas, millésime par millésime.
   const currentYear = new Date().getFullYear();
   const recentMinTarget = currentYear - 2;
 
-  const [recentesVentes, anciennesVentes] = await Promise.all([
-    fetchWindow(prefixe, maxPages, recentMinTarget, currentYear),
-    fetchWindow(prefixe, maxPages, ANCIEN_MIN, ANCIEN_MAX),
+  // Échéance PARTAGÉE par les deux fenêtres : le budget porte sur la collecte
+  // DVF entière, pas sur chaque fenêtre séparément — sinon deux fenêtres lentes
+  // le doublent.
+  const echeance = Date.now() + BUDGET_MS;
+  const [recentesParAnnee, anciennesVentes] = await Promise.all([
+    fetchWindowParAnnee(prefixe, maxPages, recentMinTarget, currentYear, echeance),
+    fetchWindow(prefixe, maxPages, ANCIEN_MIN, ANCIEN_MAX, echeance),
   ]);
+  const recentesVentes = recentesParAnnee.flatMap((a) => a.ventes);
 
   // Marché actuel : l'effet de taille fausse la comparaison (un petit logement
   // a structurellement un prix/m² plus élevé). On compare donc à surface
@@ -155,19 +221,61 @@ export async function fetchDvf(params: {
       ? ventes.filter((v) => Math.abs(v.surface - surface) <= surface * tol)
       : ventes;
 
-  let baseRecente = recentesVentes;
+  // ── Fenêtre ADAPTATIVE : on desserre le TEMPS avant la SURFACE ───────────
+  //
+  // Une fenêtre pluriannuelle fixe estime le prix du MILIEU de la fenêtre, pas
+  // celui d'aujourd'hui : son biais vaut à peu près la dérive annuelle du
+  // marché. Mesuré (rayon 500 m, comparables ±20 % autour de 60 m², médiane
+  // 2023-2025 vs 2025 seul) : +0,8 % à Paris 11e, −1,1 % à Marseille 7e,
+  // +2,5 % à Angers, **+8,8 % au Mans** — soit ~1,3 point de note sur un bloc
+  // qui pèse 0,3. On part donc du millésime le plus récent et on ne remonte
+  // dans le temps QUE si l'échantillon est trop mince.
+  //
+  // ⚠️ **Ne pas figer la fenêtre à un an « pour la fraîcheur ».** Le biais
+  // temporel est maximal là où l'échantillon annuel est le plus maigre, et le
+  // bruit y dépasse alors le biais qu'on prétend corriger — erreur-type de la
+  // médiane mesurée par bootstrap : Paris ±1,4 % sur un an contre ±1,1 % sur
+  // trois, mais Le Mans ±5,5 % contre ±2,8 %. Pire, sous SEUIL_TOLERANCE
+  // comparables, l'échelle ci-dessous élargit la SURFACE, et l'effet de taille
+  // (studio vs T4 : jusqu'à 30 % d'écart de prix/m²) est un biais bien plus
+  // gros que la dérive temporelle qu'on cherchait à supprimer. Comptages
+  // mesurés par an à ±20 % : Chartres centre 43-47, Vierzon centre 12-14,
+  // Angers périphérie 1-5. C'est pour ces derniers que la fenêtre s'élargit.
+  //
+  // L'ordre des deux desserrages n'est donc pas arbitraire : temps d'abord,
+  // surface en dernier recours.
+  const anneesRecentes = recentesParAnnee
+    .filter((a) => a.ventes.length > 0)
+    .sort((a, b) => b.annee - a.annee); // du plus récent au plus ancien
+
+  // Repli si la boucle n'atteint jamais le palier : tous les millésimes reçus.
+  let ventesFenetre = recentesVentes;
+  let anneesRetenues = anneesRecentes.map((a) => a.annee);
+  const cumul: Vente[] = [];
+  const retenues: number[] = [];
+  for (const a of anneesRecentes) {
+    cumul.push(...a.ventes);
+    retenues.push(a.annee);
+    if (dansTolerance(cumul, TOL_STRICTE).length >= SEUIL_ECHANTILLON_FIABLE) {
+      ventesFenetre = [...cumul];
+      anneesRetenues = [...retenues];
+      break;
+    }
+  }
+
+  let baseRecente = ventesFenetre;
   let baseAncienne = anciennesVentes;
   let baseComparaison = "toutes surfaces";
   if (surface != null && surface > 0) {
-    const strict = dansTolerance(recentesVentes, 0.2);
-    const large = dansTolerance(recentesVentes, 0.4);
-    if (strict.length >= 8) {
+    const strict = dansTolerance(ventesFenetre, TOL_STRICTE);
+    const large = dansTolerance(ventesFenetre, TOL_LARGE);
+    if (strict.length >= SEUIL_TOLERANCE) {
       baseRecente = strict;
-      baseAncienne = dansTolerance(anciennesVentes, 0.2);
+      baseAncienne = dansTolerance(anciennesVentes, TOL_STRICTE);
       baseComparaison = `surface ${Math.round(surface * 0.8)}–${Math.round(surface * 1.2)} m²`;
-    } else if (large.length >= 8) {
+    } else if (large.length >= SEUIL_TOLERANCE) {
       baseRecente = large;
-      baseAncienne = dansTolerance(anciennesVentes, 0.4);
+      baseAncienne = dansTolerance(anciennesVentes, TOL_LARGE);
       baseComparaison = `surface ${Math.round(surface * 0.6)}–${Math.round(surface * 1.4)} m²`;
     }
   }
@@ -184,8 +292,12 @@ export async function fetchDvf(params: {
     nbVentesRecent: baseRecente.length,
     nbVentesTotal: recentesVentes.length,
     baseComparaison,
-    recentMin: recentMinTarget,
-    recentMax: currentYear,
+    // Millésimes RÉELLEMENT couverts, jamais ceux demandés : la requête porte
+    // toujours sur `currentYear`, année qui ne contient aucune vente pendant
+    // les ~8 premiers mois. Afficher la fenêtre demandée revenait à annoncer
+    // « 2024–2026 » sur des données arrêtées fin 2025.
+    recentLabel: labelAnnees(anneesRetenues),
+    volumeLabel: labelAnnees(anneesRecentes.map((a) => a.annee)),
     medianeRecente,
     medianeAncienne,
     ancienMin: ANCIEN_MIN,
@@ -197,7 +309,7 @@ export async function fetchDvf(params: {
 }
 
 /** Endpoint, filtre de périmètre et budget de pages associés. */
-function requete(p: DvfPerimetre): { prefixe: string; maxPages: number; perimetreLabel: string } {
+function requete(p: PerimetreAnalyse): { prefixe: string; maxPages: number; perimetreLabel: string } {
   if (p.type === "commune") {
     return {
       prefixe: `${BASE_COMMUNE}?code_insee=${encodeURIComponent(p.codeInsee)}`,
@@ -224,7 +336,10 @@ function requete(p: DvfPerimetre): { prefixe: string; maxPages: number; perimetr
 }
 
 /**
- * Une fenêtre = une requête PAR ANNÉE, lancées en parallèle.
+ * Une fenêtre = une requête PAR ANNÉE, lancées en parallèle, et le résultat
+ * reste **découpé par millésime** : c'est ce découpage qui rend possible la
+ * fenêtre adaptative de `fetchDvf` (choisir combien d'années retenir se décide
+ * après la collecte, sans requête supplémentaire).
  *
  * ⚠️ Ne pas « simplifier » en une seule requête couvrant `anMin..anMax` :
  * l'API renvoie les mutations de la PLUS ANCIENNE à la plus récente et
@@ -235,28 +350,54 @@ function requete(p: DvfPerimetre): { prefixe: string; maxPages: number; perimetr
  * l'intérieur d'une année (quelques mois de décalage, sans effet sensible sur
  * une médiane) au lieu de l'appliquer au millésime entier.
  */
+async function fetchWindowParAnnee(
+  prefixe: string,
+  maxPages: number,
+  anMin: number,
+  anMax: number,
+  echeance: number
+): Promise<{ annee: number; ventes: Vente[] }[]> {
+  const annees = Array.from({ length: anMax - anMin + 1 }, (_, i) => anMin + i);
+  return Promise.all(
+    annees.map(async (annee) => ({ annee, ventes: await fetchAnnee(prefixe, maxPages, annee, echeance) }))
+  );
+}
+
+/** Variante aplatie, pour la fenêtre ancienne — son découpage ne sert à rien. */
 async function fetchWindow(
   prefixe: string,
   maxPages: number,
   anMin: number,
-  anMax: number
+  anMax: number,
+  echeance: number
 ): Promise<Vente[]> {
-  const annees = Array.from({ length: anMax - anMin + 1 }, (_, i) => anMin + i);
-  const parAnnee = await Promise.all(annees.map((an) => fetchAnnee(prefixe, maxPages, an)));
-  return parAnnee.flat();
+  const parAnnee = await fetchWindowParAnnee(prefixe, maxPages, anMin, anMax, echeance);
+  return parAnnee.flatMap((a) => a.ventes);
 }
 
-async function fetchAnnee(prefixe: string, maxPages: number, annee: number): Promise<Vente[]> {
+async function fetchAnnee(
+  prefixe: string,
+  maxPages: number,
+  annee: number,
+  echeance: number
+): Promise<Vente[]> {
   let url: string | null =
     `${prefixe}&codtypbien=121&anneemut_min=${annee}&anneemut_max=${annee}` +
     `&page_size=500&fields=valeurfonc,sbati`;
 
   const ventes: Vente[] = [];
   for (let page = 0; page < maxPages && url; page++) {
+    // Budget épuisé : on rend ce qui a déjà été collecté plutôt que de faire
+    // attendre l'utilisateur pour une décimale de médiane.
+    const restant = echeance - Date.now();
+    if (restant <= 0) break;
     // Annotation explicite : `url` est réaffectée depuis `raw.next`, donc son
     // type et celui de `raw` se référencent circulairement si on laisse TS
     // inférer (TS7022).
-    const raw: Page | null = await getJson<Page>(url, { timeoutMs: 15000 });
+    // Le timeout de page ne peut pas dépasser ce qu'il reste de budget global.
+    const raw: Page | null = await getJson<Page>(url, {
+      timeoutMs: Math.min(restant, TIMEOUT_PAGE_MS),
+    });
     if (!raw) break;
     const bruts = raw.features ? raw.features.map((f) => f.properties) : (raw.results ?? []);
     for (const b of bruts) {
@@ -270,6 +411,18 @@ async function fetchAnnee(prefixe: string, maxPages: number, annee: number): Pro
     url = raw.next ?? null;
   }
   return ventes;
+}
+
+/**
+ * « 2025 » pour un millésime unique, « 2023–2025 » pour une plage. Les années
+ * retenues peuvent être non contiguës (millésime intermédiaire vide) : on rend
+ * alors l'amplitude, la seule information utile à l'affichage.
+ */
+function labelAnnees(annees: number[]): string | null {
+  if (annees.length === 0) return null;
+  const min = Math.min(...annees);
+  const max = Math.max(...annees);
+  return min === max ? String(min) : `${min}–${max}`;
 }
 
 function median(arr: number[]): number {

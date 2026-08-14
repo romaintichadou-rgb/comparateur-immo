@@ -48,7 +48,7 @@ export default function ApartmentLocationMap({
   return (
     <MapContainer
       center={[latitude, longitude]}
-      zoom={approximatif ? 11 : compact ? 14 : 13}
+      zoom={approximatif ? (compact ? 13 : 11) : compact ? 15 : 13}
       scrollWheelZoom={false}
       dragging={!compact}
       zoomControl={!compact}

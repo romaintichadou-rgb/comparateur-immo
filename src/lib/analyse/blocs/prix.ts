@@ -1,13 +1,19 @@
 import { isImmeuble, type Apartment, type PrecisionLocalisation } from "@/lib/types";
-import type { DvfData } from "../sources/dvf";
-import { clampNote } from "../scoring";
+import { inviteAdresse, precisionAuMoins } from "../perimetre";
+import { SEUIL_ECHANTILLON_FIABLE, type DvfData } from "../sources/dvf";
+import { clampNote, interpole } from "../scoring";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } from "../types";
 
 /**
  * Bloc "Prix d'achat" — 100 % basé sur des transactions réelles (DVF+ Cerema).
  * On compare le prix/m² d'acquisition du bien (prix affiché / surface, hors
  * travaux, pour rester comparable aux prix de vente DVF) à la médiane réelle
- * du secteur sur les 3 dernières années, et on affiche l'évolution sur ~10 ans.
+ * du secteur, et on affiche l'évolution sur ~10 ans.
+ *
+ * ⚠️ **La profondeur de la comparaison n'est pas fixe** : la fenêtre DVF est
+ * adaptative (dernier millésime seul quand il est assez fourni, sinon on
+ * remonte — voir `sources/dvf.ts`). Tout libellé de période doit donc venir de
+ * `dvf.recentLabel` ; ne jamais réécrire « sur les 3 dernières années ».
  *
  * Note /10 (10 = affaire) purement déterministe : elle dépend uniquement de
  * l'écart au prix médian réel du quartier.
@@ -47,8 +53,9 @@ const NOTE_MAX_IMMEUBLE = 8;
  * quartier, l'écart de prix entre deux adresses atteint couramment ±20 %. La
  * comparaison reste informative, mais elle ne justifie pas un 10 ni un 0 — le
  * même traitement que celui déjà appliqué aux petits échantillons
- * (`nbVentesRecent < 15`), et pour la même raison : une incertitude réelle se
- * traduit par une note prudente, jamais par une note absente.
+ * (`nbVentesRecent < SEUIL_ECHANTILLON_FIABLE`), et pour la même raison : une
+ * incertitude réelle se traduit par une note prudente, jamais par une note
+ * absente.
  */
 const FIABILITE_QUARTIER = 0.65;
 
@@ -62,7 +69,7 @@ export function buildBlocPrix(
   const sources: Source[] = [];
   const donneesManquantes: string[] = [];
   let note: number | null = null;
-  const adresseExacte = precision === "exacte";
+  const rayonPossible = precisionAuMoins(precision, "rue");
 
   const prixM2Achat =
     apt.prix != null && apt.surface_m2 != null && apt.surface_m2 > 0
@@ -82,22 +89,19 @@ export function buildBlocPrix(
   // Invite NON bloquante : le bloc est noté dans les deux cas, l'adresse ne
   // fait que resserrer le périmètre de comparaison. Le texte doit donc
   // proposer un gain de précision, jamais laisser croire que l'analyse est en
-  // attente de cette saisie.
-  let invite: BlocAnalyse["invite"];
-  if (!adresseExacte) {
-    invite = {
-      text: "Cette comparaison porte sur l'ensemble de la commune (ou de l'arrondissement). Renseigne l'adresse exacte pour la resserrer sur les ventes à moins de 500 m du bien.",
-      href: `/appartements/${apt.id}?tab=donnees&edit=1`,
-      linkLabel: "Compléter l'adresse",
-    };
-  }
+  // attente de cette saisie. Formulation commune aux trois blocs concernés :
+  // voir `inviteAdresse` (analyse/perimetre.ts).
+  const invite = inviteAdresse(apt, precision, {
+    requiert: "rue",
+    gain: "resserrer la comparaison sur les ventes à moins de 500 m du bien",
+  });
 
   // Périmètre RÉELLEMENT interrogé, lu sur la donnée plutôt que redéduit de
   // `precision` : c'est `run.ts` qui arbitre (il retombe sur la commune si le
   // code INSEE manque), et un libellé recalculé ici pourrait annoncer un
   // périmètre que la requête n'a pas utilisé.
   const perimetre = dvf?.perimetreLabel ?? "arrondissement/commune";
-  const rayonSerre = dvf?.rayonSerre ?? adresseExacte;
+  const rayonSerre = dvf?.rayonSerre ?? rayonPossible;
 
   if (dvf?.medianeRecente != null) {
     sources.push(SRC_DVF);
@@ -117,7 +121,11 @@ export function buildBlocPrix(
       label: "Prix/m² médian comparable",
       value: dvf.medianeRecente,
       unit: "€/m²",
-      detail: `${dvf.nbVentesRecent} ventes · ${dvf.baseComparaison} · ${dvf.recentMin}–${dvf.recentMax}`,
+      // Millésimes lus sur la donnée (`recentLabel`), jamais reconstruits ici :
+      // la fenêtre est adaptative, sa profondeur change d'un bien à l'autre.
+      detail: [`${dvf.nbVentesRecent} ventes`, dvf.baseComparaison, dvf.recentLabel]
+        .filter(Boolean)
+        .join(" · "),
       perimetre,
       source: SRC_DVF.label,
       gravite: "info",
@@ -138,17 +146,30 @@ export function buildBlocPrix(
         gravite: ecartNote <= -0.05 ? "positif" : ecartNote <= 0.05 ? "info" : ecartNote <= 0.15 ? "attention" : "alerte",
       });
 
-      let penalite: number;
-      if (ecartNote <= -0.15) penalite = 0;
-      else if (ecartNote <= -0.05) penalite = 1;
-      else if (ecartNote <= 0.05) penalite = 2;
-      else if (ecartNote <= 0.15) penalite = 3;
-      else penalite = 4;
-      let rawNote = (5 - penalite) * 2;
-      // Fiabilité de l'échantillon : avec moins de 15 ventes comparables,
-      // la médiane est fragile — on rapproche la note vers la neutralité (5).
-      if (dvf.nbVentesRecent < 15) {
-        const fiab = dvf.nbVentesRecent / 15;
+      // Barème CONTINU (voir `interpole`), ancré sur « au prix du marché = 6/10 ».
+      //
+      // ⚠️ Remplace un escalier à 5 marches (10/8/6/4/2) dont le plancher était
+      // atteint dès +15 % : +17 % et +80 % recevaient la même note, et le pas
+      // de marche faisait chuter de 4 à 2 entre +14,9 % et +15,1 %.
+      //
+      // Les deux pentes sont volontairement ASYMÉTRIQUES : une bonne affaire se
+      // reconnaît vite (10/10 dès −20 %), une surcote se paie progressivement
+      // (0/10 seulement à +40 %). Une surcote de 17 % coûte cher mais n'est pas
+      // le pire cas imaginable — c'était précisément le reproche fait au
+      // barème précédent.
+      let rawNote = interpole(ecartNote, [
+        [-0.20, 10], // nettement sous le marché
+        [0, 6], //     au prix du marché
+        [0.40, 0], //  surcote extrême
+      ]);
+      // Fiabilité de l'échantillon : sous SEUIL_ECHANTILLON_FIABLE ventes
+      // comparables, la médiane est fragile — on rapproche la note vers la
+      // neutralité (5). C'est le même seuil qui arrête la fenêtre adaptative
+      // côté DVF : la fenêtre s'élargit tant que ce palier n'est pas atteint,
+      // et l'atténuation ne joue donc que sur les secteurs où même trois
+      // millésimes ne suffisent pas.
+      if (dvf.nbVentesRecent < SEUIL_ECHANTILLON_FIABLE) {
+        const fiab = dvf.nbVentesRecent / SEUIL_ECHANTILLON_FIABLE;
         rawNote = rawNote * fiab + 5 * (1 - fiab);
       }
       // Fiabilité du PÉRIMÈTRE : une médiane communale situe le secteur, pas

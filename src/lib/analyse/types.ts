@@ -15,34 +15,34 @@ export type BlocKey = "prix" | "location" | "risque" | "potentiel" | "quartier" 
 
 export const BLOC_LABELS: Record<BlocKey, string> = {
   prix: "Prix d'achat",
-  location: "Potentiel locatif",
+  location: "Rendement",
   risque: "Risques",
   potentiel: "Potentiel",
   quartier: "Quartier",
   simulation: "Simulation financière",
 };
 
-// Poids de chaque bloc dans la note globale. Prix + simulation financière
-// dominent volontairement (décision produit) : le prix d'achat et le
-// cash-flow réel après crédit et fiscalité sont les deux critères les plus
-// déterminants pour la décision d'achat. Le total fait 1 sur les 5 blocs
-// notés. "quartier" est purement informatif : poids 0, jamais noté, jamais
-// compté dans la moyenne (computeScoreGlobal filtre déjà sur note != null).
+// Poids de chaque bloc dans la note globale. Seuls les critères INTRINSÈQUES
+// au bien comptent : prix d'achat, rendement, risques, potentiel de
+// valorisation. "simulation" et "quartier" sont informatifs (poids 0) : le
+// cash-flow dépend du montage financier personnel (apport, taux, durée) et
+// ne doit pas influencer la qualité intrinsèque de l'opportunité.
+// computeScoreGlobal renormalise automatiquement sur les poids non nuls.
 export const BLOC_POIDS: Record<BlocKey, number> = {
   prix: 0.3,
-  location: 0.2,
-  risque: 0.15,
-  potentiel: 0.15,
-  simulation: 0.2,
+  location: 0.3,
+  risque: 0.2,
+  potentiel: 0.2,
+  simulation: 0,
   quartier: 0,
 };
 
 export const BLOC_POIDS_SANS_PRIX: Record<BlocKey, number> = {
   prix: 0,
-  location: 0.35,
-  risque: 0.15,
-  potentiel: 0.15,
-  simulation: 0.35,
+  location: 0.4,
+  risque: 0.2,
+  potentiel: 0.2,
+  simulation: 0,
   quartier: 0,
 };
 

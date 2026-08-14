@@ -1,7 +1,7 @@
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { resolveInputs, simulate, type AnneeSimulation } from "@/lib/simulation";
-import { cashflowSeuilsFromSettings, cashflowTone, clampNote } from "../scoring";
+import { cashflowSeuilsFromSettings, cashflowTone } from "../scoring";
 import { formatEurosSigned } from "@/lib/format";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fait } from "../types";
 
@@ -13,11 +13,9 @@ import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type BlocHighlight, type Fai
  * Simulation financière (apartment.simulation_inputs) quand elles existent,
  * sinon le scénario standard par défaut (defaultInputs()).
  *
- * Note /10 purement déterministe : dérivée du cash-flow mensuel MOYEN sur
- * toute la durée du crédit (indicateur le plus représentatif, lisse les
- * variations d'une année sur l'autre), situé par rapport aux seuils
- * personnels de cash-flow (page Profil investisseur) — mêmes seuils que ceux
- * utilisés pour colorer le cash-flow dans l'onglet Simulation financière.
+ * Bloc INFORMATIF (note: null, poids 0) : le cash-flow dépend du montage
+ * financier personnel (apport, taux, durée), pas de la qualité intrinsèque
+ * du bien. Affiché sans note ni verdict dans l'onglet Analyse.
  */
 
 const SRC_CALC = "Calcul — simulation LMNP";
@@ -79,35 +77,10 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
     anneesSansImpotFait(result.annees),
   ];
 
-  // Note /10 = facteur principal (CF LMNP vs seuils profil, 80%) +
-  // bonus fiscal (durée exonération, 20%).
-  const range = Math.max(seuils.vert - seuils.rouge, 50);
-
-  // Facteur principal : cash-flow moyen LMNP situé par rapport aux seuils profil.
-  let scoreCF: number;
-  if (cfLMNP >= seuils.vert + range) scoreCF = 5;
-  else if (cfLMNP >= seuils.vert)
-    scoreCF = 4 + Math.min((cfLMNP - seuils.vert) / range, 1);
-  else if (cfLMNP >= seuils.rouge)
-    scoreCF = 2 + 2 * ((cfLMNP - seuils.rouge) / (seuils.vert - seuils.rouge));
-  else if (cfLMNP >= seuils.rouge - range)
-    scoreCF = Math.max(0, 2 * ((cfLMNP - (seuils.rouge - range)) / range));
-  else scoreCF = 0;
-
-  // Bonus fiscal : durée d'exonération LMNP.
-  let bonusFiscal = 0;
-  if (result.anneesExonerees >= 15) bonusFiscal = 0.5;
-  else if (result.anneesExonerees >= 10) bonusFiscal = 0.35;
-  else if (result.anneesExonerees >= 5) bonusFiscal = 0.15;
-  else if (result.anneesExonerees === 0) bonusFiscal = -0.25;
-
-  const base = scoreCF + bonusFiscal;
-  const note = clampNote(Math.max(0, base) * 2);
-
   return {
     cle: "simulation",
     titre: BLOC_LABELS.simulation,
-    note,
+    note: null,
     poids: BLOC_POIDS.simulation,
     highlights,
     disponible: true,

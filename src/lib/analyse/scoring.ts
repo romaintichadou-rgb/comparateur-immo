@@ -112,8 +112,7 @@ export const TONE_PANEL_STYLES: Record<RendementTone, TonePanelStyle> = {
 };
 
 /**
- * Tonalité d'une note /10 — SOURCE UNIQUE, alignée sur les paliers de
- * `scoreCategorie` (≥ 7 = "Opportunité intéressante" → vert). Utilisée par les
+ * Tonalité d'une note /10 — SOURCE UNIQUE (≥ 7 → vert). Utilisée par les
  * sous-scores du verdict, les FlatSections et l'anneau de score du tableau :
  * un 7,5 doit être vert PARTOUT, jamais vert sur une page et ambre sur une
  * autre. Ne pas réintroduire de seuil local.
@@ -301,9 +300,13 @@ export function buildVerdicts(
   }
 
   // 3) Tout bloc noté ≤ 5/10 remonte comme point d'attention critique.
+  //    "simulation" est exclu : le cash-flow dépend du montage financier
+  //    personnel, pas de la qualité intrinsèque du bien.
+  const BLOCS_INFORMATIFS: Set<string> = new Set(["simulation", "quartier"]);
+
   const BLOC_VERDICT_FAIBLE: Record<BlocKey, { titre: string; detail: string }> = {
     prix: { titre: "Prix trop élevé", detail: "Le prix affiché est supérieur aux ventes comparables du secteur — la marge de rentabilité est réduite." },
-    location: { titre: "Faible potentiel locatif", detail: "Demande locative faible ou loyer atteignable insuffisant pour le prix d'achat." },
+    location: { titre: "Faible rendement", detail: "Demande locative faible ou loyer atteignable insuffisant pour le prix d'achat." },
     simulation: { titre: "Mauvais cash-flow mensuel", detail: "Après crédit et fiscalité, l'effort d'épargne mensuel est élevé — vérifie le financement." },
     potentiel: { titre: "Peu de potentiel", detail: "Peu de marge de plus-value à la revente ou de revalorisation locative." },
     risque: { titre: "Risques élevés", detail: "Un ou plusieurs facteurs de risque pèsent sur cet investissement — voir le détail ci-dessous." },
@@ -311,6 +314,7 @@ export function buildVerdicts(
   };
 
   for (const b of Object.values(blocs) as BlocAnalyse[]) {
+    if (BLOCS_INFORMATIFS.has(b.cle)) continue;
     if (b.note != null && b.note <= 5) {
       const labels = BLOC_VERDICT_FAIBLE[b.cle as BlocKey];
       verdicts.push({
@@ -325,7 +329,7 @@ export function buildVerdicts(
   // 4) Points forts marquants (note ≥ 9/10) — équilibre, en dernier, max 2.
   const BLOC_VERDICT_FORT: Record<BlocKey, string> = {
     prix: "Prix d'achat très compétitif",
-    location: "Forte demande locative",
+    location: "Rendement élevé",
     simulation: "Cash-flow confortable",
     potentiel: "Fort potentiel de valorisation",
     risque: "Profil de risque très sain",
@@ -333,7 +337,7 @@ export function buildVerdicts(
   };
 
   const forts = (Object.values(blocs) as BlocAnalyse[])
-    .filter((b) => b.note != null && (b.note as number) >= 9)
+    .filter((b) => b.note != null && !BLOCS_INFORMATIFS.has(b.cle) && (b.note as number) >= 9)
     .sort((a, b) => (b.note as number) - (a.note as number))
     .slice(0, 2);
   for (const b of forts) {
@@ -348,37 +352,21 @@ export function buildVerdicts(
   return verdicts;
 }
 
-/**
- * Catégorie qualitative du score global, affichée en tag coloré dans l'en-tête
- * de l'Analyse IA. Chaque palier correspond à un profil d'investissement.
- */
-export type ScoreCategorie = "excellent" | "solide" | "correct" | "fragile" | "deconseille" | "inconnu";
-
+/** Libellé + tonalité d'une pastille de catégorie. */
 export interface ScoreCategorieInfo {
   label: string;
   tone: ScoreTone;
 }
 
-const SCORE_CATEGORIES: Record<ScoreCategorie, ScoreCategorieInfo> = {
-  excellent: { label: "Excellente opportunité", tone: "emerald" },
-  solide: { label: "Opportunité intéressante", tone: "emerald" },
-  correct: { label: "À négocier", tone: "amber" },
-  fragile: { label: "Investissement fragile", tone: "red" },
-  deconseille: { label: "Investissement déconseillé", tone: "red" },
-  inconnu: { label: "Données insuffisantes", tone: "neutral" },
-};
-
-export function scoreCategorie(note: number | null): ScoreCategorieInfo {
-  if (note == null) return SCORE_CATEGORIES.inconnu;
-  if (note >= 8.5) return SCORE_CATEGORIES.excellent;
-  if (note >= 7) return SCORE_CATEGORIES.solide;
-  if (note >= 5) return SCORE_CATEGORIES.correct;
-  if (note >= 3.5) return SCORE_CATEGORIES.fragile;
-  return SCORE_CATEGORIES.deconseille;
-}
-
 /**
  * Catégorie qualitative d'un BLOC d'analyse (section individuelle),
+ *
+ * ⚠️ Il n'existe volontairement PAS d'équivalent pour le score GLOBAL. Un
+ * `scoreCategorie(score)` a existé, dont la tranche 5–7 s'intitulait « À
+ * négocier » — le vocabulaire de la DÉCISION appliqué à une simple tranche de
+ * note. Les deux classements s'affichaient côte à côte et se contredisaient
+ * (pastille « À négocier » sous un titre « Passe ton chemin »). Le score global
+ * ne porte plus qu'une décision, via `DECISION_CHIP`.
  * distincte du verdict global. Les labels décrivent la qualité du thème
  * évalué, pas le profil d'investissement.
  */
@@ -398,6 +386,37 @@ export function blocCategorie(note: number | null): ScoreCategorieInfo {
   if (note >= 5) return BLOC_CATEGORIES.moyen;
   if (note >= 3.5) return BLOC_CATEGORIES.faible;
   return BLOC_CATEGORIES.critique;
+}
+
+/**
+ * Interpolation linéaire par morceaux sur une table d'ancrages — MÉCANISME
+ * UNIQUE de notation des critères CONTINUS (pourcentage, ratio, comptage).
+ *
+ * ⚠️ **Ne jamais noter un critère continu par une cascade de ternaires.** Une
+ * cascade produit un escalier : elle est plate à l'intérieur d'une marche et
+ * saute d'un bloc à la frontière. Mesuré sur le bloc Potentiel avant migration,
+ * l'évolution des prix du secteur rendait la MÊME note de 0 % à +14 %, puis
+ * bondissait de 0,8 point entre +14 % et +15 %. Deux défauts pour le prix d'un :
+ * aucune gradation là où elle compte, et une falaise arbitraire au milieu.
+ *
+ * `points` doit être trié par `x` croissant. En dehors des bornes, la valeur
+ * est plafonnée au premier / dernier ancrage — les plateaux extrêmes sont
+ * VOLONTAIRES (au-delà d'un certain niveau, « c'est excellent » ne se nuance
+ * plus), contrairement aux plateaux intermédiaires qui sont des défauts.
+ *
+ * Les critères CATÉGORIELS ne passent pas par ici : une étiquette DPE, une
+ * classe radon ou une zone sismique n'ont pas de valeurs intermédiaires. Leur
+ * escalier reflète le réel, il ne l'invente pas.
+ */
+export function interpole(x: number, points: readonly (readonly [number, number])[]): number {
+  const premier = points[0];
+  if (x <= premier[0]) return premier[1];
+  for (let i = 1; i < points.length; i++) {
+    const [x0, y0] = points[i - 1];
+    const [x1, y1] = points[i];
+    if (x <= x1) return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+  }
+  return points[points.length - 1][1];
 }
 
 export function clampNote(n: number): number {

@@ -113,7 +113,7 @@ cohérent avec l'app).
 
 - _[contextuel — si écart DVF > 0]_ **Prix au-dessus du marché** — « Le prix
   ressort +X % vs la médiane des ventes réelles du quartier (N ventes à Y €/m²
-  sur 3 ans). » · verbatim : « D'après les ventes notariales récentes du secteur
+  sur les millésimes DVF retenus). » · verbatim : « D'après les ventes notariales récentes du secteur
   (base DVF), le prix au m² tourne autour de **Y €**. Votre bien est **X %**
   au-dessus ; je me positionne à **Z €**, cohérent avec le marché. » · source DVF.
 - _[contextuel — comparables]_ **Ventes comparables** — cite 1–2 ventes récentes

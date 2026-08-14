@@ -42,12 +42,10 @@ interface ThresholdChartProps {
   formatX: (v: number) => string;
   formatY: (v: number) => string;
   title: string;
-  yUnit: string;
   hoveredIndex: number | null;
   onHover: (index: number | null) => void;
   ghostPoint?: { x: number; y: number | null };
   anilMarkers?: { min: number; max: number };
-  annonceX?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +244,6 @@ function ThresholdChart({
   onHover,
   ghostPoint,
   anilMarkers,
-  annonceX,
 }: ThresholdChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const reducedMotion = useReducedMotion();
@@ -439,25 +436,19 @@ function ThresholdChart({
         {fillD && <path d={fillD} fill={`url(#fill-${uid})`} />}
         {pathD && <path d={pathD} fill="none" stroke="#3d3580" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
 
-        {annonceX != null && annonceX !== currentX && (
-          <>
-            <line x1={scaleX(annonceX)} y1={PAD.top} x2={scaleX(annonceX)} y2={PAD.top + PLOT_H} stroke="#8b8393" strokeWidth=".8" strokeDasharray="2 3" opacity=".4" />
-            <text x={scaleX(annonceX)} y={PAD.top - 5} textAnchor="middle" fontSize="7.5" fill="#8b8393" fontFamily="sans-serif">Annonce</text>
-          </>
-        )}
-
         {ghostPoint && ghostPoint.y != null && (
           <>
-            <line x1={scaleX(ghostPoint.x)} y1={PAD.top} x2={scaleX(ghostPoint.x)} y2={PAD.top + PLOT_H} stroke="#3d3580" strokeWidth=".8" strokeDasharray="2 3" opacity=".25" />
-            <circle cx={scaleX(ghostPoint.x)} cy={scaleY(ghostPoint.y)} r="4.5" fill="none" stroke="#3d3580" strokeWidth="1.5" strokeDasharray="2 2" opacity=".5" />
+            <line x1={scaleX(ghostPoint.x)} y1={PAD.top} x2={scaleX(ghostPoint.x)} y2={PAD.top + PLOT_H} stroke="#8b8393" strokeWidth=".75" strokeDasharray="3 4" opacity=".6" />
+            <text x={scaleX(ghostPoint.x)} y={PAD.top - 5} textAnchor="middle" fontSize="7.5" fill="#8b8393" fontFamily="sans-serif">Annonce</text>
+            <circle cx={scaleX(ghostPoint.x)} cy={scaleY(ghostPoint.y)} r="4" fill="white" stroke="#8b8393" strokeWidth="1.2" />
             {(() => {
               const gx = Math.max(36, Math.min(CHART_W - 36, scaleX(ghostPoint.x)));
               const gLabel = formatY(ghostPoint.y);
               const gLabelW = Math.max(48, gLabel.length * 5.5 + 16);
               return (
                 <>
-                  <rect x={gx - gLabelW / 2} y={scaleY(ghostPoint.y) - 22} width={gLabelW} height="18" rx="4" fill="white" stroke="#3d3580" strokeWidth=".8" strokeDasharray="2 2" opacity=".8" />
-                  <text x={gx} y={scaleY(ghostPoint.y) - 10} textAnchor="middle" fontSize="8" fontWeight="600" fill="#3d3580" fontFamily="'Geist Mono', monospace" opacity=".8">
+                  <rect x={gx - gLabelW / 2} y={scaleY(ghostPoint.y) - 22} width={gLabelW} height="18" rx="4" fill="white" stroke="#b0a8c0" strokeWidth=".8" />
+                  <text x={gx} y={scaleY(ghostPoint.y) - 10} textAnchor="middle" fontSize="8" fontWeight="600" fill="#6b6280" fontFamily="'Geist Mono', monospace">
                     {gLabel}
                   </text>
                 </>
@@ -488,8 +479,8 @@ function ThresholdChart({
 
         {currentY != null && (
           <>
-            <line x1={scaleX(currentX)} y1={PAD.top} x2={scaleX(currentX)} y2={PAD.top + PLOT_H} stroke="#8478c9" strokeWidth="1" strokeDasharray="3 3" opacity=".5" />
-            <line x1={PAD.left} y1={scaleY(currentY)} x2={scaleX(currentX)} y2={scaleY(currentY)} stroke="#8478c9" strokeWidth="1" strokeDasharray="3 3" opacity=".5" />
+            <line x1={scaleX(currentX)} y1={PAD.top} x2={scaleX(currentX)} y2={PAD.top + PLOT_H} stroke="#3d3580" strokeWidth="1" strokeDasharray="3 3" opacity=".5" />
+            <line x1={PAD.left} y1={scaleY(currentY)} x2={scaleX(currentX)} y2={scaleY(currentY)} stroke="#3d3580" strokeWidth=".75" strokeDasharray="3 3" opacity=".35" />
             <circle cx={scaleX(currentX)} cy={scaleY(currentY)} r="5" fill="#3d3580" />
             {!reducedMotion && (
               <circle cx={scaleX(currentX)} cy={scaleY(currentY)} r="9" fill="none" stroke="#3d3580" strokeWidth="1.2" opacity=".3">
@@ -587,8 +578,8 @@ function ComboSimulator({
 
   const prixMin = roundTo((apt.prix ?? 0) * 0.7, 5000);
   const prixMax = roundTo((apt.prix ?? 0) * 1.3, 5000);
-  const loyerMin = loyerRange?.[0] ?? 0;
-  const loyerMax = loyerRange?.[1] ?? (apt.loyer_retenu ?? 0) * 1.5;
+  const loyerMin = loyerRange ? roundTo(loyerRange[0] * 0.9, 10) : 0;
+  const loyerMax = loyerRange ? roundTo(loyerRange[1] * 1.1, 10) : roundTo((apt.loyer_retenu ?? 0) * 1.5, 10);
 
   const resetCombo = () => {
     onComboPrixChange(apt.prix ?? 0);
@@ -829,7 +820,7 @@ export default function PlaygroundView({
     setAnilLoading(true);
     const typo = typologieAnil(apt.type_bien, apt.nb_pieces, immeuble, apt.surface_m2);
     let cancelled = false;
-    fetch(`/api/loyer-reference?code_insee=${encodeURIComponent(apt.code_insee)}&typologie=${typo}`)
+    fetch(`/api/loyer-reference?apartment_id=${encodeURIComponent(apt.id)}&typologie=${typo}`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
@@ -846,7 +837,9 @@ export default function PlaygroundView({
       })
       .catch(() => { if (!cancelled) { setRefCC(null); setAnilLoading(false); } });
     return () => { cancelled = true; };
-  }, [apt.code_insee, apt.type_bien, apt.nb_pieces, apt.surface_m2, apt.nb_lots, immeuble, surface, hasSurface]);
+    // `apt.id` en dépendance : la route résout le périmètre depuis le bien
+    // stocké, la clé de cache ne peut donc plus être la seule commune.
+  }, [apt.id, apt.code_insee, apt.type_bien, apt.nb_pieces, apt.surface_m2, apt.nb_lots, immeuble, surface, hasSurface]);
 
   const loyerRange: [number, number] | null = useMemo(() => {
     if (!refCC || !hasSurface) return null;
@@ -859,7 +852,7 @@ export default function PlaygroundView({
 
   const xValues = useMemo(() => {
     if (facteur === "prix" && hasPrix) return generatePriceRange(apt.prix!);
-    if (facteur === "loyer" && loyerRange && hasLoyer) return generateLoyerRange(loyerRange[0], loyerRange[1], apt.loyer_retenu!);
+    if (facteur === "loyer" && loyerRange && hasLoyer) return generateLoyerRange(roundTo(loyerRange[0] * 0.9, 10), roundTo(loyerRange[1] * 1.1, 10), apt.loyer_retenu!);
     return [];
   }, [facteur, apt.prix, apt.loyer_retenu, loyerRange, hasPrix, hasLoyer]);
 
@@ -1002,13 +995,10 @@ export default function PlaygroundView({
             formatX={formatXFn}
             formatY={(v) => `${(v * 100).toFixed(1)} %`}
             title="Rendement net"
-            yUnit="%"
             hoveredIndex={hoveredIndex}
             onHover={setHoveredIndex}
-
             ghostPoint={ghostRendement}
             anilMarkers={anilMarkers}
-            annonceX={origX}
           />
           <ThresholdChart
             data={dataPoints}
@@ -1018,13 +1008,10 @@ export default function PlaygroundView({
             formatX={formatXFn}
             formatY={(v) => formatCashflow(v)}
             title="Cash-flow mensuel"
-            yUnit="€"
             hoveredIndex={hoveredIndex}
             onHover={setHoveredIndex}
-
             ghostPoint={ghostCashflow}
             anilMarkers={anilMarkers}
-            annonceX={origX}
           />
         </div>
       )}

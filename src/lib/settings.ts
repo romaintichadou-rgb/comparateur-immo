@@ -48,12 +48,6 @@ export const FINANCEMENT_MODE_INFOS: Record<
   },
 };
 
-/** Forme courte, pour un badge à côté d'un chiffre. */
-export const FINANCEMENT_MODE_COURT: Record<FinancementMode, string> = {
-  cout_total: "coût total",
-  hors_notaire: "hors notaire",
-};
-
 export interface AppSettings {
   /** Rendement net (%) à partir duquel c'est vert ("objectif atteint"). */
   rendementSeuilVertPct: number;

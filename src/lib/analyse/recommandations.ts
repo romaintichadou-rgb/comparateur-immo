@@ -39,7 +39,8 @@ export interface RecommandationContext {
   settings: AppSettings;
   seuils: RendementSeuils;
   precision: PrecisionLocalisation | null;
-  loyerPerimetre: "rayon500" | "arrondissement";
+  /** Libellé du périmètre ANIL réellement agrégé (`LoyerData.perimetreLabel`). */
+  loyerPerimetre: string;
   baseBlocs: Record<BlocKey, BlocAnalyse>;
   baseScore: number | null;
   baseVerdicts: Verdict[];
@@ -401,9 +402,13 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         // dit plutôt que de présenter un chiffre fragile comme acquis.
         const fiabilite =
           nbVentes != null && nbVentes < 15 ? " Échantillon restreint : à confirmer avec l'agent." : "";
+        // Période lue sur la donnée : la fenêtre DVF est adaptative, écrire
+        // « sur les 3 dernières années » en dur mentait dès qu'elle se
+        // resserrait sur le dernier millésime.
+        const periodeTxt = ctx.dvf?.recentLabel ? ` sur ${ctx.dvf.recentLabel}` : "";
         out.push({
           titre: "Le prix dépasse les ventes réelles du quartier",
-          detail: `${nbVentes ?? "Plusieurs"} ventes comparables${baseTxt}${zone ? ` à ${zone}` : ""} sur les 3 dernières années : prix médian ${fmtEuros(mediane)}/m², contre ${fmtEuros(prixM2Actuel)}/m² ici.${fiabilite}`,
+          detail: `${nbVentes ?? "Plusieurs"} ventes comparables${baseTxt}${zone ? ` à ${zone}` : ""}${periodeTxt} : prix médian ${fmtEuros(mediane)}/m², contre ${fmtEuros(prixM2Actuel)}/m² ici.${fiabilite}`,
           source: "DVF",
           chiffre: `+${ecartPct} %`,
           chiffreLabel: "au-dessus du marché",
@@ -414,10 +419,10 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       // stagnant ou en recul). Un marché en hausse n'est pas un argument pour
       // négocier — on ne le montre pas.
       if (ctx.dvf?.evolutionPct != null && ctx.dvf.evolutionPct <= -3 && ctx.dvf.medianeAncienne != null && mediane != null) {
-        const { evolutionPct, medianeAncienne, ancienMin, ancienMax, recentMin, recentMax } = ctx.dvf;
+        const { evolutionPct, medianeAncienne, ancienMin, ancienMax, recentLabel } = ctx.dvf;
         out.push({
           titre: "Le marché du secteur recule",
-          detail: `${zone ? `À ${zone}, le` : "Le"} prix médian est passé de ${fmtEuros(medianeAncienne)}/m² (${ancienMin}–${ancienMax}) à ${fmtEuros(mediane)}/m² (${recentMin}–${recentMax}). Un marché qui recule renforce ta position.`,
+          detail: `${zone ? `À ${zone}, le` : "Le"} prix médian est passé de ${fmtEuros(medianeAncienne)}/m² (${ancienMin}–${ancienMax}) à ${fmtEuros(mediane)}/m²${recentLabel ? ` (${recentLabel})` : ""}. Un marché qui recule renforce ta position.`,
           source: "DVF",
           chiffre: `${evolutionPct} %`,
           chiffreLabel: "sur ~10 ans",
@@ -585,7 +590,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     };
     const blocs: Record<BlocKey, BlocAnalyse> = {
       ...ctx.baseBlocs,
-      risque: buildBlocRisque(mod, dpeDataMod, ctx.georisques),
+      risque: buildBlocRisque(mod, dpeDataMod, ctx.georisques, ctx.precision),
       location: buildBlocLocation(mod, ctx.loyerRef, ctx.seuils, ctx.loyerPerimetre, {
         renovePremium: true,
       }),
@@ -720,13 +725,12 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         const gain = loyerCible - loyerActuel;
         const annee = ctx.loyerRef.annee ? ` ${ctx.loyerRef.annee}` : "";
         const zone = zoneOf(apt);
-        const perimetreLabel = ctx.loyerPerimetre === "rayon500" ? "rayon 500 m" : "arrondissement";
         const nbObsTxt =
           ctx.loyerRef.nbObs > 0 ? ` (${ctx.loyerRef.nbObs.toLocaleString("fr-FR")} annonces observées)` : "";
 
         args.push({
           titre: "Ton loyer est sous le marché du secteur",
-          detail: `Pour ${Math.round(surface)} m²${zone ? ` à ${zone}` : ""} (${perimetreLabel}), la carte des loyers ANIL${annee}${nbObsTxt} situe le marché entre ${fmtEuros(loyerMinAnil)} et ${fmtEuros(loyerMaxAnil)}/mois. Tu es à ${fmtEuros(loyerActuel)}.`,
+          detail: `Pour ${Math.round(surface)} m²${zone ? ` à ${zone}` : ""} (${ctx.loyerPerimetre}), la carte des loyers ANIL${annee}${nbObsTxt} situe le marché entre ${fmtEuros(loyerMinAnil)} et ${fmtEuros(loyerMaxAnil)}/mois. Tu es à ${fmtEuros(loyerActuel)}.`,
           source: "ANIL",
           chiffre: `+${fmtEuros(gain)}`,
           chiffreLabel: "de marge par mois",

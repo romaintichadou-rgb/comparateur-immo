@@ -24,11 +24,9 @@ sources de dérive).
    `sm:text-5xl`), raison actionnable (jamais de score brut), puis ligne de
    sous-scores par bloc (couleurs `noteTone()`), puis cartes alertes/attention
    (critère ET bloc, triées alerte > attention, critere > bloc, max 3).
-2. **MetricCards** — 4 cartes (Cash-flow, Rendement net, Prix au m², DPE) en
-   grille, avec emphase conditionnelle sur négocie/passe.
-3. **Bloc synthèse** — narration IA sur fond `bg-ink-100/40`.
+2. **Bloc synthèse** — narration IA sur fond `bg-ink-100/40`.
 4. **Sections plates** (`FlatSection`) — séparées par des `<hr>`, chaque bloc
-   d'analyse (Prix, Locatif, Risques, Potentiel, Simulation) avec note,
+   d'analyse (Prix, Rendement, Risques, Potentiel, Simulation) avec note,
    verdicts, highlights, faits, et narration.
 
 ## Verdict (décision à 3 niveaux)
@@ -38,6 +36,13 @@ sources de dérive).
 - **achète** si `score >= 7` ET aucun verdict `attention` ET pas de surcote
   (`ecartPct <= 5`) ;
 - **négocie** sinon.
+
+**Le bloc Simulation ne contribue ni au score global ni aux verdicts.**
+Le cash-flow dépend du montage financier personnel (apport, taux, durée),
+pas de la qualité intrinsèque du bien. Le bloc reste affiché (note, faits,
+highlights) mais son poids est 0 dans `BLOC_POIDS` et `BLOC_POIDS_SANS_PRIX`,
+et il est exclu de `buildVerdicts` (`BLOCS_INFORMATIFS`). Même traitement
+que le bloc Quartier.
 
 `DECISION_STYLES` (`AnalyseIA.tsx`) porte l'habillage de la CARTE verdict :
 
@@ -53,12 +58,13 @@ Le trait et le chiffre de la jauge viennent de `DECISION_RING_STYLES`
 (`scoring.ts`, voir `docs/reference/couleurs-scoring.md`), partagé avec
 l'anneau de l'accueil.
 
-## MetricCards — tonalité des valeurs
+## KPI banner (entre en-tête et onglets)
 
-Couleur de la valeur : `METRIC_VALUE_CLASS` — `positif` = `text-emerald-700`,
-`attention` = `text-amber-700`, `alerte` = `text-red-600`, `neutral` =
-`text-ink-900`. Tags d'emphase (négocie/passe uniquement) : `Rédhibitoire`
-(`bg-red-100 text-red-700`) ou `À négocier` (`bg-amber-100 text-amber-700`).
+Les 4 KPIs investisseur (Rendement net, Cash-flow mensuel, Prix au m², DPE)
+sont affichés dans `ApartmentDetail.tsx`, **entre l'en-tête et la barre
+d'onglets**, visibles quel que soit l'onglet actif. Ils ne font plus partie
+de l'onglet Analyse (pas de duplication). Cash-flow et Rendement net ouvrent
+leur panneau de détail au clic (`CashflowDetailPanel`, `RendementDetailPanel`).
 
 ## VerdictGauge (jauge circulaire)
 
@@ -370,7 +376,7 @@ visible**. Voir `COL_CODGEO` dans `sources/delinquance.ts` — et vérifier les
 colonnes réelles via l'endpoint `/profile/` de la ressource avant de conclure
 à une panne réseau.
 
-## Bloc Prix : deux périmètres DVF, jamais d'absence de note
+## Périmètre de comparaison : deux échelles, jamais d'absence de note
 
 L'adresse exacte est absente de la grande majorité des annonces au moment de
 l'ajout. Le bloc Prix ne doit donc PAS conditionner sa note à cette saisie :
@@ -384,12 +390,255 @@ presque tous les biens.
 | `"exacte"` | `geomutations/` (`in_bbox`) | rayon 500 m | `rayon 500 m` |
 | sinon | `mutations/` (`code_insee`) | commune, arrondissement à PLM | `arrondissement/commune` |
 
-Le choix se fait dans `run.ts` (`DvfPerimetre`), **d'après `precision`** — ce
-que valent les COORDONNÉES — et non d'après `aAdressePrecise()`, qui ne dit que
-ce que l'utilisateur a saisi. Les deux divergent quand la BAN ne résout
-l'adresse qu'au niveau de la rue. `buildBlocPrix` lit ensuite
-`dvf.perimetreLabel` / `dvf.rayonSerre` plutôt que de redéduire le périmètre :
-le périmètre interrogé et le périmètre annoncé ne peuvent pas diverger.
+### `analyse/perimetre.ts` — source unique de la finesse de localisation
+
+**Trois niveaux de précision**, reportés tels quels depuis le `type` de la BAN
+(`geocoding.ts`). ⚠️ `street` et `municipality` étaient écrasés sur une même
+valeur « approximative », ce qui rendait indiscernables le milieu d'une voie et
+le centre d'une commune — plusieurs kilomètres d'écart.
+
+| `precision_localisation` | BAN `type` | Le point désigne | `coordsAuBatiment` | `coordsDansLeSecteur` |
+|---|---|---|---|---|
+| `exacte` | `housenumber` | le bâtiment | ✅ | ✅ |
+| `rue` | `street` | le milieu de la voie | ❌ | ✅ |
+| `arrondissement` | `locality`, `municipality` | le centre du quartier / de la commune | ❌ | ❌ |
+
+⚠️ Le repli « secteur » de `geocodeApartmentLocation` (quartier/ville) force
+toujours `arrondissement`, **même si la BAN répond par une rue** : cette rue est
+la mieux notée du quartier, pas celle du bien.
+
+**Deux prédicats, deux besoins** — ne pas les confondre :
+
+| Consommateur | Prédicat | Pourquoi |
+|---|---|---|
+| DVF, Carte des loyers ANIL, `/api/estimate-rent` | `perimetreAnalyse()` (= `coordsDansLeSecteur`) | un rayon ancré sur la voie contient le bien |
+| OpenStreetMap (commodités, vie de quartier, gare, occupation du sol) | `coordsDansLeSecteur` | tout se mesure en rayon autour du point |
+| Géorisques — **aléa argile seul** | `coordsDansLeSecteur` | maille fine, varie dans la commune |
+| Jointure DPE ADEME | `coordsAuBatiment` | jointure par identifiant BAN : un identifiant de VOIE n'apparie rien |
+
+Le critère porte sur ce que valent les **COORDONNÉES**, jamais sur ce que
+l'utilisateur a **SAISI** (`aAdressePrecise()`, qui ne sert plus qu'à choisir
+une formulation).
+
+⚠️ **Les sources ponctuelles ne se gardent PAS sur `hasCoords`.** Avoir des
+coordonnées ne dit pas qu'elles valent quelque chose. Sans adresse, OSM et
+l'aléa argile tournaient autour du centroïde communal et le résultat
+s'affichait comme un fait sur le bien — « gare à 900 m », « argile : exposition
+moyenne », ce dernier sous une étiquette `perimetre: "adresse"` codée en dur,
+reprise telle quelle dans le prompt de narration (`narration.ts` sérialise
+`f.perimetre`). Mesuré à Lille : argile **faible** rue de Thumesnil,
+**moyenne** au centroïde de la commune — deux codes, deux pénalités, deux
+couleurs.
+
+⚠️ **Trois des quatre champs Géorisques sont COMMUNAUX** malgré des endpoints
+qui prennent des coordonnées (radon publié par commune, zonage sismique
+réglementaire par commune, `gaspar/risques` communal). Ils restent interrogés
+quelle que soit la précision : couper tout le bloc perdrait trois données
+valides.
+
+⚠️ **La liquidité du marché (bloc Potentiel, poids 0,30) n'a aucune garde de
+précision.** Un volume de ventes DVF se lit à l'échelle communale — c'est sa
+maille naturelle. La garde qui existait supprimait ce critère dès qu'il manquait
+un numéro de voie, alors que la donnée était disponible, et la note du bloc se
+renormalisait en silence sur les critères restants.
+
+⚠️ **`runAnalyse` renvoie la localisation qu'il recalcule, et l'appelant la
+persiste** (`patchLocalisation`). Il ne persistait que `code_insee` ; comme
+`reestimation.ts` lit la précision STOCKÉE pendant que l'analyse re-géocode à
+chaque exécution, jeter la précision fraîche rouvrait la divergence de périmètre
+dès que la BAN enrichissait une voie de ses numéros. `patchLocalisation`
+n'écrase jamais une valeur connue par un `null` : un géocodage en échec ne doit
+pas effacer le pin de la carte.
+
+⚠️ **Un seul type `PerimetreAnalyse`, pas un par source.** `run.ts` construit UN
+objet et le passe tel quel à `fetchDvf` ET `fetchLoyerRef` : deux sources ne
+*peuvent* plus recevoir deux échelles différentes pour un même bien. Ne pas
+réintroduire un `DvfPerimetre` / `LoyerPerimetre` séparé.
+
+⚠️ **`/api/estimate-rent` partage le même périmètre** (`reestimation.ts`). Le
+bloc Rendement juge ce loyer contre SA référence et en tire le « +X % vs
+marché » : avec deux périmètres, il comparait le loyer à une autre référence que
+celle qui l'a produit. Le surcoût réseau est absorbé par le Data Cache de Next
+(reverse-géocodages BAN, 30 jours).
+
+Chaque bloc affiche ensuite le libellé porté par la DONNÉE
+(`dvf.perimetreLabel` / `dvf.rayonSerre`, `LoyerData.perimetreLabel`) plutôt que
+de redéduire le périmètre depuis `precision` : le périmètre interrogé et le
+périmètre annoncé ne peuvent pas diverger.
+
+⚠️ **Périmètre demandé ≠ périmètre obtenu, côté ANIL** : la Carte des loyers ne
+descend jamais sous la commune. Un rayon de 500 m qui ne traverse qu'une seule
+commune rend exactement la valeur communale — l'annoncer « rayon 500 m »
+promettait une finesse que la donnée n'a pas. Voir
+`docs/reference/estimation-loyer-charges.md`.
+
+### DVF dicte la durée de l'analyse — et c'est une API de PRÉPRODUCTION
+
+Mesuré source par source sur un bien réel (rue de Thumesnil, Lille), collecte
+complète en parallèle :
+
+| Source | Temps | |
+|---|---|---|
+| **DVF (Cerema)** | **5 384 ms** | ██████████████████ |
+| Délinquance | 952 ms | ███ |
+| Profil commune | 525 ms | █ |
+| Revenu médian | 497 ms | █ |
+| Géorisques | 359 ms | █ |
+| ANIL (5 reverse-géo) | 350 ms | █ |
+| OSM (bundle, course de miroirs) | 7 ms | |
+
+La vague dure exactement le temps de DVF ; géocodage compris, 5 771 ms au
+total. **Optimiser une autre source ne peut rien donner** tant que DVF domine.
+
+⚠️ `apidf-preprod.cerema.fr` est une instance de PRÉPRODUCTION, et se comporte
+comme telle. Sur données froides : 38 s (Bordeaux), 60 s sans aucune réponse
+(Toulouse), contre ~300 ms une fois le cache serveur chaud. **Toute mesure
+comparative sur cette API est faussée par l'ordre des essais** — deux
+protocoles successifs ont donné des résultats opposés avant qu'un préchauffage
+ne le révèle. Ne pas conclure d'un A/B naïf.
+
+`BUDGET_MS` (12 s) plafonne la collecte DVF entière, échéance PARTAGÉE par les
+deux fenêtres. Dégradation gracieuse : les pages déjà obtenues sont conservées,
+on cesse seulement d'en demander. Vérifié sur la commune de Lille — 12,0 s au
+lieu de ~70 s, 1 994 ventes conservées, **médiane inchangée à 4 069 €/m²**.
+
+⚠️ **Ne PAS fusionner les requêtes par année en une requête de plage** pour
+réduire les allers-retours : l'avertissement de `fetchWindow` explique
+pourquoi (tri ascendant non contournable → une fenêtre saturée ne rend que ses
+années les plus anciennes → médiane sous-estimée → bien mécaniquement
+« surcoté »). Le gain de temps apparent d'un tel regroupement est un artefact
+de cache serveur, pas un vrai gain.
+
+⚠️ **La bbox est STABLE, c'est son CENTRE qui change tout.** Vérifié : la même
+requête rendue trois fois de suite donne rigoureusement le même résultat (39
+ventes, 3/3). En revanche, déplacer le centre du disque de 500 m le long de la
+même rue fait passer l'échantillon de 39 à 194 ventes, et la cohorte de
+surfaces comparables de 4 à 43.
+
+Conséquence directe sur la note de prix : à `precision = "rue"`, le disque est
+centré sur le MILIEU de la voie, qui peut être à quelques centaines de mètres du
+bien — et l'échantillon DVF n'a alors rien à voir avec celui du bâtiment réel.
+C'est l'argument le plus fort en faveur d'une adresse complète, bien plus que le
+confort d'affichage. Ne jamais diagnostiquer un écart de médiane sans avoir
+d'abord vérifié les coordonnées exactes utilisées.
+
+### Critère CONTINU → `interpole`. Critère CATÉGORIEL → escalier assumé.
+
+C'est la distinction qui décide de la forme d'un barème. Se tromper de côté
+produit soit des falaises arbitraires, soit une fausse précision.
+
+| Bloc | Entrées | Forme | Pourquoi |
+|---|---|---|---|
+| Prix | écart au marché (%) | `interpole` | grandeur continue |
+| Potentiel | évolution (%), nb de ventes, ratio délinquance, nb de commodités | `interpole` ×4 | 4 grandeurs continues |
+| Rendement | rendement net (%) | linéaire par morceaux (déjà) | grandeur continue |
+| Risques | étiquette DPE/GES, classe radon, zone sismique | **escalier** | valeurs discrètes dans la source |
+
+⚠️ **Ne jamais noter un critère continu par une cascade de ternaires.** Elle est
+plate à l'intérieur d'une marche et saute à la frontière. Mesuré sur Potentiel
+avant migration : l'évolution des prix rendait la MÊME note de 0 % à +14 %, puis
+bondissait de 0,8 point entre +14 % et +15 %. Et la liquidité notait 77 ventes
+comme 40 (« au-dessus du palier 40 »), alors que 77 est presque au palier 80.
+
+⚠️ **Ne jamais lisser un critère catégoriel.** Il n'existe pas de DPE « D,5 » ni
+de zone sismique 2,4. L'escalier du bloc Risques reflète le réel ; ses grands
+écarts aussi — la chute E → F (6,8 → 2,8 /10) épouse le seuil légal
+d'interdiction de louer en 2028, elle n'est pas un artefact de barème.
+
+Les plateaux **extrêmes** de `interpole` (avant le premier ancrage, après le
+dernier) sont volontaires : au-delà d'un certain niveau, « c'est excellent » ne
+se nuance plus. Ce sont les plateaux **intermédiaires** qui sont des défauts.
+
+**Deux plateaux connus, laissés en l'état** — à ne pas « corriger » sans
+décision produit : DPE A, B et C valent la même note de risque (l'excellence
+énergétique n'est pas récompensée, seul le risque d'interdiction compte) ; et
+le libellé « Critique » couvre tout le bas de l'échelle (0–3,5), donc un bien à
++17 % et un bien à +50 % portent le même mot.
+
+### Une donnée absente ne doit ni récompenser ni punir
+
+⚠️ **Deux façons d'agréger des sous-critères, une seule est neutre à l'absence.**
+
+| Bloc | Agrégation | Effet d'un critère manquant |
+|---|---|---|
+| Potentiel | moyenne pondérée (`scoreSum / weightSum`) | **neutre** — la renormalisation absorbe l'absence |
+| Risques | somme de pénalités (`5 − Σ p`) | **biaisé** — une pénalité absente = points gratuits |
+
+Le bloc Risques a donc besoin d'une règle explicite : un aléa non mesuré prend
+la valeur **médiane de son échelle** (`PENALITE_NEUTRE`), jamais zéro. Sans
+elle, couper l'aléa argile sous le niveau `rue` faisait qu'un bien SANS adresse
+obtenait mécaniquement une meilleure note qu'avec — « moins de données =
+meilleure note », et deux biens qui ne se comparent plus.
+
+Mesuré, même bien et même DPE, seul l'aléa argile variant :
+
+| Argile | Note Risques |
+|---|---|
+| faible (mesurée) | 8,6 /10 |
+| **non mesurée** | **8,4 /10** |
+| forte (mesurée) | 8,2 /10 |
+
+La valeur non mesurée tombe entre les deux : renseigner l'adresse améliore la
+note en zone saine, la dégrade en zone exposée. Avant la règle, elle valait
+8,6 — le meilleur cas possible, gratuitement.
+
+**Limite connue** : `risquesCommune` (gaspar) rend une liste vide aussi bien
+pour « aucun risque recensé » que pour un appel en échec. Les deux sont
+indistinguables côté client, aucune règle neutre n'est donc applicable — c'est
+volontaire, pas un oubli.
+
+### Le bloc Quartier dépend de l'adresse, lui aussi
+
+Il est le **quatrième** consommateur de `inviteAdresse` (après Prix, Potentiel
+et Risques). Conditionner OpenStreetMap à la précision lui retire la moitié de
+ses faits — gare, caractère, vie de quartier — et il devenait simplement
+silencieux, sans dire pourquoi. Son `messageIndisponible` distingue désormais
+la panne de source (« indisponibles pour ce bien ») de la cause actionnable
+(position au niveau de la commune).
+
+⚠️ `AnalyseIA.tsx` ne propose « clique sur Relancer » que si le bloc n'a PAS
+d'invite : relancer ne répare pas une adresse manquante.
+
+### La narration reçoit un garde-fou de précision
+
+`narrateAll(..., precision)` injecte `CAVEAT_NARRATION` dans le prompt. Le
+modèle ne recevait aucune indication de précision : on lui retirait les faits
+de quartier sans lui dire pourquoi, ce qui laisse un conseiller libre de les
+reconstituer de mémoire. Trois niveaux, cohérents avec les
+`CAVEAT_LOCALISATION_*` de `rentEstimation.ts` — les faire diverger ferait
+parler les deux moteurs de la même position avec deux prudences différentes.
+Précision absente → garde-fou le plus strict, jamais aucun.
+
+### `inviteAdresse()` — une seule formulation pour les trois blocs
+
+Trois blocs perdent en finesse sans position au bâtiment (**Prix**,
+**Potentiel**, **Risques**), et les trois l'annonçaient dans des mots
+différents : deux invites rédigées chacune de leur côté, plus une phrase noyée
+dans les « données manquantes » du bloc Risques. Le lecteur voyait trois
+messages sans comprendre qu'ils décrivent UNE cause et se règlent d'UN geste.
+
+`inviteAdresse(apt, precision, { requiert, gain })` impose la structure
+**constat → action → gain** ; seul `gain` varie d'un bloc à l'autre, le constat
+et le verbe sont communs. Ajouter un bloc dépendant de l'adresse = passer par
+cette fonction, jamais rédiger une quatrième variante.
+
+⚠️ **`requiert` n'est pas décoratif.** Prix et Potentiel se contentent du niveau
+`rue` et doivent donc se TAIRE à ce niveau — sinon ils réclament un numéro qui
+ne changerait rien à leur calcul. Les Risques exigent `exacte` (jointure DPE par
+identifiant BAN). Une invite unique envoyait forcément un mauvais message à
+l'un des trois.
+
+⚠️ **Deux constats, pas un.** « Renseigne l'adresse exacte » se lit comme un
+reproche absurde quand le champ Adresse est déjà rempli et qu'il ne manque que
+le NUMÉRO de voie — l'invite envoyait corriger un champ sans défaut visible.
+`aAdressePrecise()` sert *uniquement* à ce choix de formulation, jamais à
+arbitrer un périmètre.
+
+**Placement** : la bannière se rend **sous le titre de section**, avant la
+narration et les chiffres (`FlatSection`, `AnalyseIA.tsx`) — elle qualifie le
+périmètre sur lequel tout le bloc est calculé, donc elle se lit avant les
+chiffres qu'elle qualifie. Elle est volontairement **hors du test
+`bloc.disponible`** : un bloc sans données est le cas où elle a le plus à dire.
 
 ⚠️ **Élargir le rayon n'est PAS une alternative** : `geomutations/` plafonne
 l'emprise à **0,02° × 0,02°** et répond 400 au-delà, ce qui borne le rayon
@@ -412,13 +661,87 @@ mutations de la plus ancienne à la plus récente et n'honore pas le tri
 décroissant : une fenêtre de 3 ans qui sature la pagination ne renverrait que
 ses premières années, donc une médiane calculée sur les prix les plus vieux —
 le bien paraîtrait mécaniquement surcoté. Le découpage par année borne la
-troncature à l'intérieur d'une année.
+troncature à l'intérieur d'une année. Second bénéfice, exploité ci-dessous :
+le résultat reste ventilé par millésime, ce qui permet de choisir la profondeur
+de la fenêtre APRÈS la collecte, sans requête supplémentaire.
 
 Budget de pagination volontairement plus serré côté commune
 (`MAX_PAGES_COMMUNE = 2` contre `MAX_PAGES_RAYON = 4`) : `mutations/` ignore le
 paramètre `fields` et renvoie l'objet complet (~245 Ko/page). Mille ventes par
 an suffisent à une médiane stable — mesuré sur 2023 : Paris 11e 2 329 ventes,
 Le Mans 1 116, Marseille 1er 679.
+
+## Fenêtre récente ADAPTATIVE : on desserre le temps avant la surface
+
+La médiane récente n'est plus calculée sur une fenêtre fixe de 3 ans. On part
+du **millésime le plus récent** et on ne remonte dans le temps que tant que
+l'échantillon n'atteint pas `SEUIL_ECHANTILLON_FIABLE` comparables à ±20 %.
+
+**Pourquoi ne pas garder 3 ans.** Une fenêtre pluriannuelle estime le prix du
+MILIEU de la fenêtre : son biais vaut à peu près la dérive annuelle du marché.
+Mesuré (rayon 500 m, comparables ±20 % autour de 60 m², médiane 2023-2025 contre
+2025 seul) : +0,8 % à Paris 11e, −1,1 % à Marseille 7e, +2,5 % à Angers,
+**+8,8 % au Mans**. Au barème de `buildBlocPrix` (0,15 point de note par point
+d'écart au-dessus du marché), le dernier cas vaut ~1,3 point sur un bloc de
+poids 0,3 — le bien paraît surcoté parce que le marché a baissé depuis.
+
+⚠️ **Pourquoi ne pas figer non plus à un an.** Le biais temporel est maximal là
+où l'échantillon annuel est le plus maigre, et le bruit y dépasse alors le biais
+qu'on prétendait corriger. Erreur-type de la médiane (bootstrap 2 000 tirages) :
+
+| Secteur | 1 an | 3 ans | comparables ±20 %/an |
+|---|---|---|---|
+| Paris 11e | ±1,4 % | ±1,1 % | 120-143 |
+| Angers centre | ±3,1 % | ±1,6 % | 59-70 |
+| Marseille 7e | ±4,9 % | ±2,0 % | 83-96 |
+| Le Mans centre | ±5,5 % | ±2,8 % | 25-35 |
+| Vierzon centre | — | — | 4-14 selon la surface |
+| Angers périphérie | — | — | **0-5** |
+
+Pire : sous `SEUIL_TOLERANCE` comparables, l'échelle de tolérance élargit la
+SURFACE, et l'effet de taille (studio contre T4, jusqu'à 30 % d'écart de
+prix/m²) est un biais bien plus gros que la dérive temporelle visée. D'où
+l'ordre des deux desserrages, qui n'est pas interchangeable : **temps d'abord,
+surface en dernier recours.**
+
+`SEUIL_ECHANTILLON_FIABLE` est exporté et partagé avec `blocs/prix.ts`, où il
+arrête l'atténuation de la note vers la neutralité. Les laisser diverger donne
+le pire des deux mondes — une fenêtre élargie jusqu'à un volume que le bloc
+juge encore trop mince, ou l'inverse.
+
+### Deux libellés, deux populations
+
+| Champ | Population | Consommateur |
+|---|---|---|
+| `recentLabel` | millésimes RETENUS pour la médiane | fait « Prix/m² médian comparable », leviers de négociation |
+| `volumeLabel` + `nbVentesTotal` | TOUTE la fenêtre collectée | critère « liquidité du marché » (bloc Potentiel) |
+
+⚠️ **Ne pas réaligner `nbVentesTotal` sur la fenêtre adaptative.** Les seuils de
+liquidité (15 / 40 / 80 / 150) sont calibrés sur un volume pluriannuel : le
+brancher sur une fenêtre qui se resserre à un an en zone dense diviserait le
+comptage par deux ou trois et ferait chuter la note d'un secteur devenu… plus
+liquide.
+
+⚠️ **Aucun libellé de période en dur.** La profondeur change d'un bien à
+l'autre : tout texte affiché doit lire `recentLabel` / `volumeLabel`. Le levier
+« le prix dépasse les ventes réelles du quartier » annonçait « sur les 3
+dernières années » quelle que soit la réalité.
+
+Les millésimes affichés sont ceux **réellement couverts**, jamais ceux demandés.
+La requête porte toujours sur l'année en cours, vide pendant ~8 mois (DVF paraît
+deux fois par an, avec ~8 mois de retard : au 15/08/2026 l'année 2026 renvoie
+0 vente, les données s'arrêtant au 31/12/2025). Le fait annonçait « 2024–2026 »
+sur des données arrêtées fin 2025. Cette requête n'est pas perdue pour autant :
+c'est par elle qu'arrive le millésime partiel dès sa publication. Une année dont
+la requête ÉCHOUE (l'API est une préproduction instable) sort du libellé de la
+même façon — ce qui est affiché est ce qui a servi.
+
+⚠️ **Une fenêtre glissante de 12 mois n'est pas implémentable côté API.**
+`datemut_min` / `datemut_max` sont acceptés puis ignorés (même `count` avec et
+sans : Paris 11e 2025 → 2 386 dans les deux cas) ; seul `anneemut_min/max`
+filtre. Le champ `datemut` étant présent dans la réponse, un filtrage glissant
+resterait faisable côté client — sans gain réel, le retard de publication faisant
+déjà de « les 12 derniers mois » le dernier millésime complet.
 
 ## `evolutionPct` : même cohorte de surface des deux côtés
 

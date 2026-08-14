@@ -401,11 +401,31 @@ Invariants de sécurité qui s'appliquent quel que soit le fichier touché :
 - **`proxy.ts` ne protège rien** — il rafraîchit le jeton. La vraie barrière
   est `requireSession()` dans le DAL (`db.ts`).
 - **Toute route qui n'appelle pas `db.ts` doit vérifier la session à la
-  main** via `getApiSession()` (ex. `/api/parse`, `/api/loyer-reference`) —
-  elle n'hérite d'aucune protection sinon.
+  main** via `getApiSession()` (ex. `/api/parse`) — elle n'hérite d'aucune
+  protection sinon. Corollaire : une route qui se met à lire un bien
+  (`requireApartment`) hérite du DAL et n'a plus besoin du contrôle manuel —
+  le garder n'est pas faux, mais fait croire à deux barrières distinctes.
 - **`redirectionQuota()` et `destination()` n'acceptent que des chemins
   internes** (`/…`, jamais `//…` ni une URL absolue) — sinon redirection
   ouverte.
+
+# Précision de localisation : trois niveaux, pas deux
+
+`precision_localisation` (`PRECISIONS_LOCALISATION`, `src/lib/types.ts`) vaut
+`exacte` (le bâtiment), `rue` (le milieu de la voie) ou `arrondissement` (le
+centre du quartier ou de la commune). Elle **arbitre quelles sources de
+l'Analyse IA sont interrogées**, ce n'est pas une étiquette d'affichage.
+
+- **Migration requise** : `supabase/migrations/0015_precision_rue.sql`
+  (contrainte `check` élargie) — à exécuter manuellement sur CHAQUE projet
+  Supabase, comme les précédentes.
+- **Ne jamais tester `=== "arrondissement"`** pour dire « position
+  approximative » : depuis l'ajout de `rue`, l'égalité stricte laisse passer
+  les positions au milieu d'une voie. Écrire `!== "exacte"`.
+- Les prédicats `coordsAuBatiment()` / `coordsDansLeSecteur()`
+  (`src/lib/analyse/perimetre.ts`) sont la SEULE façon d'en dériver une
+  décision — détail et tableau des consommateurs dans
+  `docs/reference/analyse-optimiser.md`.
 
 # Modélisation "Immeuble" (bien de rapport multi-lots)
 

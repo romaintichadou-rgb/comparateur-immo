@@ -56,10 +56,17 @@ export default function LoyerDetailPanel({
   // états séparés ne peuvent pas distinguer « pas encore chargé pour ce bien »
   // de « chargé, et il n'y a rien » (les deux valent `anil === null`), ce qui
   // laissait passer une frame avec les anciennes données d'un autre bien.
-  const [anilResult, setAnilResult] = useState<{ codeInsee: string; data: AnilData | null } | null>(null);
-  // Dernier `code_insee` effectivement (re)fetché — évite un aller-retour
-  // réseau inutile en réouvrant le panneau sur un bien de la même commune ;
-  // un `ref` plutôt que relire `anilResult` dans l'effet, pour ne pas avoir à
+  // ⚠️ Identifié par le BIEN, plus par sa commune : depuis que le périmètre
+  // peut agréger plusieurs communes (voir `analyse/perimetre.ts`), deux biens
+  // d'une même commune n'ont plus forcément la même référence — l'un géocodé au
+  // bâtiment près d'une limite communale, l'autre non. Une clé communale
+  // servirait la référence du premier au second.
+  const [anilResult, setAnilResult] = useState<
+    { aptId: string; data: AnilData | null; perimetreLabel: string | null } | null
+  >(null);
+  // Dernier couple (bien, typologie) effectivement (re)fetché — évite un
+  // aller-retour réseau inutile en rouvrant le panneau sur le même bien ; un
+  // `ref` plutôt que relire `anilResult` dans l'effet, pour ne pas avoir à
   // l'ajouter aux dépendances (il change à cause de CET effet lui-même).
   const anilFetchedForRef = useRef<string | null>(null);
 
@@ -84,6 +91,7 @@ export default function LoyerDetailPanel({
   // `surface_m2` entre pourtant dans `typologieAnil` (seuil T1-T2 / T3+), donc
   // corriger la surface d'un bien pouvait laisser affichée la référence de
   // l'ancienne typologie.
+  const aptId = apartment?.id ?? "";
   const codeInsee = apartment?.code_insee ?? "";
   const typeBien = apartment?.type_bien ?? "";
   const nbPieces = apartment?.nb_pieces ?? null;
@@ -92,26 +100,27 @@ export default function LoyerDetailPanel({
   useEffect(() => {
     // Rien à charger, et rien à remettre à zéro : le rendu compare déjà le
     // code INSEE de la référence en mémoire à celui du bien affiché.
-    if (!codeInsee) return;
-    // La typologie fait partie de la clé : deux biens de la même commune mais
-    // de typologies différentes (T2 / T4 / maison) lisent des ressources ANIL
-    // distinctes. Sans elle dans la clé, le second réutiliserait la référence
-    // du premier — soit jusqu'à 19 % d'écart.
+    if (!aptId || !codeInsee) return;
+    // La typologie fait partie de la clé : un même bien projeté sur une autre
+    // surface ou un autre nombre de pièces (recommandation, playground) change
+    // de ressource ANIL — soit jusqu'à 19 % d'écart.
     const typo = typologieAnil(typeBien, nbPieces, isImmeuble(typeBien), surfaceM2);
-    const cle = `${codeInsee}|${typo}`;
+    const cle = `${aptId}|${typo}`;
     if (anilFetchedForRef.current === cle) return;
     anilFetchedForRef.current = cle;
     let cancelled = false;
-    fetch(`/api/loyer-reference?code_insee=${encodeURIComponent(codeInsee)}&typologie=${typo}`)
+    fetch(`/api/loyer-reference?apartment_id=${encodeURIComponent(aptId)}&typologie=${typo}`)
       .then((r) => r.json())
       .then((data) => {
-        if (!cancelled) setAnilResult({ codeInsee, data: data.ref ?? null });
+        if (!cancelled) {
+          setAnilResult({ aptId, data: data.ref ?? null, perimetreLabel: data.perimetreLabel ?? null });
+        }
       })
       .catch(() => {
-        if (!cancelled) setAnilResult({ codeInsee, data: null });
+        if (!cancelled) setAnilResult({ aptId, data: null, perimetreLabel: null });
       });
     return () => { cancelled = true; };
-  }, [codeInsee, typeBien, nbPieces, surfaceM2]);
+  }, [aptId, codeInsee, typeBien, nbPieces, surfaceM2]);
 
   useEffect(() => {
     if (!displayed) return;
@@ -150,14 +159,18 @@ export default function LoyerDetailPanel({
   // BLOC, une fois que TOUT est prêt — jamais l'une avant les autres.
   // Quand le bien n'a pas de `code_insee`, il n'y a rien à charger : prêt
   // immédiatement, aucun spinner ne doit apparaître pour rien.
-  const contentReady = apt.code_insee === "" || anilResult?.codeInsee === apt.code_insee;
+  const contentReady = apt.code_insee === "" || anilResult?.aptId === apt.id;
   // ⚠️ La référence en mémoire n'est utilisable que si elle a été chargée POUR
   // CE bien. Sans cette comparaison, ouvrir le panneau sur un bien SANS code
   // INSEE juste après un bien qui en a un afficherait la référence du
   // précédent (`contentReady` est vrai d'emblée dans ce cas). L'effet remettait
   // l'état à zéro pour s'en prémunir — au prix d'un rendu en cascade, là où la
   // comparaison suffit.
-  const anil = anilResult?.codeInsee === apt.code_insee ? anilResult.data : null;
+  const anil = anilResult?.aptId === apt.id ? anilResult.data : null;
+  // Périmètre réellement agrégé, rendu par la route. Le panneau EXPLIQUE un
+  // chiffre : taire l'échelle sur laquelle il est mesuré laisserait le lecteur
+  // la deviner, alors que les blocs d'analyse l'affichent, eux, en pastille.
+  const anilPerimetre = anilResult?.aptId === apt.id ? anilResult.perimetreLabel : null;
 
   const aiEstimated = isAiEstimated(apt, "loyer_retenu");
 
@@ -352,7 +365,7 @@ export default function LoyerDetailPanel({
                   <div className="flex items-start gap-1.5">
                     <Info className="h-3 w-3 text-ink-300 mt-0.5 shrink-0" />
                     <p className="text-[11px] leading-relaxed text-ink-400">
-                      Carte des loyers ANIL {anil.annee} · {anil.nbObs.toLocaleString("fr-FR")} annonces observées · loyers <strong className="font-medium">charges comprises</strong>, logement non meublé.
+                      Carte des loyers ANIL {anil.annee}{anilPerimetre ? ` · ${anilPerimetre}` : ""} · {anil.nbObs.toLocaleString("fr-FR")} annonces observées · loyers <strong className="font-medium">charges comprises</strong>, logement non meublé.
                       {" "}Loyer moyen pour un logement type de {refCC.surfaceReference} m² : {formatEuros(anilRefTotal)}, ajusté à {surface} m² ({pctSurface > 0 ? "+" : ""}{pctSurface} %).
                       {/* Tooltip du badge ci-dessus, en clair : un `title` seul
                           n'est pas fiable au toucher (mobile). */}

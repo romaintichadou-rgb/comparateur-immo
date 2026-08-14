@@ -50,7 +50,24 @@ export type Plateforme = (typeof PLATEFORMES)[number];
 export const STATUTS = ["à visiter", "visité", "abandonné", "acheté"] as const;
 export type Statut = (typeof STATUTS)[number];
 
-export const PRECISIONS_LOCALISATION = ["exacte", "arrondissement"] as const;
+/**
+ * Granularité de la position, du plus fin au plus grossier — reflète le `type`
+ * renvoyé par la BAN (voir `geocoding.ts`). ⚠️ Les trois valeurs ne sont pas
+ * cosmétiques : elles arbitrent quelles sources sont interrogées (voir
+ * `analyse/perimetre.ts`).
+ *
+ * - `exacte` : le bâtiment (`housenumber`). Seul niveau qui autorise la
+ *   jointure DPE par identifiant BAN.
+ * - `rue` : le milieu de la voie (`street`) — quelques centaines de mètres du
+ *   bien. Suffisant pour tout ce qui se mesure dans un rayon (DVF, OSM, aléas
+ *   à maille fine), pas pour identifier un bâtiment.
+ * - `arrondissement` : centre du quartier ou de la commune. Rien de ponctuel
+ *   n'y est mesurable — l'écart au bien réel se compte en kilomètres.
+ *
+ * ⚠️ Ajouter une valeur = migration SQL (contrainte `check`), voir
+ * `supabase/migrations/0015_precision_rue.sql`.
+ */
+export const PRECISIONS_LOCALISATION = ["exacte", "rue", "arrondissement"] as const;
 export type PrecisionLocalisation = (typeof PRECISIONS_LOCALISATION)[number];
 
 export const DPE_GES_VALEURS = ["A", "B", "C", "D", "E", "F", "G"] as const;

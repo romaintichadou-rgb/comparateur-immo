@@ -8,16 +8,15 @@
 
 L'en-tête utilise un layout inline flex (pas de blocs empilés) :
 **photo 16:9** (`aspect-video w-32` mobile / `sm:w-52` desktop) ·
-**titre + adresse + prix/décision + meta** · **mini carte** (112×288px,
-desktop uniquement).
+**titre + adresse + prix/décision + meta**. Pas de mini carte dans le header
+(déplacée dans l'onglet Description, carte "Localisation").
 
 - **Photo** → lien vers l'annonce (`apt.url`). Fallback : icône `Home` sur
   fond `ink-50`. Format **16:9**, pas carré : c'est le cadrage des visuels
   d'annonce. Les dimensions passent par `aspect-video` + une largeur — ne pas
   revenir à un couple `h-*`/`w-*` figé.
   ⚠️ Le lien porte un **`aria-label`** : il n'enveloppe qu'une image
-  décorative (`alt=""`), donc sans lui son nom accessible est **vide**. Même
-  règle pour la mini carte.
+  décorative (`alt=""`), donc sans lui son nom accessible est **vide**.
 
 ### Titre du bien (`formatApartmentTitle`)
 
@@ -75,11 +74,21 @@ déjà complète, en ne retirant que des segments de QUEUE (jamais le premier).
   voie est connue ; sinon repli sur les coordonnées ; `null` si rien à
   situer.
 
+## KPI banner (entre en-tête et onglets)
+
+4 StatCards en grille (`grid-cols-2 xl:grid-cols-4`), visibles quel que soit
+l'onglet actif : **Rendement net** (cliquable → `RendementDetailPanel`),
+**Cash-flow mensuel** (cliquable → `CashflowDetailPanel`), **Prix au m²**,
+**DPE**. Calculés indépendamment du score d'analyse via `simulate()` et les
+fonctions de scoring (`cashflowTone`, `rendementNetTone`, `dpeInfo`,
+`ecartPrixMarche`).
+
 ## Onglets avec icônes
 
 | Tab (key) | Icône | Label desktop | Label mobile |
 |-----|-------|---------------|--------------|
 | Analyse (`ia`) | `Sparkles` | Analyse | Analyse |
+| Playground (`playground`) | `SlidersHorizontal` | Playground | Play. |
 | Optimiser (`optimiser`) | `Lightbulb` | Optimiser | Optim. |
 | Description (`donnees`) | `Home` | Description du bien | Bien |
 | Opération (`financiere`) | `HandCoins` | Détails de l'opération | Opération |
@@ -125,7 +134,7 @@ Quatre cartes, plus une cinquième en pleine largeur :
 
 | Carte | Champs |
 |---|---|
-| Localisation | ville, quartier, code postal, adresse |
+| Localisation | ville, quartier, code postal, adresse + **carte Leaflet** (h-40, cliquable → Google Maps) |
 | Caractéristiques | type de bien, *[nombre de lots si immeuble]*, surface, nb pièces, nb chambres |
 | Bâtiment | étage, ascenseur, année de construction |
 | État et diagnostics | état du bien, DPE, GES |

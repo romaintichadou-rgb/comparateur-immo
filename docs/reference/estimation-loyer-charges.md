@@ -571,9 +571,21 @@ une réputation pour un nom trop générique ou inconnu.
 ⚠️ **Indépendante de `precisionLocalisation`, volontairement** — connaître
 le NOM d'un quartier ne demande pas de connaître l'adresse exacte (on peut
 savoir qu'on est à "Canal Saint-Martin" sans connaître le numéro de rue).
-C'est `CAVEAT_LOCALISATION_APPROX` (ci-dessus) qui restreint déjà les
-affirmations de RUE (vis-à-vis, exposition précise) à la seule position
-exacte — un périmètre plus étroit, resté inchangé.
+Ce sont les CAVEATS DE LOCALISATION (ci-dessus) qui restreignent les
+affirmations trop fines — un périmètre plus étroit.
+
+⚠️ **Deux caveats, un par niveau de `precisionLocalisation`** — depuis l'ajout
+du niveau `rue` :
+
+| Précision | Caveat | Ce qui reste interdit au modèle |
+|---|---|---|
+| `exacte` | *(aucun)* | — |
+| `rue` | `CAVEAT_LOCALISATION_RUE` | vis-à-vis, exposition, vue, calme — tout ce qui dépend du BÂTIMENT et de l'étage |
+| `arrondissement` | `CAVEAT_LOCALISATION_APPROX` | en plus : la rue elle-même et son environnement immédiat |
+
+Interdire « toute affirmation sur la rue » à un bien dont on CONNAÎT la rue
+bridait le modèle sans raison : le caveat unique traitait « milieu de la rue de
+Thumesnil » comme « centre de Lille ».
 
 **Mesuré avant déploiement** (3 appels répétés par cas, `gemini-2.5-flash`,
 `temperature: 0`) :
@@ -650,8 +662,66 @@ rafraîchie annuellement sans nouvelle estimation). Sert à SIGNALER
 l'incertitude (badge « Fiabilité réduite », Étape 1 du panneau), pas à
 écarter la référence.
 
-`fetchLoyerReferenceLocal` (agrégation multi-communes dans un rayon de 500 m)
-retient le niveau de fiabilité le PLUS FAIBLE des communes combinées.
+L'agrégation multi-communes dans un rayon de 500 m (`fetchLoyerRef`, périmètre
+`rayon500`) retient le niveau de fiabilité le PLUS FAIBLE des communes
+combinées.
+
+### Une seule entrée ANIL — et un libellé qui dit la vérité
+
+| Fonction | Rend | Appelée par |
+|---|---|---|
+| `fetchLoyerRef(perimetre, typologie)` | `LoyerData` = référence **+ `perimetreLabel`** | `analyse/run.ts`, `reestimation.ts` (`/api/estimate-rent`), `/api/loyer-reference` |
+
+⚠️ **Point d'entrée UNIQUE.** `loyerReferenceCommune` (la ligne communale seule)
+n'est plus exportée : c'est le repli interne de `fetchLoyerRef`. Tout appelant
+passe par un `PerimetreAnalyse` construit par `perimetreAnalyse()`
+(`analyse/perimetre.ts`) — **le même type et la même fonction que DVF**. Sans
+cette contrainte, chaque appelant re-choisit son échelle dans son coin.
+
+⚠️ **Les trois chemins doivent partager le périmètre, pas seulement la
+typologie.** `buildBlocLocation` juge le loyer estimé contre SA référence et en
+tire le « +X % vs marché » ; `LoyerDetailPanel` affiche les chiffres censés
+EXPLIQUER cette estimation. Tant que l'estimation et le panneau s'ancraient sur
+la ligne communale pendant que l'analyse agrégeait, l'écran pouvait contredire
+le chiffre qu'il expliquait. Invisible tant qu'une seule commune est traversée
+(la quasi-totalité des biens), faux dès qu'un bien géocodé au bâtiment est à
+moins de 500 m d'une limite communale.
+
+Le surcoût réseau de l'agrégation (5 reverse-géocodages BAN) est absorbé par le
+Data Cache de Next (`CACHE_SOURCES_S`, 30 jours) : seul le tout premier appel
+sur un bien le paie.
+
+### `/api/loyer-reference` prend un `apartment_id`, pas un `code_insee`
+
+La référence ne se déduit plus d'une commune seule. La route relit la
+localisation **en base** (`requireApartment`) plutôt que de la recevoir du
+client : c'est la seule façon de garantir les mêmes entrées que l'analyse, et
+cela évite de faire transiter des coordonnées par une query string. La
+protection est celle du DAL (`requireSession()` + filtre `user_id`) : le
+`getApiSession()` manuel qu'exigeait l'ancienne version n'a plus lieu d'être,
+la route appelant désormais `db.ts`.
+
+`typologie` reste un paramètre CLIENT : le panneau peut afficher une projection
+(recommandation, playground) dont la surface ou le nombre de pièces diffèrent du
+bien stocké.
+
+La route rend aussi `perimetreLabel`, affiché par `LoyerDetailPanel` à côté du
+millésime ANIL : l'écran qui EXPLIQUE un chiffre doit dire à quelle échelle il
+est mesuré, comme les blocs d'analyse le font en pastille.
+
+⚠️ **La clé de cache client est le BIEN, plus sa commune** (`LoyerDetailPanel`,
+`PlaygroundView`). Deux biens d'une même commune n'ont plus forcément la même
+référence — l'un géocodé au bâtiment près d'une limite communale, l'autre non :
+une clé communale servirait la référence du premier au second.
+
+⚠️ **L'ANIL ne descend JAMAIS sous la commune.** Le rayon de 500 m ne resserre
+rien : il ne fait que repérer les communes que le disque traverse, pour les
+biens proches d'une limite communale. Tant qu'une seule en ressort — la
+quasi-totalité des biens — la valeur rendue est *rigoureusement* la valeur
+communale. `perimetreLabel` suit donc l'agrégation RÉELLE (`nbCommunes > 1`),
+pas le périmètre demandé : afficher « rayon 500 m » sur une valeur communale
+promettait une précision inexistante, et contredisait le bloc Prix qui, sur le
+même bien, annonçait honnêtement « arrondissement/commune ».
 
 ### Écarté de ce lot — et pourquoi
 

@@ -1,6 +1,7 @@
-import type { Apartment } from "@/lib/types";
+import type { Apartment, PrecisionLocalisation } from "@/lib/types";
 import type { GeorisquesData } from "../sources/georisques";
 import type { DpeData } from "../sources/ademe";
+import { inviteAdresse, precisionAuMoins } from "../perimetre";
 import { clampNote } from "../scoring";
 import { BLOC_LABELS, BLOC_POIDS, type BlocAnalyse, type Fait, type Source } from "../types";
 
@@ -53,14 +54,39 @@ export function buildBlocRisque(
   // trouvé serait celui d'un AUTRE bâtiment, présenté à tort comme celui du
   // bien. georisques est null si le bien n'est pas géolocalisé.
   dpeData: DpeData,
-  gr: GeorisquesData | null
+  gr: GeorisquesData | null,
+  precision: PrecisionLocalisation | null = null
 ): BlocAnalyse {
   const faits: Fait[] = [];
   const sources: Source[] = [];
   let dpePenalite = 0;
   const geoPenalites: number[] = [];
 
-  const adresseExacte = apt.adresse.trim() !== "";
+  /**
+   * Pénalité d'un aléa NON MESURÉ : la valeur médiane de son échelle, jamais 0.
+   *
+   * ⚠️ `geoSub` est `5 − Σ pénalités` : une pénalité absente vaut donc points
+   * gratuits. Tant que l'aléa argile était interrogé au centroïde communal il
+   * répondait toujours ; maintenant qu'il est coupé sous le niveau `rue` (voir
+   * georisques.ts), un bien SANS adresse obtiendrait mécaniquement une
+   * meilleure note Risques que le même bien AVEC adresse en zone argileuse —
+   * « moins de données = meilleure note », et deux biens qui ne se comparent
+   * plus. La médiane ne récompense ni ne punit l'absence : renseigner
+   * l'adresse améliore la note en zone saine, la dégrade en zone exposée.
+   *
+   * Même règle pour le radon et la sismicité, qui peuvent manquer sur panne
+   * partielle de Géorisques — le défaut est identique, il n'a simplement
+   * jamais été systématique.
+   */
+  const PENALITE_NEUTRE = { argiles: 0.5, radon: 0.5, sismique: 0.75 } as const;
+
+  // ⚠️ `precision`, pas `apt.adresse.trim() !== ""`. C'est la position qui
+  // conditionne la jointure ADEME (run.ts n'appelle `fetchDpe` que si les
+  // coordonnées valent le bâtiment), pas le fait que l'utilisateur ait tapé
+  // quelque chose : une voie sans numéro remplissait le champ tout en laissant
+  // `dpeData` vide, et ce bloc annonçait alors un DPE « vérifiable » qu'aucune
+  // requête n'avait cherché.
+  const adresseExacte = precisionAuMoins(precision, "exacte");
 
   // Étiquettes de référence : les valeurs officielles ADEME si trouvées, sinon
   // les valeurs saisies (déclaratives) faute de mieux.
@@ -105,10 +131,13 @@ export function buildBlocRisque(
     // déclarée par le bien, faute de DPE officiel correspondant à sa
     // surface — pas de fait chiffré supplémentaire ici, juste la mention en
     // donnée manquante ci-dessous.
+    // Sans position au bâtiment, la cause et le remède sont portés par
+    // l'invite commune (voir plus bas) — la répéter ici en « donnée manquante »
+    // donnait deux messages pour un seul problème.
     donneesManquantes.push(
       adresseExacte
         ? "DPE officiel correspondant à la surface du bien"
-        : "DPE officiel (adresse exacte non renseignée — non vérifiable sans risque de confondre avec un autre bâtiment)"
+        : "DPE officiel du bâtiment"
     );
   }
 
@@ -136,6 +165,12 @@ export function buildBlocRisque(
   if (gr) {
     let usedGeorisques = false;
 
+    if (!gr.argiles) {
+      geoPenalites.push(PENALITE_NEUTRE.argiles);
+      donneesManquantes.push(
+        "retrait-gonflement des argiles (aléa à maille fine : demande une position au niveau de la rue)"
+      );
+    }
     if (gr.argiles) {
       usedGeorisques = true;
       const c = Number(gr.argiles.code);
@@ -143,12 +178,22 @@ export function buildBlocRisque(
       faits.push({
         label: "Retrait-gonflement des argiles",
         value: gr.argiles.libelle,
-        perimetre: "adresse",
+        // Libellé aligné sur ce que valent VRAIMENT les coordonnées. Il était
+        // codé « adresse » en dur, y compris quand le point interrogé était le
+        // centroïde de la commune — et `narration.ts` sérialise ce libellé dans
+        // le prompt, donc le LLM reprenait l'affirmation à son compte.
+        // `gr.argiles` est nul en dessous du niveau `rue` (voir georisques.ts),
+        // ces deux valeurs sont donc les seules atteignables.
+        perimetre: precision === "exacte" ? "adresse" : "rue",
         source: SRC_GEORISQUES.label,
         gravite: c >= 3 ? "alerte" : c === 2 ? "attention" : "positif",
       });
     }
 
+    if (!gr.radon) {
+      geoPenalites.push(PENALITE_NEUTRE.radon);
+      donneesManquantes.push("potentiel radon de la commune");
+    }
     if (gr.radon) {
       usedGeorisques = true;
       const c = Number(gr.radon.classe);
@@ -157,12 +202,19 @@ export function buildBlocRisque(
         label: "Potentiel radon",
         value: ["Faible", "Moyen", "Élevé"][c - 1] ?? `Classe ${c}`,
         detail: `${c} / 3`,
-        perimetre: "arrondissement",
+        // Publié par commune : le libellé le dit, comme les risques recensés
+        // plus bas. « arrondissement » laissait croire à une maille infra-
+        // communale hors PLM.
+        perimetre: "commune",
         source: SRC_GEORISQUES.label,
         gravite: c >= 3 ? "alerte" : c === 2 ? "attention" : "positif",
       });
     }
 
+    if (!gr.sismique) {
+      geoPenalites.push(PENALITE_NEUTRE.sismique);
+      donneesManquantes.push("zonage sismique de la commune");
+    }
     if (gr.sismique) {
       usedGeorisques = true;
       const c = Number(gr.sismique.code);
@@ -171,7 +223,9 @@ export function buildBlocRisque(
         label: "Zonage sismique",
         value: ["Très faible", "Faible", "Modérée", "Moyenne", "Forte"][c - 1] ?? gr.sismique.libelle,
         detail: `${c} / 5`,
-        perimetre: "adresse",
+        // Zonage RÉGLEMENTAIRE par commune, malgré un endpoint qui prend des
+        // coordonnées : un centroïde communal y donne la bonne réponse.
+        perimetre: "commune",
         source: SRC_GEORISQUES.label,
         // Même logique de couleur que le radon : niveau faible → vert (positif).
         gravite: c >= 4 ? "alerte" : c === 3 ? "attention" : "positif",
@@ -220,6 +274,11 @@ export function buildBlocRisque(
     sources,
     narration: "",
     donneesManquantes,
+    // Formulation commune aux trois blocs concernés — voir `inviteAdresse`.
+    invite: inviteAdresse(apt, precision, {
+      requiert: "exacte",
+      gain: "récupérer le DPE officiel du bâtiment auprès de l'ADEME",
+    }),
     messageIndisponible:
       note == null
         ? "Données de risque indisponibles (adresse non géolocalisée ou aucun diagnostic/aléa trouvé)."

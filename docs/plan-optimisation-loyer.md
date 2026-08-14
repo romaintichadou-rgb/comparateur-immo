@@ -103,7 +103,7 @@ par an). On applique le même pattern à l'ANIL.
   server-only comme `taux_tfpb_communes.json`.
 - Réécrire `src/lib/analyse/sources/loyers.ts` pour lire ce JSON local au lieu
   de télécharger/parser les CSV à chaque appel à froid. Les fonctions
-  publiques (`fetchLoyerReference`, `fetchLoyerReferenceLocal`) gardent la
+  publiques (aujourd'hui `loyerReferenceCommune`, `fetchLoyerRef`) gardent la
   même signature et le même comportement (agrégation des communes voisines,
   `niveauPrediction` le pire des constituants) — seule la source de la donnée
   change, pas la logique.

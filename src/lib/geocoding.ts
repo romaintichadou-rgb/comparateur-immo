@@ -92,9 +92,18 @@ function versResultat(f: BanFeature, query: string): BanResult {
   return {
     latitude: lat,
     longitude: lon,
-    // Une adresse au numéro près = "exacte" ; rue/quartier/commune = approx.
+    // ⚠️ Les trois granularités de la BAN sont reportées telles quelles. Écraser
+    // `street` et `municipality` sur une même valeur « approximative » rendait
+    // indiscernables le milieu d'une voie et le centre d'une commune — des
+    // kilomètres d'écart. Tout ce qui se mesure dans un rayon (OSM, aléa
+    // argile) tournait alors autour du centroïde communal en se présentant
+    // comme un fait sur le bien.
     precision_localisation:
-      f.properties.type === "housenumber" ? "exacte" : "arrondissement",
+      f.properties.type === "housenumber"
+        ? "exacte"
+        : f.properties.type === "street"
+          ? "rue"
+          : "arrondissement",
     code_insee: f.properties.citycode ?? "",
     ban_id: f.properties.id ?? "",
     label: f.properties.label ?? query,
@@ -120,7 +129,11 @@ export async function geocodeApartmentLocation(input: {
 
   const hit = await banSearch(formatSecteur(input), input.code_postal);
   if (hit) {
-    // On ne présente jamais un repli quartier/ville comme une adresse exacte.
+    // ⚠️ Le repli interroge le SECTEUR (quartier, ville), pas la voie du bien.
+    // La BAN peut très bien y répondre par une rue — la mieux notée du
+    // quartier — mais ce n'est pas celle du bien : on écrase donc toujours en
+    // `arrondissement`, sans quoi le niveau `rue` promettrait une proximité
+    // qu'aucune donnée ne soutient.
     return { ...hit, precision_localisation: "arrondissement" };
   }
 

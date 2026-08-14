@@ -10,7 +10,13 @@ import { getJson } from "./http";
 const BASE = "https://georisques.gouv.fr/api/v1";
 
 export interface GeorisquesData {
-  /** Retrait-gonflement des argiles (aléa point précis). */
+  /**
+   * Retrait-gonflement des argiles — aléa à MAILLE FINE, seul champ de cette
+   * source qui varie à l'intérieur d'une commune. `null` quand les coordonnées
+   * ne valent pas au moins la voie : mesuré à Lille, « Exposition faible » rue
+   * de Thumesnil contre « Exposition moyenne » au centroïde de la commune, soit
+   * deux pénalités et deux couleurs différentes pour le même bien.
+   */
   argiles: { code: string; libelle: string } | null;
   /** Potentiel radon de la commune (classe 1 à 3). */
   radon: { classe: string } | null;
@@ -22,17 +28,30 @@ export interface GeorisquesData {
 
 const fetchJson = (url: string) => getJson<unknown>(url, { timeoutMs: 12000 });
 
+/**
+ * ⚠️ **Trois des quatre champs sont COMMUNAUX**, malgré des endpoints qui
+ * prennent des coordonnées : le radon est publié par commune, le zonage
+ * sismique est réglementaire par commune, et `gaspar/risques` recense les
+ * risques de la commune. Un centroïde communal y donne donc la bonne réponse —
+ * ils restent interrogés quelle que soit la précision.
+ *
+ * Seul l'aléa argile est à maille fine : `coordsFines` le coupe quand le point
+ * ne vaut pas au moins la voie. Ne pas « simplifier » en gardant tout ou en
+ * coupant tout — ce serait perdre trois données valides, ou en publier une
+ * fausse.
+ */
 export async function fetchGeorisques(params: {
   lat: number;
   lon: number;
   codeInsee: string;
+  coordsFines: boolean;
 }): Promise<GeorisquesData> {
-  const { lat, lon, codeInsee } = params;
+  const { lat, lon, codeInsee, coordsFines } = params;
   // Géorisques attend latlon au format "lon,lat".
   const latlon = `${lon},${lat}`;
 
   const [argilesRaw, radonRaw, sismiqueRaw, gasparRaw] = await Promise.all([
-    fetchJson(`${BASE}/rga?latlon=${latlon}`),
+    coordsFines ? fetchJson(`${BASE}/rga?latlon=${latlon}`) : Promise.resolve(null),
     codeInsee ? fetchJson(`${BASE}/radon?code_insee=${codeInsee}`) : Promise.resolve(null),
     fetchJson(`${BASE}/zonage_sismique?latlon=${latlon}`),
     fetchJson(`${BASE}/gaspar/risques?latlon=${latlon}`),

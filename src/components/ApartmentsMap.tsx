@@ -149,8 +149,17 @@ export default function ApartmentsMap({
                   </button>
                 </div>
 
-                {apt.precision_localisation === "arrondissement" && (
-                  <p className="text-[11px] text-amber-600">Position approximative</p>
+                {/* `!== "exacte"` : le niveau `rue` est approximatif lui aussi,
+                    une égalité stricte sur `arrondissement` le laisserait passer
+                    pour une position au bâtiment. Le libellé distingue les deux
+                    — le pin d'une voie est à quelques dizaines de mètres près,
+                    celui d'une commune à plusieurs kilomètres. */}
+                {apt.precision_localisation !== "exacte" && (
+                  <p className="text-[11px] text-amber-600">
+                    {apt.precision_localisation === "rue"
+                      ? "Position au milieu de la rue"
+                      : "Position approximative"}
+                  </p>
                 )}
 
                 <div className="flex gap-3 border-t border-ink-100 pt-2 text-xs font-medium">
