@@ -110,6 +110,34 @@ Un montant SAISI reste prioritaire. Le plafond de `capitalEffectif` couvre
 déjà `cout_total` — ne pas le resserrer. `SimulationResult.montantPlafonne`
 signale qu'un montant saisi a dû être ramené au coût de l'opération.
 
+### `planFinancement()` — coût total, capital, apport en un seul endroit
+
+`planFinancement(apt, inputs)` (`simulation.ts`) rend
+`{ coutTotal, capital, apport }`. C'est la SOURCE UNIQUE de ces trois
+grandeurs : `simulate()` en dérive mensualité et TRI, le Playground s'en sert
+pour proposer l'apport comme curseur.
+
+⚠️ **L'apport n'est PAS un champ de `SimulationInputs`, et ne doit pas le
+devenir.** C'est exactement le complément du capital emprunté
+(`coutTotal − capital`). Le stocker à côté créerait deux vérités pour une seule
+grandeur, qu'un simple changement de prix ferait diverger. Un écran qui veut
+« régler l'apport » écrit donc `montantEmprunte = coutTotal − apport`, jamais un
+apport. Aucune colonne ni migration n'est nécessaire pour ça.
+
+⚠️ **L'apport ne touche PAS le rendement net.** `calculations.ts` divise par le
+coût total de l'opération, pas par l'argent engagé : le rendement est identique
+qu'on paie comptant ou qu'on emprunte à 110 %. L'apport ne bouge que la
+mensualité, et par elle le cash-flow, le TRI, l'enrichissement et le point mort.
+Tout écran qui laisse régler l'apport en n'affichant que le rendement offre un
+curseur qui paraît cassé — il doit montrer mensualité et cash-flow, et le dire.
+
+⚠️ **Convention en cas de changement de prix : l'apport est la grandeur stable,
+l'emprunt absorbe l'écart.** Déjà appliquée par
+`patchApartment.suivreMontantEmprunte` et `recommandations.inputsAtPrice`. Un
+écran qui dérive l'emprunt de l'apport au rendu l'obtient gratuitement — mais
+doit BORNER l'apport à `[0, coutTotal]`, sinon `capitalEffectif` plafonne en
+silence et l'écran affiche un apport que le calcul n'a pas utilisé.
+
 ## UI : `ChampHerite` (Simulation financière)
 
 Miroir d'`OptionalRateField`, **sens inversé** : un champ hérité a toujours une

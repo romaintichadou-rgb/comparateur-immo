@@ -407,7 +407,7 @@ export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): Sim
   // Base revalorisable : prix + travaux, hors frais de notaire (qui ne créent
   // pas de valeur patrimoniale), même convention que le simulateur de référence.
   const valeurBienInitiale = (apt.prix ?? 0) + (apt.travaux ?? 0);
-  const { coutTotal: coutTotalReel, capital, apport } = planFinancement(apt, inputs);
+  const { capital, apport } = planFinancement(apt, inputs);
   const tauxRevalo = (inputs.revalorisationBienPct ?? 0) / 100;
   const tauxMensuel = inputs.tauxCreditPct / 100 / 12;
   const nbMois = Math.max(1, Math.round(inputs.dureeAnnees * 12));

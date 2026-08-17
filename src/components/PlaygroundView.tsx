@@ -617,7 +617,6 @@ const SLIDER_THUMB = "[&::-webkit-slider-thumb]:size-3.5 [&::-webkit-slider-thum
 
 function ComboSimulator({
   apt,
-  settings,
   seuilsRendement,
   cashflowSeuils,
   loyerRange,
@@ -634,7 +633,6 @@ function ComboSimulator({
   dvfMedianM2,
 }: {
   apt: ApartmentWithComputed;
-  settings: AppSettings;
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
   loyerRange: [number, number] | null;
@@ -964,20 +962,20 @@ function ComboSimulator({
               <div className="flex items-center justify-between gap-2 py-2.5">
                 <span className="text-ink-500">Mensualité</span>
                 <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-600">
-                  {combo.sim != null ? `${formatEuros(Math.round(combo.sim.mensualiteTotale))} €` : "—"}
+                  {combo.sim != null ? formatEuros(Math.round(combo.sim.mensualiteTotale)) : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2 py-2.5">
                 <span className="text-ink-500">Emprunt</span>
                 <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-600">
-                  {combo.sim != null ? `${formatEuros(combo.sim.montantEmprunte)} €` : "—"}
+                  {combo.sim != null ? formatEuros(combo.sim.montantEmprunte) : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2.5">
                 <span className="text-ink-500">Δ prix d&apos;achat</span>
                 <span className="font-mono text-xs tabular-nums text-ink-600">
                   {ecartPrix !== 0
-                    ? `${ecartPrix > 0 ? "+" : ""}${formatEuros(ecartPrix)}${apt.prix ? ` (${ecartPrix > 0 ? "+" : ""}${Math.round((ecartPrix / apt.prix) * 100)} %)` : ""}`
+                    ? `${formatEurosSigned(ecartPrix)}${apt.prix ? ` (${formatPercent(ecartPrix / apt.prix)})` : ""}`
                     : "—"
                   }
                 </span>
@@ -1215,7 +1213,6 @@ export default function PlaygroundView({
       {combo != null && (
         <ComboSimulator
           apt={apt}
-          settings={settings}
           seuilsRendement={seuilsRendement}
           cashflowSeuils={cashflowSeuils}
           loyerRange={loyerRange}

@@ -275,13 +275,50 @@ Chacun porte désormais un `GroupHeader` :
 
 | Groupe | Titre | Contrôle dans l'en-tête |
 |---|---|---|
-| `ComboSimulator` | Simulateur prix et loyer | — |
+| `ComboSimulator` | Simulateur prix, loyer et apport | — |
 | `PlaygroundKpiSummary` | Projection financière | — |
-| Courbes | Courbes de seuils | bascule **Par prix / Par loyer** |
+| Courbes | Courbes de seuils | bascule **Par prix / Par loyer / Par apport** |
 
-⚠️ La bascule prix/loyer est le CONTRÔLE du groupe « Courbes de seuils », elle
+⚠️ La bascule de facteur est le CONTRÔLE du groupe « Courbes de seuils », elle
 vit dans son en-tête (`children`) et non flottante au-dessus : isolée, rien ne
 disait ce qu'elle commandait. Son sous-titre suit le facteur actif.
+
+## Le curseur d'apport
+
+Troisième paramètre du simulateur, à côté du prix et du loyer. Détail du modèle
+(pourquoi l'apport n'est pas un champ stocké, pourquoi il ne touche pas le
+rendement) : **`docs/reference/simulation-financiere.md`**, section
+« `planFinancement()` ».
+
+- **Valeur de départ = l'apport du plan ENREGISTRÉ**, pas 0 : en mode auto et
+  financement `hors_notaire`, l'apport vaut déjà les frais de notaire. Le repère
+  du curseur est libellé « Plan actuel » (et non « Annonce » comme prix et
+  loyer : une annonce ne porte pas de plan de financement).
+- **Plage** : 0 (prêt à 110 %) → coût total (achat comptant). La borne haute
+  suit le prix simulé. Raccourcis : « Prêt à 110 % », « Comptant », et
+  « Cash-flow vert · X » — pendant du « Seuil vert » du prix, sur le seul
+  indicateur que l'apport déplace.
+- ⚠️ **La clé de réinitialisation se dérive du bien ENREGISTRÉ, jamais de
+  `comboPrix`** : le coût total dépend du prix, donc une clé calculée sur le
+  curseur remettrait l'apport à sa valeur d'origine à chaque mouvement du
+  curseur de prix.
+- ⚠️ **Le héros du panneau (« Rendement net simulé ») ne bouge pas** avec
+  l'apport. Une mention l'annonce dès que l'apport s'écarte du plan, et le
+  panneau porte les deux lignes que l'apport pilote vraiment : **Mensualité** et
+  **Emprunt**. Sans elles, le curseur passe pour cassé.
+- ⚠️ **Courbe rendement MASQUÉE sur l'axe apport** : elle serait une droite
+  horizontale, qu'on lirait comme « rien ne s'améliore ». Seule la courbe
+  cash-flow s'affiche, en pleine largeur, et le sous-titre dit pourquoi.
+
+### `simulerCombo` — un seul bien modifié pour tout le Playground
+
+`ComboSimulator` et `PlaygroundKpiSummary` reconstruisaient chacun leur copie du
+bien. Tant que seuls le prix et le loyer bougeaient, les deux copies restaient
+d'accord par hasard ; avec l'apport elles doivent porter le MÊME
+`montantEmprunte`. `simulerCombo()` est désormais l'unique constructeur, son
+résultat descend en prop, et **`computeDataPoints` passe par lui aussi** — sinon
+les courbes resteraient en financement automatique pendant que le panneau
+au-dessus d'elles est à apport figé.
 
 Les titres des deux courbes (`ThresholdChart`) sont sous le niveau H3 : ils
 utilisent `LABEL_BLOC` et non un `font-display text-sm`, qui n'existe nulle
