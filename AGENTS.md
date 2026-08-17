@@ -183,6 +183,7 @@ dans les boutons CTA.
 | `SectionHeader` | `SectionHeader.tsx` | Titre de carte de section — Fraunces `text-lg`, **sans icône**. Props : `title`, `as` (h2/h3), `className`. **OBLIGATOIRE pour tout en-tête de carte bordée.** |
 | `SectionTitle` | `SectionHeader.tsx` | Identique à `SectionHeader`, mais le libellé passe par `children` au lieu du prop `title`. Même rendu, à ne jamais faire diverger. |
 | `GroupTitle` | `SectionHeader.tsx` | Titre de GROUPE dans une carte — Fraunces `text-base`, un cran sous `SectionHeader`. |
+| `GroupHeader` | `SectionHeader.tsx` | Le même niveau, mais avec **sous-titre** (`text-sm ink-500`, token de `TabHeader`), `count` facultatif et un contrôle à droite (`children`). **OBLIGATOIRE pour tout groupe de contenu qui mérite un titre + une phrase** — pas de bloc titré à la main. |
 | `Skeleton` | `Skeleton.tsx` | Barre shimmer de chargement. |
 | `ConfirmDialog` | `ConfirmDialog.tsx` | Modale de confirmation destructive (titre, description, bouton rouge). |
 | `ErrorScreen` | `ErrorScreen.tsx` | Page d'erreur/not-found plein écran. |
@@ -229,6 +230,8 @@ Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 | Padding de carte section | 20px | `p-5` |
 | Padding de StatCard | 16px | `p-4` |
 | Gap dans une grille de cartes | 12px | `gap-3` |
+| Espacement entre GROUPES d'un onglet | 40px | `space-y-10` |
+| Espacement titre de groupe → contenu | 16px | `mb-4` (dans `GroupHeader`) |
 | Espacement entre sections (FlatSection) | 56px | `pt-14 pb-14` |
 | Espacement onglet → contenu | 24px mobile / 32px desktop | `pb-6 sm:pb-8` |
 | Séparateur de section | — | `border-t border-ink-100/50` |
@@ -250,6 +253,13 @@ Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 
 ⚠️ Le niveau « Onglet » n'a **pas** de variante responsive, contrairement aux
 deux du dessus — palier fixe. Sur mobile il égale le titre de la fiche.
+
+⚠️ **L'échelle s'arrête au H3.** Sous ce niveau (titre de courbe, libellé de
+curseur, en-tête de colonne) on quitte Fraunces pour `LABEL_BLOC`
+(`text-sm font-medium text-ink-700`, `SectionHeader.tsx`). Un
+`font-display text-sm` n'existe nulle part dans l'échelle : le rapetissement
+de Fraunces sous 16 px se lit comme un bug de police, pas comme un cran
+hiérarchique.
 
 Deux exceptions assumées : **Verdict de l'Analyse** (`text-4xl sm:text-5xl`,
 c'est LE résultat de l'écran) et **en-tête compact de la fiche bien**

@@ -11,6 +11,7 @@ import {
   Landmark,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
+import { GroupHeader, GroupTitle, SectionTitle, TITRE_SECTION } from "@/components/SectionHeader";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { isImmeuble } from "@/lib/types";
@@ -175,27 +176,21 @@ export default function OptimiserView({
 
   if (recos.length === 0) {
     return (
-      <div
-        className={`rounded-xl border p-8 text-center ${
+      <DegradedCard
+        titre={dejaAchat ? "Rien de plus à optimiser" : "Pistes indisponibles"}
+        texte={
           dejaAchat
-            ? "border-emerald-200 bg-gradient-to-r from-white to-emerald-50"
-            : "border-ink-100 bg-white"
-        }`}
-      >
-        <p className="font-display text-lg font-semibold text-ink-900">
-          {dejaAchat ? "Rien de plus à optimiser" : "Pistes indisponibles"}
-        </p>
-        <p className="mx-auto mt-1.5 max-w-md text-sm text-ink-600">
-          {dejaAchat
             ? "Aucun levier modélisable n'améliorerait nettement la rentabilité — le bien est déjà bien optimisé."
-            : "Renseigne le prix et la surface du bien pour obtenir des pistes chiffrées."}
-        </p>
-      </div>
+            : "Renseigne le prix et la surface du bien pour obtenir des pistes chiffrées."
+        }
+        cta={null}
+        tone={dejaAchat ? "positif" : "neutre"}
+      />
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {recos.map((reco, i) => (
         <LevierCard
           key={reco.levier + i}
@@ -250,6 +245,20 @@ function LevierCard({
         ? "bg-red-50 text-red-700"
         : "bg-ink-50 text-ink-500";
 
+  // Un seul jeu de pastilles, rendu à deux emplacements selon la largeur.
+  const badges = (
+    <>
+      {reco.flipVersAchat && (
+        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+          Achète
+        </span>
+      )}
+      <span className={`rounded-full px-2.5 py-1 text-xs font-bold tabular-nums ${badgeStyle}`}>
+        {badge.label}
+      </span>
+    </>
+  );
+
   return (
     <div
       className={`overflow-hidden rounded-xl border border-l-4 transition-shadow ${colors.border} ${
@@ -260,7 +269,7 @@ function LevierCard({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-ink-50/50 sm:gap-4"
+        className="flex w-full items-start gap-3 p-5 text-left transition-colors hover:bg-ink-50/50 sm:items-center sm:gap-4"
       >
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}
@@ -268,21 +277,20 @@ function LevierCard({
           <Icon className={`h-5 w-5 ${colors.text}`} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-ink-900">{reco.titre ?? reco.action}</p>
-          <p className="mt-0.5 line-clamp-1 text-xs text-ink-500">{reco.pourquoi}</p>
+          {/* `TITRE_SECTION` sur un `<p>` et non un heading : le contenu d'un
+              `<button>` est du phrasing content, un `<h*>` y serait invalide —
+              c'est exactement le cas pour lequel la constante est exportée. */}
+          <p className={TITRE_SECTION}>{reco.titre ?? reco.action}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-ink-500 sm:line-clamp-1">{reco.pourquoi}</p>
+          {/* Sur mobile les pastilles passent SOUS le titre : à 375 px, trois
+              éléments `shrink-0` sur la même ligne ne laissaient qu'une
+              soixantaine de pixels au titre, qui se cassait sur quatre lignes
+              (AGENTS.md, « les quatre pièges du mobile », n°4). */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:hidden">{badges}</div>
         </div>
-        {reco.flipVersAchat && (
-          <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-            Achète
-          </span>
-        )}
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums ${badgeStyle}`}
-        >
-          {badge.label}
-        </span>
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">{badges}</div>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-ink-300 transition-transform duration-200 ${
+          className={`mt-0.5 h-4 w-4 shrink-0 text-ink-300 transition-transform duration-200 sm:mt-0 ${
             expanded ? "rotate-180" : ""
           }`}
           aria-hidden
@@ -342,9 +350,12 @@ function LevierDetail({
   return (
     <div className="border-t border-ink-100">
       {/* Action + pivot + impact cards */}
-      <div className="bg-accent-50/50 p-5">
+      <div className="bg-accent-50/50 p-5 sm:p-6">
+        {/* Niveau GROUPE (`text-base`) et non section : le titre de la carte
+            est déjà en `text-lg`, l'action est ce qu'il contient. En `text-lg`
+            ici, l'enfant pesait plus lourd que son parent. */}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h3 className="font-display text-lg font-semibold text-ink-900">{reco.action}</h3>
+          <GroupTitle>{reco.action}</GroupTitle>
           {pivot?.delta && (
             <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-700">
               {pivot.delta}
@@ -361,7 +372,7 @@ function LevierDetail({
           )}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {pairs.map((p) => (
             <StatCard
               key={p.kind}
@@ -378,7 +389,7 @@ function LevierDetail({
       {/* Caveat */}
       {reco.caveat && (
         <div
-          className={`flex gap-2.5 border-y px-5 py-3 ${
+          className={`flex gap-2.5 border-y px-5 py-4 sm:px-6 ${
             reco.caveatBloquant
               ? "border-red-100 bg-red-50 text-red-700"
               : "border-amber-100 bg-amber-50 text-amber-800"
@@ -391,11 +402,16 @@ function LevierDetail({
 
       {/* Arguments */}
       {(preuves.length > 0 || methode.length > 0) && (
-        <div className="space-y-6 p-5">
+        <div className="space-y-8 p-5 sm:p-6">
           {preuves.length > 0 && (
             <section>
-              <SectionLabel titre="Les faits" nombre={preuves.length} />
-              <ul className="space-y-2.5">
+              <GroupHeader
+                as="h4"
+                title="Les faits"
+                count={preuves.length}
+                subtitle="Ce sur quoi le levier s'appuie, chiffres à l'appui."
+              />
+              <ul className="space-y-3">
                 {preuves.map((a, i) => (
                   <PreuveItem key={i} arg={a} />
                 ))}
@@ -404,8 +420,13 @@ function LevierDetail({
           )}
           {methode.length > 0 && (
             <section>
-              <SectionLabel titre="La méthode" nombre={methode.length} />
-              <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <GroupHeader
+                as="h4"
+                title="La méthode"
+                count={methode.length}
+                subtitle="Comment l'appliquer concrètement."
+              />
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {methode.map((a, i) => (
                   <li key={i} className="flex gap-3 rounded-xl bg-ink-50 px-4 py-3.5">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-ink-400" aria-hidden />
@@ -427,15 +448,6 @@ function LevierDetail({
 // ---------------------------------------------------------------------------
 // Shared small components
 // ---------------------------------------------------------------------------
-
-function SectionLabel({ titre, nombre }: { titre: string; nombre: number }) {
-  return (
-    <div className="mb-3 flex items-baseline gap-2">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">{titre}</h4>
-      <span className="text-[11px] tabular-nums text-ink-300">{nombre}</span>
-    </div>
-  );
-}
 
 function PreuveItem({ arg }: { arg: Argument }) {
   return (
@@ -462,18 +474,36 @@ function PreuveItem({ arg }: { arg: Argument }) {
   );
 }
 
+/**
+ * Carte d'état dégradé ou terminal de la sous-pill : pas d'analyse, pas de
+ * recos, ou rien de plus à optimiser.
+ *
+ * ⚠️ Titre en `SectionTitle` (`text-lg`, `h3`) et non en `text-2xl` : la carte
+ * vit SOUS le `TabHeader` « Optimiser » (`text-xl`, `h2`). Un `text-2xl` y
+ * faisait un enfant plus gros que son parent, et un second `h2` là où la
+ * hiérarchie attend un `h3`.
+ */
 function DegradedCard({
   titre,
   texte,
   cta,
+  tone = "neutre",
 }: {
   titre: string;
   texte: string;
   cta: { label: string; onClick: () => void } | null;
+  /** `positif` : état terminal souhaitable (rien à optimiser) — dégradé vert. */
+  tone?: "neutre" | "positif";
 }) {
   return (
-    <section className="rounded-xl border border-ink-100 bg-gradient-to-r from-white to-accent-50 p-8 text-center sm:p-12">
-      <h2 className="font-display text-2xl font-semibold text-ink-900">{titre}</h2>
+    <section
+      className={`rounded-xl border p-8 text-center sm:p-12 ${
+        tone === "positif"
+          ? "border-emerald-200 bg-gradient-to-r from-white to-emerald-50"
+          : "border-ink-100 bg-gradient-to-r from-white to-accent-50"
+      }`}
+    >
+      <SectionTitle as="h3">{titre}</SectionTitle>
       <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">{texte}</p>
       {cta && (
         <button

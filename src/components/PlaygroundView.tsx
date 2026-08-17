@@ -7,7 +7,13 @@ import { isImmeuble } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { computeDerived } from "@/lib/calculations";
 import { estimateFraisNotaire, lotsEffectifs } from "@/lib/estimates";
-import { resolveInputs, simulate, type InputsResolus, type SimulationResult } from "@/lib/simulation";
+import {
+  planFinancement,
+  resolveInputs,
+  simulate,
+  type InputsResolus,
+  type SimulationResult,
+} from "@/lib/simulation";
 import {
   referenceCCMeuble,
   typologieAnil,
@@ -24,14 +30,15 @@ import {
   type RendementSeuils,
   type RendementTone,
 } from "@/lib/analyse/scoring";
-import { formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
+import { formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
+import { GroupHeader, LABEL_BLOC } from "@/components/SectionHeader";
 
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Facteur = "prix" | "loyer";
+type Facteur = "prix" | "loyer" | "apport";
 interface DataPoint { x: number; yRendement: number | null; yCashflow: number | null }
 
 interface ThresholdChartProps {
@@ -113,6 +120,67 @@ function useReducedMotion(): boolean {
 // Data generation
 // ---------------------------------------------------------------------------
 
+/**
+ * Bien modifié + plan de financement du simulateur — SOURCE UNIQUE des deux
+ * blocs qui l'affichent (`ComboSimulator` et `PlaygroundKpiSummary`).
+ *
+ * Les deux reconstruisaient chacun leur copie du bien. Tant que seuls le prix
+ * et le loyer bougeaient, les deux copies restaient d'accord par hasard ; avec
+ * l'apport, elles doivent porter le MÊME `montantEmprunte`, sinon le panneau et
+ * les KPIs décrivent deux opérations différentes.
+ *
+ * ⚠️ L'apport est traduit en `montantEmprunte` (`coutTotal − apport`), jamais
+ * stocké tel quel : voir `planFinancement` dans `simulation.ts`. Il est BORNÉ au
+ * coût total, sinon `capitalEffectif` plafonne en silence et l'écran affiche un
+ * apport que le calcul n'a pas utilisé.
+ */
+function simulerCombo(
+  apt: ApartmentWithComputed,
+  settings: AppSettings,
+  prix: number,
+  loyer: number,
+  apport: number,
+): { derived: ApartmentWithComputed; coutTotal: number; apport: number; sim: SimulationResult | null } {
+  const modified = { ...apt } as ApartmentWithComputed;
+  modified.prix = prix;
+  modified.frais_notaire_estimes = estimateFraisNotaire(prix, apt.etat_bien ?? "ancien") ?? 0;
+  modified.loyer_retenu = loyer;
+  const derived = computeDerived(modified);
+  const coutTotal = Math.round(derived.budget_total ?? prix);
+  const apportBorne = Math.min(Math.max(0, apport), coutTotal);
+  const inputs: InputsResolus = {
+    ...resolveInputs(apt.simulation_inputs, settings),
+    montantEmprunte: coutTotal - apportBorne,
+  };
+  return { derived, coutTotal, apport: apportBorne, sim: simulate(derived, inputs) };
+}
+
+/**
+ * Apport du plan ENREGISTRÉ, au prix enregistré.
+ *
+ * ⚠️ Se dérive de `apartment`, jamais du curseur de prix : une clé de
+ * réinitialisation calculée sur `comboPrix` remettrait l'apport à sa valeur
+ * d'origine à chaque mouvement du curseur de prix.
+ *
+ * Ce n'est pas 0 par défaut : en mode auto et financement `hors_notaire`,
+ * l'apport vaut déjà les frais de notaire.
+ */
+function apportDuPlan(apt: ApartmentWithComputed, settings: AppSettings): number {
+  return planFinancement(apt, resolveInputs(apt.simulation_inputs, settings)).apport;
+}
+
+function generateApportRange(coutTotal: number, apportActuel: number): number[] {
+  const step = Math.max(1000, roundTo(coutTotal / 40, 1000) || 1000);
+  const pts: number[] = [];
+  for (let x = 0; x <= coutTotal; x += step) pts.push(x);
+  if (pts[pts.length - 1] !== coutTotal) pts.push(coutTotal);
+  if (!pts.includes(apportActuel) && apportActuel <= coutTotal) {
+    pts.push(apportActuel);
+    pts.sort((a, b) => a - b);
+  }
+  return pts;
+}
+
 function generatePriceRange(prix: number): number[] {
   const lo = roundTo(prix * 0.7, 5000);
   const hi = roundTo(prix * 1.3, 5000);
@@ -149,33 +217,36 @@ function generateLoyerRange(min: number, max: number, loyer: number): number[] {
   return pts;
 }
 
+/**
+ * Les courbes passent par `simulerCombo`, comme le panneau : l'apport figé du
+ * simulateur doit s'appliquer à CHAQUE point.
+ *
+ * ⚠️ Avant l'ajout de l'apport, les courbes calculaient en mode financement
+ * automatique (l'emprunt suivait le prix) — d'accord avec le panneau par
+ * coïncidence, puisque lui aussi était en auto. Dès qu'un apport est fixé, une
+ * courbe restée en auto raconterait une autre opération que le panneau juste
+ * au-dessus d'elle.
+ *
+ * ⚠️ `yRendement` est CONSTANT sur l'axe apport (le rendement net ne dépend pas
+ * du financement) : la courbe rendement n'est pas affichée pour ce facteur —
+ * voir `PlaygroundView`.
+ */
 function computeDataPoints(
   apt: ApartmentWithComputed,
   settings: AppSettings,
   facteur: Facteur,
   xValues: number[],
-  fixedOverride?: { prix?: number; loyer?: number },
+  fixed: { prix: number; loyer: number; apport: number },
 ): DataPoint[] {
-  const inputs = resolveInputs(apt.simulation_inputs, settings);
   return xValues.map((x) => {
-    const modified = { ...apt } as ApartmentWithComputed;
-    if (facteur === "prix") {
-      modified.prix = x;
-      modified.frais_notaire_estimes = estimateFraisNotaire(x, apt.etat_bien ?? "ancien") ?? 0;
-      if (fixedOverride?.loyer != null) modified.loyer_retenu = fixedOverride.loyer;
-    } else {
-      modified.loyer_retenu = x;
-      if (fixedOverride?.prix != null) {
-        modified.prix = fixedOverride.prix;
-        modified.frais_notaire_estimes = estimateFraisNotaire(fixedOverride.prix, apt.etat_bien ?? "ancien") ?? 0;
-      }
-    }
-    const derived = computeDerived(modified);
-    const simResult = simulate(derived, inputs);
+    const prix = facteur === "prix" ? x : fixed.prix;
+    const loyer = facteur === "loyer" ? x : fixed.loyer;
+    const apport = facteur === "apport" ? x : fixed.apport;
+    const { derived, sim } = simulerCombo(apt, settings, prix, loyer, apport);
     return {
       x,
       yRendement: derived.rendement_net,
-      yCashflow: simResult?.cashflowMensuelMoyenLMNP ?? null,
+      yCashflow: sim?.cashflowMensuelMoyenLMNP ?? null,
     };
   });
 }
@@ -371,7 +442,7 @@ function ThresholdChart({
 
   return (
     <div>
-      <h4 className="mb-2 font-display text-sm font-semibold text-ink-900">{title}</h4>
+      <h4 className={`mb-3 ${LABEL_BLOC}`}>{title}</h4>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${CHART_W} ${CHART_H}`}
@@ -551,10 +622,15 @@ function ComboSimulator({
   cashflowSeuils,
   loyerRange,
   seuilVertPrix,
+  seuilVertApport,
   comboPrix,
   comboLoyer,
+  comboApport,
+  apportPlan,
+  combo,
   onComboPrixChange,
   onComboLoyerChange,
+  onComboApportChange,
   dvfMedianM2,
 }: {
   apt: ApartmentWithComputed;
@@ -563,41 +639,43 @@ function ComboSimulator({
   cashflowSeuils: CashflowSeuils;
   loyerRange: [number, number] | null;
   seuilVertPrix: number | null;
+  /** Apport à partir duquel le cash-flow passe au vert, `null` si hors plage. */
+  seuilVertApport: number | null;
   comboPrix: number;
   comboLoyer: number;
+  comboApport: number;
+  /** Apport du plan enregistré — repère fixe du curseur. */
+  apportPlan: number;
+  /** Résultat partagé avec les KPIs (`simulerCombo`) — jamais recalculé ici. */
+  combo: ReturnType<typeof simulerCombo>;
   onComboPrixChange: (v: number) => void;
   onComboLoyerChange: (v: number) => void;
+  onComboApportChange: (v: number) => void;
   dvfMedianM2: number | null;
 }) {
-  const comboResult = useMemo(() => {
-    const modified = { ...apt } as ApartmentWithComputed;
-    modified.prix = comboPrix;
-    modified.frais_notaire_estimes = estimateFraisNotaire(comboPrix, apt.etat_bien ?? "ancien") ?? 0;
-    modified.loyer_retenu = comboLoyer;
-    const derived = computeDerived(modified);
-    const inputs = resolveInputs(apt.simulation_inputs, settings);
-    const sim = simulate(derived, inputs);
-    return {
-      rendement: derived.rendement_net,
-      cashflow: sim?.cashflowMensuelMoyenLMNP ?? null,
-    };
-  }, [apt, comboPrix, comboLoyer, settings]);
-
-  const rdtTone = toneForRendement(comboResult.rendement, seuilsRendement);
-  const cfTone = toneForCashflow(comboResult.cashflow, cashflowSeuils);
+  const rendementCombo = combo.derived.rendement_net;
+  const cashflowCombo = combo.sim?.cashflowMensuelMoyenLMNP ?? null;
+  const rdtTone = toneForRendement(rendementCombo, seuilsRendement);
+  const cfTone = toneForCashflow(cashflowCombo, cashflowSeuils);
 
   const ecartPrix = comboPrix - (apt.prix ?? 0);
   const ecartLoyer = comboLoyer - (apt.loyer_retenu ?? 0);
-  const hasEcart = ecartPrix !== 0 || ecartLoyer !== 0;
+  const ecartApport = comboApport - apportPlan;
+  const hasEcart = ecartPrix !== 0 || ecartLoyer !== 0 || ecartApport !== 0;
 
   const prixMin = roundTo((apt.prix ?? 0) * 0.7, 5000);
   const prixMax = roundTo((apt.prix ?? 0) * 1.3, 5000);
   const loyerMin = loyerRange ? roundTo(loyerRange[0] * 0.9, 10) : 0;
   const loyerMax = loyerRange ? roundTo(loyerRange[1] * 1.1, 10) : roundTo((apt.loyer_retenu ?? 0) * 1.5, 10);
+  // Plage d'apport : de 0 (prêt à 110 %) au coût total (achat comptant). La
+  // borne haute est le coût total du prix SIMULÉ, donc elle bouge avec le
+  // curseur de prix — d'où le `Math.min` sur la valeur affichée plus bas.
+  const apportMax = combo.coutTotal;
 
   const resetCombo = () => {
     onComboPrixChange(apt.prix ?? 0);
     onComboLoyerChange(apt.loyer_retenu ?? 0);
+    onComboApportChange(apportPlan);
   };
 
   const surface = apt.surface_m2 ?? 0;
@@ -607,193 +685,308 @@ function ComboSimulator({
   const loyerPct = loyerMax > loyerMin ? ((comboLoyer - loyerMin) / (loyerMax - loyerMin)) * 100 : 0;
   const origPrixPct = prixMax > prixMin ? (((apt.prix ?? 0) - prixMin) / (prixMax - prixMin)) * 100 : 50;
   const origLoyerPct = loyerMax > loyerMin ? (((apt.loyer_retenu ?? 0) - loyerMin) / (loyerMax - loyerMin)) * 100 : 50;
+  // `combo.apport` et non `comboApport` : c'est la valeur BORNÉE au coût total,
+  // la seule que le calcul a réellement utilisée. Afficher la valeur brute
+  // laisserait la poignée au-delà de la piste quand le prix descend sous
+  // l'apport choisi.
+  const apportPct = apportMax > 0 ? (combo.apport / apportMax) * 100 : 0;
+  const origApportPct = apportMax > 0 ? (Math.min(apportPlan, apportMax) / apportMax) * 100 : 0;
 
   return (
-    <div className="rounded-xl border border-ink-100 bg-white">
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_280px]">
-        {/* Left column: stacked sliders */}
-        <div className="space-y-6 p-5 sm:p-6">
-          {/* Prix d'achat slider */}
-          <div>
-            <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-              <span className="text-sm font-medium text-ink-700">Prix d&apos;achat</span>
-            {seuilVertPrix != null && Math.abs(comboPrix - Math.round(seuilVertPrix)) > 1000 && (
-              <button
-                onClick={() => onComboPrixChange(roundTo(seuilVertPrix, 1000))}
-                className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-px text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
-              >
-                Seuil vert · {formatEurosShort(roundTo(seuilVertPrix, 1000))}
-              </button>
-            )}
-            {(apt.prix ?? 0) > 0 && Math.abs(ecartPrix + (apt.prix ?? 0) * 0.1) > 1000 && (
-              <button
-                onClick={() => onComboPrixChange(roundTo((apt.prix ?? 0) * 0.9, 1000))}
-                className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
-              >
-                −10 %
-              </button>
-            )}
-            {(apt.prix ?? 0) > 0 && Math.abs(ecartPrix + (apt.prix ?? 0) * 0.2) > 1000 && (
-              <button
-                onClick={() => onComboPrixChange(roundTo((apt.prix ?? 0) * 0.8, 1000))}
-                className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
-              >
-                −20 %
-              </button>
-            )}
-            {dvfPrix != null && Math.abs(comboPrix - dvfPrix) > 5000 && (
-              <button
-                onClick={() => onComboPrixChange(roundTo(dvfPrix, 1000))}
-                className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
-              >
-                DVF médian
-              </button>
-            )}
-            {hasEcart && (
-              <button
-                onClick={resetCombo}
-                className="flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] text-ink-400 hover:bg-ink-50 hover:text-ink-600"
-                aria-label="Réinitialiser"
-              >
-                <RotateCcw className="size-2.5" />
-              </button>
-            )}
-              <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
+    <section>
+      <GroupHeader
+        title="Simulateur prix, loyer et apport"
+        subtitle="Déplacez les curseurs : rendement, mensualité et cash-flow se recalculent à chaque mouvement. Rien n'est enregistré."
+      />
+      <div className="rounded-xl border border-ink-100 bg-white">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_280px]">
+          {/* Left column: stacked sliders */}
+          <div className="space-y-8 p-5 sm:p-6">
+            {/* Prix d'achat slider */}
+            <div>
+              <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <span className={LABEL_BLOC}>Prix d&apos;achat</span>
+              {seuilVertPrix != null && Math.abs(comboPrix - Math.round(seuilVertPrix)) > 1000 && (
                 <button
-                  onClick={() => onComboPrixChange(Math.max(prixMin, comboPrix - 1000))}
-                  className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
-                >&minus;</button>
-                <span className="min-w-[80px] text-center font-mono text-sm font-semibold tabular-nums text-ink-900">
-                  {formatEuros(comboPrix)}
-                </span>
+                  onClick={() => onComboPrixChange(roundTo(seuilVertPrix, 1000))}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-px text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
+                >
+                  Seuil vert · {formatEurosShort(roundTo(seuilVertPrix, 1000))}
+                </button>
+              )}
+              {(apt.prix ?? 0) > 0 && Math.abs(ecartPrix + (apt.prix ?? 0) * 0.1) > 1000 && (
                 <button
-                  onClick={() => onComboPrixChange(Math.min(prixMax, comboPrix + 1000))}
-                  className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
-                >+</button>
-                <span className="pr-1 text-xs text-ink-400">€</span>
+                  onClick={() => onComboPrixChange(roundTo((apt.prix ?? 0) * 0.9, 1000))}
+                  className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
+                >
+                  −10 %
+                </button>
+              )}
+              {(apt.prix ?? 0) > 0 && Math.abs(ecartPrix + (apt.prix ?? 0) * 0.2) > 1000 && (
+                <button
+                  onClick={() => onComboPrixChange(roundTo((apt.prix ?? 0) * 0.8, 1000))}
+                  className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
+                >
+                  −20 %
+                </button>
+              )}
+              {dvfPrix != null && Math.abs(comboPrix - dvfPrix) > 5000 && (
+                <button
+                  onClick={() => onComboPrixChange(roundTo(dvfPrix, 1000))}
+                  className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
+                >
+                  DVF médian
+                </button>
+              )}
+              {hasEcart && (
+                <button
+                  onClick={resetCombo}
+                  className="flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] text-ink-400 hover:bg-ink-50 hover:text-ink-600"
+                  aria-label="Réinitialiser"
+                >
+                  <RotateCcw className="size-2.5" />
+                </button>
+              )}
+                <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
+                  <button
+                    onClick={() => onComboPrixChange(Math.max(prixMin, comboPrix - 1000))}
+                    className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
+                  >&minus;</button>
+                  <span className="min-w-[80px] text-center font-mono text-sm font-semibold tabular-nums text-ink-900">
+                    {formatEuros(comboPrix)}
+                  </span>
+                  <button
+                    onClick={() => onComboPrixChange(Math.min(prixMax, comboPrix + 1000))}
+                    className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
+                  >+</button>
+                  <span className="pr-1 text-xs text-ink-400">€</span>
+                </div>
               </div>
-            </div>
-            <div className="relative h-6">
-              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
+              <div className="relative h-6">
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
+                  <div
+                    className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
+                    style={{ width: `${prixPct}%` }}
+                  />
+                </div>
                 <div
-                  className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
-                  style={{ width: `${prixPct}%` }}
+                  className="pointer-events-none absolute top-0 z-[5] flex h-full -translate-x-1/2 flex-col items-center justify-center"
+                  style={{ left: `${origPrixPct}%` }}
+                >
+                  <div className="h-3.5 w-px bg-ink-300/60" />
+                </div>
+                <input
+                  type="range"
+                  aria-label="Prix d'achat"
+                  min={prixMin}
+                  max={prixMax}
+                  step={1000}
+                  value={comboPrix}
+                  onChange={(e) => onComboPrixChange(Number(e.target.value))}
+                  className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
                 />
               </div>
-              <div
-                className="pointer-events-none absolute top-0 z-[5] flex h-full -translate-x-1/2 flex-col items-center justify-center"
-                style={{ left: `${origPrixPct}%` }}
-              >
-                <div className="h-3.5 w-px bg-ink-300/60" />
-              </div>
-              <input
-                type="range"
-                min={prixMin}
-                max={prixMax}
-                step={1000}
-                value={comboPrix}
-                onChange={(e) => onComboPrixChange(Number(e.target.value))}
-                className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
-              />
-            </div>
-            <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
-              <span>{formatEurosShort(prixMin)}</span>
-              <span
-                className="absolute -translate-x-1/2 text-[10px] text-ink-400"
-                style={{ left: `${origPrixPct}%` }}
-              >
-                Annonce
-              </span>
-              <span>{formatEurosShort(prixMax)}</span>
-            </div>
-          </div>
-
-          {/* Loyer mensuel slider */}
-          <div>
-            <div className="mb-2.5 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-ink-700">Loyer mensuel</span>
-              <div className="flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
-                <button
-                  onClick={() => onComboLoyerChange(Math.max(loyerMin, comboLoyer - 10))}
-                  className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
-                >&minus;</button>
-                <span className="min-w-[64px] text-center font-mono text-sm font-semibold tabular-nums text-ink-900">
-                  {formatEuros(comboLoyer)}
+              <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
+                <span>{formatEurosShort(prixMin)}</span>
+                <span
+                  className="absolute -translate-x-1/2 text-[10px] text-ink-400"
+                  style={{ left: `${origPrixPct}%` }}
+                >
+                  Annonce
                 </span>
-                <button
-                  onClick={() => onComboLoyerChange(Math.min(loyerMax, comboLoyer + 10))}
-                  className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
-                >+</button>
-                <span className="pr-1 text-xs text-ink-400">€</span>
+                <span>{formatEurosShort(prixMax)}</span>
               </div>
             </div>
-            <div className="relative h-6">
-              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
+
+            {/* Loyer mensuel slider */}
+            <div>
+              <div className="mb-2.5 flex items-center justify-between gap-3">
+                <span className={LABEL_BLOC}>Loyer mensuel</span>
+                <div className="flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
+                  <button
+                    onClick={() => onComboLoyerChange(Math.max(loyerMin, comboLoyer - 10))}
+                    className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
+                  >&minus;</button>
+                  <span className="min-w-[64px] text-center font-mono text-sm font-semibold tabular-nums text-ink-900">
+                    {formatEuros(comboLoyer)}
+                  </span>
+                  <button
+                    onClick={() => onComboLoyerChange(Math.min(loyerMax, comboLoyer + 10))}
+                    className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
+                  >+</button>
+                  <span className="pr-1 text-xs text-ink-400">€</span>
+                </div>
+              </div>
+              <div className="relative h-6">
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
+                  <div
+                    className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
+                    style={{ width: `${loyerPct}%` }}
+                  />
+                </div>
                 <div
-                  className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
-                  style={{ width: `${loyerPct}%` }}
+                  className="pointer-events-none absolute top-0 z-[5] flex h-full -translate-x-1/2 flex-col items-center justify-center"
+                  style={{ left: `${origLoyerPct}%` }}
+                >
+                  <div className="h-3.5 w-px bg-ink-300/60" />
+                </div>
+                <input
+                  type="range"
+                  aria-label="Loyer mensuel"
+                  min={loyerMin}
+                  max={loyerMax}
+                  step={5}
+                  value={comboLoyer}
+                  onChange={(e) => onComboLoyerChange(Number(e.target.value))}
+                  className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
                 />
               </div>
-              <div
-                className="pointer-events-none absolute top-0 z-[5] flex h-full -translate-x-1/2 flex-col items-center justify-center"
-                style={{ left: `${origLoyerPct}%` }}
-              >
-                <div className="h-3.5 w-px bg-ink-300/60" />
+              <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
+                <span>{formatEuros(loyerMin)}</span>
+                <span
+                  className="absolute -translate-x-1/2 text-[10px] text-ink-400"
+                  style={{ left: `${origLoyerPct}%` }}
+                >
+                  Annonce
+                </span>
+                <span>{formatEuros(loyerMax)}</span>
               </div>
-              <input
-                type="range"
-                min={loyerMin}
-                max={loyerMax}
-                step={5}
-                value={comboLoyer}
-                onChange={(e) => onComboLoyerChange(Number(e.target.value))}
-                className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
-              />
             </div>
-            <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
-              <span>{formatEuros(loyerMin)}</span>
-              <span
-                className="absolute -translate-x-1/2 text-[10px] text-ink-400"
-                style={{ left: `${origLoyerPct}%` }}
-              >
-                Annonce
-              </span>
-              <span>{formatEuros(loyerMax)}</span>
+
+            {/* Apport slider */}
+            <div>
+              <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <span className={LABEL_BLOC}>Apport</span>
+                {seuilVertApport != null && Math.abs(combo.apport - Math.round(seuilVertApport)) > 1000 && (
+                  <button
+                    onClick={() => onComboApportChange(Math.min(apportMax, roundTo(seuilVertApport, 1000)))}
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-px text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Cash-flow vert · {formatEurosShort(roundTo(seuilVertApport, 1000))}
+                  </button>
+                )}
+                {combo.apport !== 0 && (
+                  <button
+                    onClick={() => onComboApportChange(0)}
+                    className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
+                  >
+                    Prêt à 110 %
+                  </button>
+                )}
+                {combo.apport !== apportMax && (
+                  <button
+                    onClick={() => onComboApportChange(apportMax)}
+                    className="rounded-full border border-ink-200 px-2 py-px text-[10px] font-medium text-ink-500 hover:bg-ink-50"
+                  >
+                    Comptant
+                  </button>
+                )}
+                <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
+                  <button
+                    onClick={() => onComboApportChange(Math.max(0, combo.apport - 1000))}
+                    className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
+                  >&minus;</button>
+                  <span className="min-w-[80px] text-center font-mono text-sm font-semibold tabular-nums text-ink-900">
+                    {formatEuros(combo.apport)}
+                  </span>
+                  <button
+                    onClick={() => onComboApportChange(Math.min(apportMax, combo.apport + 1000))}
+                    className="px-1.5 py-1 text-sm text-ink-400 hover:text-ink-700"
+                  >+</button>
+                  <span className="pr-1 text-xs text-ink-400">€</span>
+                </div>
+              </div>
+              <div className="relative h-6">
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
+                  <div
+                    className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
+                    style={{ width: `${apportPct}%` }}
+                  />
+                </div>
+                <div
+                  className="pointer-events-none absolute top-0 z-[5] flex h-full -translate-x-1/2 flex-col items-center justify-center"
+                  style={{ left: `${origApportPct}%` }}
+                >
+                  <div className="h-3.5 w-px bg-ink-300/60" />
+                </div>
+                <input
+                  type="range"
+                  aria-label="Apport personnel"
+                  min={0}
+                  max={apportMax}
+                  step={1000}
+                  value={combo.apport}
+                  onChange={(e) => onComboApportChange(Number(e.target.value))}
+                  className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
+                />
+              </div>
+              <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
+                <span>0 €</span>
+                <span
+                  className="absolute -translate-x-1/2 text-[10px] text-ink-400"
+                  style={{ left: `${origApportPct}%` }}
+                >
+                  Plan actuel
+                </span>
+                <span>{formatEurosShort(apportMax)}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right column: results card */}
-        <div className="flex flex-col border-t border-ink-100/50 sm:border-l sm:border-t-0">
-          {/* Hero rendement */}
-          <div className={`flex flex-1 flex-col items-center justify-center px-5 py-6 ${TONE_PANEL_STYLES[rdtTone].wrap} sm:rounded-tr-xl`}>
-            <p className={`mb-1 text-xs font-medium ${TONE_PANEL_STYLES[rdtTone].label}`}>Rendement net simulé</p>
-            <p className={`font-mono text-3xl font-bold tabular-nums ${TONE_PANEL_STYLES[rdtTone].value}`}>
-              {comboResult.rendement != null ? formatPercent(comboResult.rendement) : "—"}
-            </p>
-          </div>
-
-          {/* Detail rows */}
-          <div className="divide-y divide-ink-100/50 px-5 text-sm">
-            <div className="flex items-center justify-between py-2.5">
-              <span className="text-ink-500">Cash-flow mensuel</span>
-              <span className={`font-mono font-semibold tabular-nums ${TONE_PANEL_STYLES[cfTone].value}`}>
-                {comboResult.cashflow != null ? formatCashflow(comboResult.cashflow) : "—"}
-              </span>
+          {/* Right column: results card */}
+          <div className="flex flex-col border-t border-ink-100/50 sm:border-l sm:border-t-0">
+            {/* Hero rendement */}
+            <div className={`flex flex-1 flex-col items-center justify-center px-5 py-6 ${TONE_PANEL_STYLES[rdtTone].wrap} sm:rounded-tr-xl`}>
+              <p className={`mb-1 text-xs font-medium ${TONE_PANEL_STYLES[rdtTone].label}`}>Rendement net simulé</p>
+              <p className={`font-mono text-3xl font-bold tabular-nums ${TONE_PANEL_STYLES[rdtTone].value}`}>
+                {rendementCombo != null ? formatPercent(rendementCombo) : "—"}
+              </p>
+              {/* ⚠️ Le rendement net divise par le coût de l'opération : il ne
+                  dépend PAS du financement. Sans cette mention, le curseur
+                  d'apport passe pour cassé — on le bouge, le grand chiffre ne
+                  bronche pas. Les lignes en dessous sont sa vraie réponse. */}
+              {ecartApport !== 0 && (
+                <p className={`mt-1.5 text-center text-[10px] leading-tight ${TONE_PANEL_STYLES[rdtTone].label}`}>
+                  Inchangé par l&apos;apport — voir mensualité et cash-flow
+                </p>
+              )}
             </div>
-            <div className="flex items-center justify-between py-2.5">
-              <span className="text-ink-500">Δ prix d&apos;achat</span>
-              <span className="font-mono text-xs tabular-nums text-ink-600">
-                {ecartPrix !== 0
-                  ? `${ecartPrix > 0 ? "+" : ""}${formatEuros(ecartPrix)}${apt.prix ? ` (${ecartPrix > 0 ? "+" : ""}${Math.round((ecartPrix / apt.prix) * 100)} %)` : ""}`
-                  : "—"
-                }
-              </span>
+
+            {/* Detail rows */}
+            <div className="divide-y divide-ink-100/50 px-5 text-sm">
+              <div className="flex items-center justify-between gap-2 py-2.5">
+                <span className="text-ink-500">Cash-flow mensuel</span>
+                <span className={`whitespace-nowrap font-mono font-semibold tabular-nums ${TONE_PANEL_STYLES[cfTone].value}`}>
+                  {cashflowCombo != null ? formatCashflow(cashflowCombo) : "—"}
+                </span>
+              </div>
+              {/* Les deux grandeurs que l'apport pilote directement. */}
+              <div className="flex items-center justify-between gap-2 py-2.5">
+                <span className="text-ink-500">Mensualité</span>
+                <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-600">
+                  {combo.sim != null ? `${formatEuros(Math.round(combo.sim.mensualiteTotale))} €` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 py-2.5">
+                <span className="text-ink-500">Emprunt</span>
+                <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-600">
+                  {combo.sim != null ? `${formatEuros(combo.sim.montantEmprunte)} €` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-ink-500">Δ prix d&apos;achat</span>
+                <span className="font-mono text-xs tabular-nums text-ink-600">
+                  {ecartPrix !== 0
+                    ? `${ecartPrix > 0 ? "+" : ""}${formatEuros(ecartPrix)}${apt.prix ? ` (${ecartPrix > 0 ? "+" : ""}${Math.round((ecartPrix / apt.prix) * 100)} %)` : ""}`
+                    : "—"
+                  }
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -814,6 +1007,9 @@ export default function PlaygroundView({
 
   const [comboPrix, setComboPrix] = useState(apartment.prix ?? 0);
   const [comboLoyer, setComboLoyer] = useState(apartment.loyer_retenu ?? 0);
+  // Apport du plan ENREGISTRÉ — pas 0 : en mode auto + financement
+  // `hors_notaire`, l'apport vaut déjà les frais de notaire.
+  const [comboApport, setComboApport] = useState(() => apportDuPlan(apartment, settings));
 
   // Les curseurs repartent de la valeur du bien dès qu'elle change (sauvegarde,
   // ré-estimation). Ajustement PENDANT LE RENDU plutôt que dans un effet —
@@ -835,6 +1031,17 @@ export default function PlaygroundView({
   if (loyerDuBien !== loyerDuBienVu) {
     setLoyerDuBienVu(loyerDuBien);
     setComboLoyer(loyerDuBien);
+  }
+
+  // ⚠️ La clé de réinitialisation se dérive du bien ENREGISTRÉ, jamais de
+  // `comboPrix` : le coût total dépend du prix, donc une clé calculée sur le
+  // curseur remettrait l'apport à sa valeur d'origine à chaque mouvement du
+  // curseur de prix.
+  const apportPlan = apportDuPlan(apartment, settings);
+  const [apportPlanVu, setApportPlanVu] = useState(apportPlan);
+  if (apportPlan !== apportPlanVu) {
+    setApportPlanVu(apportPlan);
+    setComboApport(apportPlan);
   }
 
   const apt = apartment;
@@ -899,25 +1106,37 @@ export default function PlaygroundView({
 
   const hasLoyerFactor = loyerRange != null && hasLoyer;
 
+  // Résultat PARTAGÉ entre le panneau du simulateur et les KPIs — un seul bien
+  // modifié, un seul plan de financement (cf. `simulerCombo`).
+  const combo = useMemo(
+    () => hasPrix && hasLoyer ? simulerCombo(apt, settings, comboPrix, comboLoyer, comboApport) : null,
+    [apt, settings, comboPrix, comboLoyer, comboApport, hasPrix, hasLoyer],
+  );
+
   const xValues = useMemo(() => {
     if (facteur === "prix" && hasPrix) return generatePriceRange(apt.prix!);
     if (facteur === "loyer" && loyerRange && hasLoyer) return generateLoyerRange(roundTo(loyerRange[0] * 0.9, 10), roundTo(loyerRange[1] * 1.1, 10), apt.loyer_retenu!);
+    if (facteur === "apport" && combo != null) return generateApportRange(combo.coutTotal, combo.apport);
     return [];
-  }, [facteur, apt.prix, apt.loyer_retenu, loyerRange, hasPrix, hasLoyer]);
+  }, [facteur, apt.prix, apt.loyer_retenu, loyerRange, hasPrix, hasLoyer, combo]);
 
-  const fixedOverride = useMemo(() => {
-    if (facteur === "prix") return { loyer: comboLoyer };
-    return { prix: comboPrix };
-  }, [facteur, comboPrix, comboLoyer]);
-
-  const dataPoints = useMemo(
-    () => xValues.length > 0 ? computeDataPoints(apt, settings, facteur, xValues, fixedOverride) : [],
-    [apt, settings, facteur, xValues, fixedOverride],
+  // Les deux autres paramètres restent figés à la valeur du simulateur : les
+  // courbes décrivent la MÊME opération que le panneau au-dessus d'elles.
+  const fixed = useMemo(
+    () => ({ prix: comboPrix, loyer: comboLoyer, apport: comboApport }),
+    [comboPrix, comboLoyer, comboApport],
   );
 
-  const currentX = facteur === "prix" ? comboPrix : comboLoyer;
+  const dataPoints = useMemo(
+    () => xValues.length > 0 ? computeDataPoints(apt, settings, facteur, xValues, fixed) : [],
+    [apt, settings, facteur, xValues, fixed],
+  );
 
-  const origX = facteur === "prix" ? (apt.prix ?? 0) : (apt.loyer_retenu ?? 0);
+  const currentX =
+    facteur === "prix" ? comboPrix : facteur === "loyer" ? comboLoyer : (combo?.apport ?? comboApport);
+
+  const origX =
+    facteur === "prix" ? (apt.prix ?? 0) : facteur === "loyer" ? (apt.loyer_retenu ?? 0) : apportPlan;
   const xAxisMoved = currentX !== origX;
 
   const ghostRendement = useMemo(() => {
@@ -942,8 +1161,22 @@ export default function PlaygroundView({
     return findCrossing(dataPoints, (d) => d.yRendement, seuilsRendement.modeste, "above");
   }, [dataPoints, facteur, seuilsRendement.modeste]);
 
+  // Pendant du « Seuil vert » du prix, sur le seul indicateur que l'apport
+  // déplace : l'apport à partir duquel le cash-flow passe au vert. Calculé sur
+  // sa PROPRE plage, sans dépendre du facteur affiché — sinon la pastille du
+  // curseur disparaîtrait dès qu'on regarde la courbe des prix.
+  const seuilVertApport = useMemo(() => {
+    if (combo == null) return null;
+    const pts = computeDataPoints(apt, settings, "apport", generateApportRange(combo.coutTotal, combo.apport), {
+      prix: comboPrix,
+      loyer: comboLoyer,
+      apport: combo.apport,
+    });
+    return findCrossing(pts, (d) => d.yCashflow, cashflowSeuils.vert, "above");
+  }, [apt, settings, combo, comboPrix, comboLoyer, cashflowSeuils.vert]);
+
   const formatXFn = useCallback(
-    (v: number) => facteur === "prix" ? formatK(v) : `${Math.round(v)} €`,
+    (v: number) => (facteur === "loyer" ? `${Math.round(v)} €` : formatK(v)),
     [facteur],
   );
 
@@ -960,16 +1193,6 @@ export default function PlaygroundView({
     }, 150);
   }, [facteur]);
 
-  const comboSim = useMemo(() => {
-    if (!hasPrix || !hasLoyer) return null;
-    const modified = { ...apt } as ApartmentWithComputed;
-    modified.prix = comboPrix;
-    modified.frais_notaire_estimes = estimateFraisNotaire(comboPrix, apt.etat_bien ?? "ancien") ?? 0;
-    modified.loyer_retenu = comboLoyer;
-    const derived = computeDerived(modified);
-    return simulate(derived, resolveInputs(apt.simulation_inputs, settings));
-  }, [apt, comboPrix, comboLoyer, settings, hasPrix, hasLoyer]);
-
   const resolus = useMemo(() => resolveInputs(apt.simulation_inputs, settings), [apt.simulation_inputs, settings]);
 
   if (!hasPrix) {
@@ -981,10 +1204,15 @@ export default function PlaygroundView({
   }
 
   return (
-    <div className="space-y-5">
+    // `space-y-10` : les trois groupes (simulateur, projection, courbes) sont
+    // des SECTIONS, pas les lignes d'une même liste — à 20 px, le sous-titre
+    // d'un groupe semblait appartenir au bloc du dessus.
+    <div className="space-y-10">
 
-      {/* Combo simulator — above charts */}
-      {hasPrix && hasLoyer && (
+      {/* Combo simulator — above charts. La garde porte sur `combo` (et non sur
+          `hasPrix && hasLoyer`, la même condition) pour que TypeScript sache que
+          le résultat partagé est non nul dans le composant. */}
+      {combo != null && (
         <ComboSimulator
           apt={apt}
           settings={settings}
@@ -992,96 +1220,136 @@ export default function PlaygroundView({
           cashflowSeuils={cashflowSeuils}
           loyerRange={loyerRange}
           seuilVertPrix={seuilVertPrixRdt}
+          seuilVertApport={seuilVertApport}
           comboPrix={comboPrix}
           comboLoyer={comboLoyer}
+          comboApport={comboApport}
+          apportPlan={apportPlan}
+          combo={combo}
           onComboPrixChange={setComboPrix}
           onComboLoyerChange={setComboLoyer}
+          onComboApportChange={setComboApport}
           dvfMedianM2={dvfMedianM2}
         />
       )}
 
       {/* KPI summary — updates live with sliders */}
-      {comboSim && (
-        <PlaygroundKpiSummary sim={comboSim} resolus={resolus} />
+      {combo?.sim && (
+        <PlaygroundKpiSummary sim={combo.sim} resolus={resolus} />
       )}
 
-      {/* Factor toggle */}
-      <div className="flex items-center gap-3">
-        <div className="inline-flex rounded-lg border border-ink-200 bg-ink-50/50 p-0.5">
-          <button
-            onClick={() => switchFacteur("prix")}
-            className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
-              facteur === "prix"
-                ? "bg-white text-ink-900 shadow-sm"
-                : "text-ink-400 hover:text-ink-600"
-            }`}
-          >
-            Par prix
-          </button>
-          <button
-            onClick={() => { if (hasLoyerFactor) switchFacteur("loyer"); }}
-            disabled={!hasLoyerFactor}
-            className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
-              facteur === "loyer"
-                ? "bg-white text-ink-900 shadow-sm"
-                : hasLoyerFactor
-                  ? "text-ink-400 hover:text-ink-600"
-                  : "text-ink-300 cursor-not-allowed"
-            }`}
-          >
-            Par loyer
-          </button>
-        </div>
-        {!hasLoyerFactor && apt.code_insee && !anilLoading && (
-          <span className="text-xs text-ink-400">Fourchette loyer indisponible</span>
-        )}
-        {!apt.code_insee && (
-          <span className="text-xs text-ink-400">Ajoutez un code postal pour le loyer</span>
-        )}
-      </div>
-
-      {/* Charts */}
-      {dataPoints.length > 0 && (
-        <div
-          className="grid grid-cols-1 gap-4 transition-opacity duration-150 sm:grid-cols-2"
-          style={{ opacity: transitioning ? 0 : 1 }}
+      {/* Charts — la bascule prix/loyer est le CONTRÔLE de ce groupe, elle vit
+          dans son en-tête plutôt que flottante au-dessus sans libellé. */}
+      <section>
+        <GroupHeader
+          title="Courbes de seuils"
+          subtitle={
+            facteur === "apport"
+              // Une seule courbe ici, et le sous-titre doit DIRE pourquoi : le
+              // rendement net ne dépend pas du financement, sa courbe serait une
+              // droite horizontale — un graphe qui ne montre rien.
+              ? "Cash-flow selon l'apport, avec vos seuils vert et rouge en repère. Le rendement net n'y figure pas : il ne dépend pas du financement."
+              : `Rendement net et cash-flow selon le ${facteur === "prix" ? "prix d'achat" : "loyer mensuel"}, avec vos seuils vert et rouge en repère.`
+          }
         >
-          <ThresholdChart
-            data={dataPoints}
-            currentX={currentX}
-            getY={getRendement}
-            thresholds={{ vert: seuilsRendement.modeste, rouge: seuilsRendement.redhibitoire }}
-            formatX={formatXFn}
-            formatY={(v) => `${(v * 100).toFixed(1)} %`}
-            title="Rendement net"
-            hoveredIndex={hoveredIndex}
-            onHover={setHoveredIndex}
-            ghostPoint={ghostRendement}
-            anilMarkers={anilMarkers}
-          />
-          <ThresholdChart
-            data={dataPoints}
-            currentX={currentX}
-            getY={getCashflow}
-            thresholds={{ vert: cashflowSeuils.vert, rouge: cashflowSeuils.rouge }}
-            formatX={formatXFn}
-            formatY={(v) => formatCashflow(v)}
-            title="Cash-flow mensuel"
-            hoveredIndex={hoveredIndex}
-            onHover={setHoveredIndex}
-            ghostPoint={ghostCashflow}
-            anilMarkers={anilMarkers}
-          />
-        </div>
-      )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="inline-flex rounded-lg border border-ink-200 bg-ink-50/50 p-0.5">
+            <button
+              onClick={() => switchFacteur("prix")}
+              className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
+                facteur === "prix"
+                  ? "bg-white text-ink-900 shadow-sm"
+                  : "text-ink-400 hover:text-ink-600"
+              }`}
+            >
+              Par prix
+            </button>
+            <button
+              onClick={() => { if (hasLoyerFactor) switchFacteur("loyer"); }}
+              disabled={!hasLoyerFactor}
+              className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
+                facteur === "loyer"
+                  ? "bg-white text-ink-900 shadow-sm"
+                  : hasLoyerFactor
+                    ? "text-ink-400 hover:text-ink-600"
+                    : "text-ink-300 cursor-not-allowed"
+              }`}
+            >
+              Par loyer
+            </button>
+            <button
+              onClick={() => switchFacteur("apport")}
+              disabled={combo == null}
+              className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
+                facteur === "apport"
+                  ? "bg-white text-ink-900 shadow-sm"
+                  : combo != null
+                    ? "text-ink-400 hover:text-ink-600"
+                    : "text-ink-300 cursor-not-allowed"
+              }`}
+            >
+              Par apport
+            </button>
+          </div>
+          {!hasLoyerFactor && apt.code_insee && !anilLoading && (
+            <span className="text-xs text-ink-400">Fourchette loyer indisponible</span>
+          )}
+          {!apt.code_insee && (
+            <span className="text-xs text-ink-400">Ajoutez un code postal pour le loyer</span>
+          )}
+          </div>
+        </GroupHeader>
 
-      {dataPoints.length === 0 && hasPrix && (
-        <div className="rounded-xl border border-ink-100 bg-white p-8 text-center text-sm text-ink-500">
-          {!hasLoyer
-            ? "Ajoutez un loyer retenu pour voir les courbes."
-            : "Données insuffisantes pour générer les courbes."}
-        </div>
-      )}
+        {dataPoints.length > 0 && (
+          <div
+            // ⚠️ Une seule colonne sur l'axe apport : le rendement net ne dépend
+            // pas du financement, sa courbe serait une droite horizontale. Une
+            // grille à deux colonnes laisserait un trou, ou pire, un graphe plat
+            // qu'on lirait comme « rien ne s'améliore ».
+            className={`grid grid-cols-1 gap-8 transition-opacity duration-150 ${
+              facteur === "apport" ? "" : "sm:grid-cols-2"
+            }`}
+            style={{ opacity: transitioning ? 0 : 1 }}
+          >
+            {facteur !== "apport" && (
+            <ThresholdChart
+              data={dataPoints}
+              currentX={currentX}
+              getY={getRendement}
+              thresholds={{ vert: seuilsRendement.modeste, rouge: seuilsRendement.redhibitoire }}
+              formatX={formatXFn}
+              formatY={(v) => `${(v * 100).toFixed(1)} %`}
+              title="Rendement net"
+              hoveredIndex={hoveredIndex}
+              onHover={setHoveredIndex}
+              ghostPoint={ghostRendement}
+              anilMarkers={anilMarkers}
+            />
+            )}
+            <ThresholdChart
+              data={dataPoints}
+              currentX={currentX}
+              getY={getCashflow}
+              thresholds={{ vert: cashflowSeuils.vert, rouge: cashflowSeuils.rouge }}
+              formatX={formatXFn}
+              formatY={(v) => formatCashflow(v)}
+              title="Cash-flow mensuel"
+              hoveredIndex={hoveredIndex}
+              onHover={setHoveredIndex}
+              ghostPoint={ghostCashflow}
+              anilMarkers={anilMarkers}
+            />
+          </div>
+        )}
+
+        {dataPoints.length === 0 && hasPrix && (
+          <div className="rounded-xl border border-ink-100 bg-white p-8 text-center text-sm text-ink-500">
+            {!hasLoyer
+              ? "Ajoutez un loyer retenu pour voir les courbes."
+              : "Données insuffisantes pour générer les courbes."}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -1118,26 +1386,29 @@ function PlaygroundKpiSummary({ sim, resolus }: { sim: SimulationResult; resolus
   ];
 
   return (
+    // ⚠️ « Projection financière » et non « Simulation financière » : ce dernier
+    // libellé est déjà celui d'un ONGLET de la fiche bien (crédit année par
+    // année). Deux écrans différents sous le même titre.
     <section className="space-y-3">
-      <div>
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
-          Simulation financière
-        </h3>
-        <p className="mt-0.5 text-[10px] text-ink-400">
-          Hypothèses : taux {resolus.tauxCreditPct} %, durée {resolus.dureeAnnees} ans, TMI{" "}
-          {resolus.tmiPct} %
-        </p>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+      <GroupHeader
+        title="Projection financière"
+        subtitle={`Hypothèses de votre profil : taux ${formatNombre(resolus.tauxCreditPct)} %, durée ${resolus.dureeAnnees} ans, TMI ${formatNombre(resolus.tmiPct)} %.`}
+        className="mb-0"
+      />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="flex items-start gap-3 rounded-xl border border-ink-100 bg-white p-4">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-50">
               {kpi.icon}
             </div>
+            {/* Mêmes tokens que `StatCard` (label `text-xs font-medium ink-500`,
+                sous-texte `text-xs ink-500`) : les deux familles de cartes
+                cohabitent dans l'onglet Optimiser. Le `text-[10px] ink-400`
+                d'avant tombait aussi sous le contraste AA (3,64:1 sur blanc). */}
             <div className="min-w-0">
-              <p className="text-[11px] font-medium text-ink-500">{kpi.label}</p>
+              <p className="text-xs font-medium text-ink-500">{kpi.label}</p>
               <p className="font-mono text-lg font-semibold tabular-nums text-ink-900">{kpi.value}</p>
-              <p className="text-[10px] text-ink-400">{kpi.detail}</p>
+              <p className="mt-0.5 text-xs text-ink-500">{kpi.detail}</p>
             </div>
           </div>
         ))}

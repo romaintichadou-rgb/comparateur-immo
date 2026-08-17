@@ -192,26 +192,64 @@ Chaque carte résumé montre :
 
 - **Icône colorée** dans un carré arrondi (`LEVIER_COLORS` : emerald/prix,
   amber/travaux, sky/loyer, violet/financement).
-- **Titre** (`reco.titre`) + **description** (`reco.pourquoi`, 1 ligne max).
+- **Titre** (`reco.titre`) au niveau CARTE — `TITRE_SECTION` (Fraunces
+  `text-lg`) posé sur un `<p>` et non un `<h*>` : le contenu d'un `<button>`
+  est du phrasing content, un heading y serait invalide. C'est le cas pour
+  lequel la constante est exportée — ne pas recopier les classes à la main.
+- **Description** (`reco.pourquoi`) en `text-sm ink-500`, `line-clamp-2` sur
+  mobile et `sm:line-clamp-1` au-delà.
 - **Badge « Achète »** si `flipVersAchat` — pastille emerald.
 - **Badge impact** : Δ rendement (`+X,X % rdt`) ou Δ cash-flow
   (`+XX €/mois`), ou « Info » si l'impact est négligeable.
 - **Chevron** animé (rotation 180° à l'ouverture).
 - **Bordure gauche colorée** (4px, couleur du levier).
 
+⚠️ Les deux pastilles sont déclarées **une fois** (`const badges`) et rendues à
+DEUX emplacements : sous le titre en `sm:hidden`, à droite en `hidden sm:flex`.
+À 375 px, trois éléments `shrink-0` sur la même ligne ne laissaient qu'une
+soixantaine de pixels au titre, qui se cassait sur quatre lignes (AGENTS.md,
+« les quatre pièges du mobile », n°4). Ne pas les remettre sur une seule
+ligne en pensant simplifier.
+
 Au clic, la carte s'ouvre (accordéon, une seule ouverte à la fois) et montre
 le détail (`LevierDetail`) :
 
-1. **L'action à faire** — `reco.action`, en titre, dans un bandeau
-   `accent-50/50`.
+1. **L'action à faire** — `reco.action`, en `GroupTitle` (Fraunces
+   `text-base`, `h3`), dans un bandeau `accent-50/50`. ⚠️ Niveau GROUPE et non
+   section : le titre de la carte est déjà en `text-lg`, l'action est ce qu'il
+   contient — en `text-lg` ici, l'enfant pesait plus lourd que son parent.
 2. **Les chiffres impactés** — cartes `avant → après` (`buildPairs`).
 3. **Le caveat** (bandeau ambre ou rouge).
-4. **Les arguments** — preuves puis méthode.
+4. **Les arguments** — « Les faits » puis « La méthode », chacun coiffé d'un
+   **`GroupHeader`** (`as="h4"`, `count`, sous-titre d'une phrase). Ils
+   portaient un `text-[11px] uppercase tracking-wider` maison, hors échelle
+   typographique et sans sous-titre.
 
-## Section « Simulation financière »
+## États dégradés et terminaux : une seule carte (`DegradedCard`)
 
-Sous les cartes de leviers, un bloc affiche 4 KPIs en grille 2×2
-(`SimKpiCard`) :
+Les quatre sorties par `return` anticipé (pas d'analyse, recos absentes du
+schéma, aucun levier modélisable, rien de plus à optimiser) passent toutes par
+**`DegradedCard`** — `titre`, `texte`, `cta` facultatif, `tone`
+(`neutre` → dégradé `accent-50` / `positif` → `emerald-50` quand l'état est
+souhaitable). L'état « Rien de plus à optimiser » en était une copie
+indépendante, avec son propre style de titre.
+
+⚠️ Titre en **`SectionTitle as="h3"`** (`text-lg`) et non `text-2xl` : la carte
+vit SOUS le `TabHeader` « Optimiser » (`text-xl`, `h2`). Un `text-2xl` y
+faisait un enfant visuellement plus gros que son parent, et un second `h2` là
+où la hiérarchie WCAG attend un `h3`.
+
+## Section « Projection financière » (sous-pill Playground)
+
+⚠️ Ce bloc vit dans **`PlaygroundView`** (`PlaygroundKpiSummary`), pas sous les
+cartes de leviers d'`OptimiserView` — la doc le plaçait au mauvais endroit,
+sous un nom de composant (`SimKpiCard`) qui n'existe pas.
+
+Titre **« Projection financière »** et non « Simulation financière » : ce
+dernier libellé est déjà celui d'un ONGLET de la fiche bien (crédit année par
+année). Deux écrans différents sous le même titre.
+
+4 KPIs en grille 2×2 :
 
 | KPI | Source | Icône |
 |---|---|---|
@@ -220,7 +258,34 @@ Sous les cartes de leviers, un bloc affiche 4 KPIs en grille 2×2
 | **Enrichissement net** | dernière année `.enrichissement` | `Landmark` violet |
 | **Point mort** | 1re année où `enrichissement > 0` | `Check` sky |
 
-Hypothèses affichées en footnote (taux, durée, TMI).
+Hypothèses affichées dans le **sous-titre du `GroupHeader`** (taux, durée,
+TMI), formatées par `formatNombre` — sans quoi un taux s'affichait « 3.5 % »
+avec un point décimal anglais.
+
+Les libellés des cartes reprennent les tokens de `StatCard`
+(`text-xs font-medium ink-500` pour le label, `text-xs ink-500` pour le
+sous-texte) : les deux familles de cartes cohabitent dans l'onglet. Le
+`text-[10px] ink-400` d'avant tombait aussi sous le contraste AA (3,64:1 sur
+blanc).
+
+## Titres et sous-titres du Playground : trois groupes nommés
+
+`PlaygroundView` empilait trois blocs dont deux n'étaient pas nommés du tout.
+Chacun porte désormais un `GroupHeader` :
+
+| Groupe | Titre | Contrôle dans l'en-tête |
+|---|---|---|
+| `ComboSimulator` | Simulateur prix et loyer | — |
+| `PlaygroundKpiSummary` | Projection financière | — |
+| Courbes | Courbes de seuils | bascule **Par prix / Par loyer** |
+
+⚠️ La bascule prix/loyer est le CONTRÔLE du groupe « Courbes de seuils », elle
+vit dans son en-tête (`children`) et non flottante au-dessus : isolée, rien ne
+disait ce qu'elle commandait. Son sous-titre suit le facteur actif.
+
+Les titres des deux courbes (`ThresholdChart`) sont sous le niveau H3 : ils
+utilisent `LABEL_BLOC` et non un `font-display text-sm`, qui n'existe nulle
+part dans l'échelle typographique.
 
 ### Le chiffre pivot est PORTÉ PAR LE TITRE
 

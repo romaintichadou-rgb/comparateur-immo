@@ -1546,11 +1546,14 @@ export default function ApartmentDetail({
       )}
 
       {activeTab === "playground" && (
-        <div className="space-y-5">
+        // `space-y-8` : la bascule de sous-pill doit se détacher du contenu
+        // qu'elle commande, sinon elle se lit comme une rangée de badges du
+        // premier bloc.
+        <div className="space-y-8">
           <TabHeader
             title="Optimiser"
             subtitle={optimiserSub === "playground"
-              ? "Visualisez à quel prix ou loyer votre investissement s'améliore"
+              ? "Visualisez à quel prix ou loyer votre investissement s'améliore."
               : sousTitreOptimiser}
           />
           <div className="flex gap-2">

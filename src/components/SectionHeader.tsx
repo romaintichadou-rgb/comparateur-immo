@@ -12,7 +12,11 @@ import type { ReactNode } from "react";
  * | H1      | Titre de page                          | `text-2xl sm:text-3xl`|
  * | Onglet  | Titre d'un onglet de la fiche bien     | `text-xl`  (`TabHeader`) |
  * | H2      | Titre d'une carte de section           | `text-lg`  ← ici      |
- * | H3      | Groupe à l'intérieur d'une carte       | `text-base`           |
+ * | H3      | Groupe à l'intérieur d'une carte       | `text-base` (`GroupTitle` / `GroupHeader`) |
+ *
+ * Sous le H3, on QUITTE l'échelle : titres de courbes, libellés de curseurs et
+ * en-têtes de colonnes passent en `LABEL_BLOC` (IBM Plex `text-sm`), jamais en
+ * Fraunces rapetissé.
  *
  * Deux exceptions assumées, documentées dans AGENTS.md : le verdict de
  * l'Analyse (`text-4xl sm:text-5xl`, c'est LE chiffre de l'écran) et l'en-tête
@@ -35,6 +39,16 @@ export const TITRE_SECTION = "font-display text-lg font-semibold text-ink-900";
 
 /** Idem, pour un titre de groupe (`GroupTitle`) rendu hors heading. */
 export const TITRE_GROUPE = "font-display text-base font-semibold text-ink-900";
+
+/**
+ * Étiquette d'un bloc SOUS le niveau groupe : titre de courbe, libellé de
+ * curseur, en-tête de colonne. L'échelle Fraunces s'arrête à `GroupTitle`
+ * (`text-base`) — plus bas, on quitte les titres pour des étiquettes en
+ * IBM Plex. Un `font-display text-sm` n'existe nulle part dans l'échelle :
+ * c'est ce qu'affichaient les titres de courbes du Playground, seul endroit
+ * de l'app où Fraunces descendait sous 16 px.
+ */
+export const LABEL_BLOC = "text-sm font-medium text-ink-700";
 
 /**
  * Titre d'une carte de section.
@@ -149,4 +163,56 @@ export function GroupTitle({
   className?: string;
 }) {
   return <Tag className={`${TITRE_GROUPE} ${className}`}>{children}</Tag>;
+}
+
+/**
+ * En-tête d'un GROUPE de contenu : titre + sous-titre, compteur ou contrôle
+ * à droite. Même structure que `TabHeader`, un cran plus bas dans l'échelle.
+ *
+ * ── Pourquoi un composant, et pas trois blocs écrits à la main ────────────
+ * L'onglet Optimiser portait QUATRE styles pour ce seul rôle : deux variantes
+ * de `text-[11px] uppercase tracking-wider` (« Les faits », les KPIs du
+ * Playground), un `font-display text-sm` hors échelle (titres de courbes), et
+ * deux blocs sans titre du tout (simulateur, courbes). Les sous-titres
+ * divergeaient d'autant : `text-xs`, `text-[10px]`, `text-sm`. Le choix de
+ * style était refait à chaque bloc, donc perdu à chaque bloc.
+ *
+ * Le sous-titre reprend EXACTEMENT le token de `TabHeader`
+ * (`text-sm text-ink-500`) : c'est ce qui fait lire le titre d'onglet et le
+ * titre de groupe comme deux crans d'une même échelle, et non comme deux
+ * conventions voisines.
+ */
+export function GroupHeader({
+  title,
+  subtitle,
+  count,
+  children,
+  as: Tag = "h3",
+  className = "",
+}: {
+  title: string;
+  /** Une phrase : ce que le groupe montre, ou les hypothèses qu'il applique. */
+  subtitle?: string;
+  /** Nombre d'items du groupe, en discret à côté du titre. */
+  count?: number;
+  /** Contrôle du groupe, aligné à droite (bascule, bouton…). */
+  children?: ReactNode;
+  as?: "h3" | "h4";
+  className?: string;
+}) {
+  return (
+    // `flex-wrap` + `gap-y` obligatoires, même piège que `TabHeader` : sans
+    // eux le contrôle de droite passe PAR-DESSUS le sous-titre dès que la
+    // colonne se resserre (AGENTS.md, « les quatre pièges du mobile », n°1).
+    <div className={`mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2 ${className}`}>
+      <div className="min-w-0">
+        <div className="flex items-baseline gap-2">
+          <Tag className={TITRE_GROUPE}>{title}</Tag>
+          {count != null && <span className="text-xs tabular-nums text-ink-400">{count}</span>}
+        </div>
+        {subtitle && <p className="mt-0.5 text-sm text-ink-500">{subtitle}</p>}
+      </div>
+      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
+    </div>
+  );
 }

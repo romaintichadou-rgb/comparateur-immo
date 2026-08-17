@@ -361,6 +361,45 @@ export function capitalEffectif(
   return Math.min(Math.max(0, montantSaisi ?? montantAuto), Math.max(0, coutTotal));
 }
 
+/**
+ * Plan de financement d'une opération : coût total, capital emprunté, apport.
+ *
+ * SOURCE UNIQUE de ces trois grandeurs — `simulate()` en dérive ses mensualités
+ * et son TRI, le Playground s'en sert pour proposer l'apport comme paramètre
+ * réglable.
+ *
+ * ⚠️ **L'apport n'est PAS un champ de `SimulationInputs`**, et ne doit pas le
+ * devenir : c'est exactement le complément du capital emprunté
+ * (`coutTotal − capital`). Le stocker à côté créerait deux vérités pour une
+ * seule grandeur, qu'un changement de prix ferait aussitôt diverger. Un écran
+ * qui veut « régler l'apport » écrit donc `montantEmprunte`, jamais un apport.
+ *
+ * ⚠️ Corollaire : l'apport n'entre PAS dans le rendement net
+ * (`calculations.ts` divise par le coût total, pas par l'argent engagé). Il ne
+ * bouge que la mensualité, et par elle le cash-flow, le TRI, l'enrichissement
+ * et le point mort. Un écran qui laisse régler l'apport en n'affichant que le
+ * rendement donne un curseur qui paraît mort.
+ */
+export function planFinancement(
+  apt: ApartmentWithComputed,
+  inputs: InputsResolus
+): { coutTotal: number; capital: number; apport: number } {
+  // Coût total RÉEL de l'opération (achat + notaire + travaux).
+  const coutTotal = Math.round(apt.budget_total ?? apt.prix ?? 0);
+  // Ce que l'emprunt couvre en mode auto, selon le profil investisseur :
+  //  - `hors_notaire` : achat + travaux, le notaire est couvert par l'apport
+  //    (pratique bancaire courante, comportement historique de l'app) ;
+  //  - `cout_total`   : tout, y compris le notaire — le prêt « à 110 % ».
+  const montantAuto =
+    inputs.financementMode === "cout_total"
+      ? coutTotal
+      : Math.round((apt.prix ?? 0) + (apt.travaux ?? 0));
+  const capital = capitalEffectif(inputs.montantEmprunte, montantAuto, coutTotal);
+  // Apport personnel = coût total − montant emprunté (jamais négatif). Inclut
+  // les frais de notaire par défaut, puisqu'ils ne sont pas dans le capital.
+  return { coutTotal, capital, apport: Math.max(0, coutTotal - capital) };
+}
+
 export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): SimulationResult | null {
   const loyerMensuel = apt.loyer_retenu;
   if (loyerMensuel == null || loyerMensuel <= 0) return null;
@@ -368,18 +407,7 @@ export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): Sim
   // Base revalorisable : prix + travaux, hors frais de notaire (qui ne créent
   // pas de valeur patrimoniale), même convention que le simulateur de référence.
   const valeurBienInitiale = (apt.prix ?? 0) + (apt.travaux ?? 0);
-  // Coût total RÉEL de l'opération (achat + notaire + travaux).
-  const coutTotalReel = Math.round(apt.budget_total ?? apt.prix ?? 0);
-  // Ce que l'emprunt couvre en mode auto, selon le profil investisseur :
-  //  - `hors_notaire` : achat + travaux, le notaire est couvert par l'apport
-  //    (pratique bancaire courante, comportement historique de l'app) ;
-  //  - `cout_total`   : tout, y compris le notaire — le prêt « à 110 % ».
-  const montantAuto =
-    inputs.financementMode === "cout_total" ? coutTotalReel : Math.round(valeurBienInitiale);
-  const capital = capitalEffectif(inputs.montantEmprunte, montantAuto, coutTotalReel);
-  // Apport personnel = coût total − montant emprunté (jamais négatif). Inclut
-  // les frais de notaire par défaut, puisqu'ils ne sont pas dans le capital.
-  const apport = Math.max(0, coutTotalReel - capital);
+  const { coutTotal: coutTotalReel, capital, apport } = planFinancement(apt, inputs);
   const tauxRevalo = (inputs.revalorisationBienPct ?? 0) / 100;
   const tauxMensuel = inputs.tauxCreditPct / 100 / 12;
   const nbMois = Math.max(1, Math.round(inputs.dureeAnnees * 12));

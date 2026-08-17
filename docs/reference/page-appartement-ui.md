@@ -113,6 +113,26 @@ Les pills sont rendues dans `ApartmentDetail.tsx`, au-dessus du contenu
 conditionnel. Style : `rounded-full`, pill active en `bg-accent-600 text-white`,
 pill inactive bordée `ink-200` fond blanc.
 
+L'onglet entier est en **`space-y-8`** : la bascule de sous-pill doit se
+détacher du contenu qu'elle commande, sinon elle se lit comme une rangée de
+badges appartenant au premier bloc.
+
+### Titres à l'intérieur d'un onglet : `GroupHeader`, jamais un bloc à la main
+
+Sous le `TabHeader` d'un onglet, chaque groupe de contenu se coiffe d'un
+**`GroupHeader`** (`SectionHeader.tsx`) — Fraunces `text-base` + sous-titre
+`text-sm ink-500`, le même token de sous-titre que `TabHeader`, ce qui fait
+lire les deux comme deux crans d'une même échelle.
+
+L'onglet Optimiser portait QUATRE styles pour ce seul rôle (deux variantes de
+`text-[11px] uppercase tracking-wider`, un `font-display text-sm` hors échelle,
+et deux blocs sans titre du tout) avec des sous-titres en `text-xs`,
+`text-[10px]` et `text-sm`. Le style était rechoisi à chaque bloc, donc perdu à
+chaque bloc.
+
+Espacement : `space-y-10` entre groupes, `mb-4` du titre à son contenu (porté
+par `GroupHeader`). Voir la table « Spacing » d'`AGENTS.md`.
+
 `?tab=optimiser` (ancienne URL) redirige vers `?tab=playground` pour
 rétrocompatibilité.
 
@@ -126,7 +146,7 @@ des états dégradés d'`OptimiserView`, qui sortent par `return` anticipé.
 | Onglet | Titre | Sous-titre |
 |---|---|---|
 | `ia` | Analyse | *dynamique* — « Verdict d'achat, sous-scores et faits chiffrés · analysée le {date} », ou « Pas encore analysée… » |
-| `playground` (pill Playground) | Optimiser | Visualisez à quel prix ou loyer votre investissement s'améliore |
+| `playground` (pill Playground) | Optimiser | Visualisez à quel prix ou loyer votre investissement s'améliore. |
 | `playground` (pill Recommandations) | Optimiser | *dynamique* — voir « Sous-titre honnête » ci-dessous |
 | `donnees` | Description du bien | Les données extraites de l'annonce, corrigeables à la main. |
 | `financiere` | Détails de l'opération | Ce que coûte l'achat, ce que rapporte la location. |
