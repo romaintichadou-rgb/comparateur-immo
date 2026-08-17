@@ -25,6 +25,7 @@ export function StatCard({
   value,
   avant,
   sub,
+  badge,
   tone,
   onClick,
 }: {
@@ -33,6 +34,7 @@ export function StatCard({
   /** When set, renders "avant → value" instead of value alone. */
   avant?: string;
   sub?: string;
+  badge?: { text: string; color?: "yellow" | "blue" | "neutral" };
   tone: StatCardTone;
   onClick?: () => void;
 }) {
@@ -40,9 +42,22 @@ export function StatCard({
     ? " decoration-dotted decoration-ink-300 decoration-2 underline underline-offset-8"
     : "";
 
+  const BADGE_COLORS = {
+    yellow: "bg-amber-100 text-amber-700",
+    blue: "bg-blue-100 text-blue-700",
+    neutral: "bg-ink-100 text-ink-500",
+  } as const;
+
   const inner = (
     <>
-      <p className="text-xs font-medium text-ink-500">{label}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-xs font-medium text-ink-500">{label}</p>
+        {badge && (
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium leading-none ${BADGE_COLORS[badge.color ?? "neutral"]}`}>
+            {badge.text}
+          </span>
+        )}
+      </div>
       {avant != null ? (
         <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 tabular-nums">
           {/* `avant` est une petite ligne de référence : IBM Plex Sans. Seule

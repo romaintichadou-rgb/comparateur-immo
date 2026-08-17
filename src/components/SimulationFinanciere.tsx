@@ -5,7 +5,7 @@ import { Banknote, Calculator, Check, ChevronDown, Landmark, Plus, TrendingUp, X
 import type { ApartmentWithComputed } from "@/lib/types";
 import { DEFAULT_HYPOTHESE_GESTION_PCT } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
-import { TONE_PANEL_STYLES, TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
+import { TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
   defaultInputs,
   resolveInputs,
@@ -24,10 +24,9 @@ import {
   type SimulationInputs,
   type SimulationResult,
 } from "@/lib/simulation";
-import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
+import { NumberField, SelectField } from "@/components/form/Fields";
 import { GroupTitle, SectionHeader, TITRE_SECTION } from "@/components/SectionHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { isAiEstimated } from "@/lib/estimates";
 import { formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
 
 /**
@@ -326,20 +325,6 @@ export default function SimulationFinanciere({
     );
   }
 
-  const cfLMNP = resultAffiche.cashflowMensuelMoyenLMNP;
-
-  // Moyennes mensuelles sur les années exonérées LMNP (année 1 toujours incluse).
-  const exoAnnees = resultAffiche.annees.filter((a) => a.impot < 1);
-  const lmnpAnnees = exoAnnees.length > 0
-    ? (exoAnnees[0].annee === 1 ? exoAnnees : [resultAffiche.annees[0], ...exoAnnees])
-    : [resultAffiche.annees[0]];
-  const nLmnp = lmnpAnnees.length;
-  const avgM = (f: (a: AnneeSimulation) => number) =>
-    lmnpAnnees.reduce((s, a) => s + f(a), 0) / nLmnp / 12;
-  const loyerMoyenM = avgM((a) => a.loyers);
-  const chargesMoyennesM = avgM((a) => a.chargesExploitation);
-  const impotMoyenM = avgM((a) => a.impot);
-  const cfTone = TONE_PANEL_STYLES[cashflowTone(cfLMNP, cashflowSeuils)];
   // Somme des cash-flows RÉELS de chaque année (carte TRI). Volontairement pas
   // `cashflowMensuelMoyen × 12 × durée` : la moyenne affichée plus haut porte
   // sur les seules années exonérées d'impôt, elle ne reconstitue donc pas le
@@ -638,57 +623,6 @@ export default function SimulationFinanciere({
 
       {/* KPI summary */}
       <SimKpiSummary result={resultAffiche} resolus={resolusAffiches} />
-
-      {/* Cash-flow mensuel détaillé */}
-      <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
-        <SectionHeader title="Cash-flow mensuel" as="h3" />
-        <ul className="divide-y divide-ink-100/50 text-sm">
-          <WaterfallRow
-            label="Loyers encaissés"
-            value={loyerMoyenM}
-            plus
-            badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
-          />
-          <WaterfallRow label="Mensualité de crédit" value={-resultAffiche.mensualiteTotale} />
-          <WaterfallRow label="Charges d'exploitation" value={-chargesMoyennesM} />
-          <WaterfallRow label="Impôt LMNP (moyen)" value={-impotMoyenM} />
-        </ul>
-        <div className={`rounded-xl p-4 ${cfTone.wrap}`}>
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
-              <span className={`text-sm font-semibold ${cfTone.label}`}>Cash-flow mensuel</span>
-              <p className={`mt-0.5 text-xs ${cfTone.sub}`}>
-                {resultAffiche.anneesExonerees > 1
-                  ? `Moyen sur ${resultAffiche.anneesExonerees} ans sans impôt`
-                  : resultAffiche.anneesExonerees === 1
-                    ? "Année 1, sans impôt"
-                    : "Année 1, après impôt"}
-              </p>
-            </div>
-            <span className={`font-mono text-2xl font-bold tabular-nums ${cfTone.value}`}>
-              {formatEurosSigned(cfLMNP)}
-            </span>
-          </div>
-          <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-xs leading-relaxed text-ink-500">
-            {resultAffiche.annees[0].impot === 0 ? (<>
-              <strong className="font-semibold text-ink-700">Pourquoi 0 € d&apos;impôt ?</strong>{" "}
-              En LMNP au réel, tu déduis l&apos;usure du bien (amortissements) de tes revenus locatifs.
-              Ici, <strong className="font-medium text-ink-700">
-                {euros(resultAffiche.amortissements.bati + resultAffiche.amortissements.travaux + resultAffiche.amortissements.notaire)} €/an
-              </strong> d&apos;amortissements{" "}
-              (bâti {euros(resultAffiche.amortissements.bati)} €
-              {resultAffiche.amortissements.travaux > 0 ? ` + travaux ${euros(resultAffiche.amortissements.travaux)} €` : ""}
-              {resultAffiche.amortissements.notaire > 0 ? ` + notaire ${euros(resultAffiche.amortissements.notaire)} €` : ""})
-              {" "}absorbent tes revenus nets → résultat imposable = 0 € pendant <strong className="font-medium text-ink-700">{resultAffiche.anneesExonerees} {resultAffiche.anneesExonerees > 1 ? "ans" : "an"}</strong>.
-            </>) : (<>
-              <strong className="font-semibold text-ink-700">Impôt année 1 : {euros(resultAffiche.annees[0].impot)} €</strong>{" "}
-              Les amortissements LMNP (<strong className="font-medium text-ink-700">
-                {euros(resultAffiche.amortissements.bati + resultAffiche.amortissements.travaux + resultAffiche.amortissements.notaire)} €/an
-              </strong>) réduisent tes revenus imposables à {euros(resultAffiche.annees[0].resultatImposable)} €/an.
-            </>)}
-          </div>
-        </div>
-      </section>
 
       {/* Graphiques (remontés avant le tableau) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">

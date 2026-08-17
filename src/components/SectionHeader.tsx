@@ -60,7 +60,7 @@ export const TITRE_GROUPE = "font-display text-base font-semibold text-ink-900";
  * choix, pas un oubli. Ne pas l'employer non plus ailleurs — un titre qui nomme
  * une section reste en `SectionHeader` / `GroupTitle`.
  */
-export const TITRE_RECOMMANDATION = "font-sans text-lg font-semibold text-ink-900 sm:text-xl";
+export const TITRE_RECOMMANDATION = "font-sans text-sm font-semibold text-ink-900 sm:text-base";
 
 /**
  * Étiquette d'un bloc SOUS le niveau groupe : titre de courbe, libellé de

@@ -1023,7 +1023,8 @@ function ComboSimulator({
         {/* Right card: impacts */}
         <div className="flex flex-col rounded-xl border border-ink-100 bg-white">
           {/* Hero rendement */}
-          <div className={`flex flex-1 flex-col items-center justify-center rounded-t-xl px-5 py-6 ${TONE_PANEL_STYLES[rdtTone].wrap}`}>
+          <div className={`relative flex flex-1 flex-col items-center justify-center rounded-t-xl px-5 py-6 ${TONE_PANEL_STYLES[rdtTone].wrap}`}>
+            <span className="absolute right-3 top-3 rounded-full bg-ink-100/60 px-2.5 py-0.5 text-[11px] font-medium text-ink-500">Simulation</span>
             <p className={`mb-1 text-xs font-medium ${TONE_PANEL_STYLES[rdtTone].label}`}>Rendement net</p>
             <p className={`font-mono text-3xl font-bold tabular-nums ${TONE_PANEL_STYLES[rdtTone].value}`}>
               {rendementCombo != null ? formatPercent(rendementCombo) : "—"}

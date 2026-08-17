@@ -18,6 +18,7 @@ import {
   noteTone,
   rendementNetTone,
   DECISION_CHIP,
+  TONE_PANEL_STYLES,
   type CashflowSeuils,
   type RendementSeuils,
   type ScoreTone,
@@ -29,10 +30,11 @@ import { useCashflowDetail } from "@/components/CashflowDetailProvider";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
 import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatNote, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
+import { isAiEstimated } from "@/lib/estimates";
 import { renderMarkdownBold } from "@/components/richText";
 import { TITRE_SECTION } from "@/components/SectionHeader";
 import { redirectionQuota } from "@/lib/quota";
-import { resolveInputs, simulate } from "@/lib/simulation";
+import { resolveInputs, simulate, type SimulationResult } from "@/lib/simulation";
 
 /** Repli si le profil investisseur n'a pas pu être chargé — les seuils réels
  * viennent toujours des réglages (prop `cashflowSeuils`). */
@@ -464,8 +466,9 @@ export default function AnalyseIA({
         />
         <StatCard
           label="Loyer mensuel"
-          value={loyerRetenu != null ? `${formatEuros(loyerRetenu)}/mois` : "—"}
-          sub={loyerRetenu == null ? "À estimer" : loyerManuel ? "Renseigné manuellement" : loyerEstimeIA ? "Estimation IA" : "Estimé"}
+          value={loyerRetenu != null ? formatEuros(loyerRetenu) : "—"}
+          sub={loyerRetenu != null ? "/mois" : "À estimer"}
+          badge={loyerEstimeIA ? { text: "Estimation IA", color: "yellow" } : loyerManuel ? { text: "Manuel", color: "blue" } : undefined}
           tone="neutral"
           onClick={() => openLoyerDetail(apartment)}
         />
@@ -488,6 +491,7 @@ export default function AnalyseIA({
             settings={settings}
             seuilsRendement={seuilsRendement}
             cashflowSeuils={cashflowSeuils}
+            simuKpi={bloc.cle === "simulation" ? simuKpi : undefined}
             isFirst={i === 0}
             isLast={i === blocs.length - 1}
           />
@@ -499,6 +503,7 @@ export default function AnalyseIA({
           Le bloc Quartier n&apos;existe pas encore pour cette analyse — clique sur « Relancer » pour le générer.
         </p>
       )}
+
     </div>
   );
 }
@@ -553,6 +558,7 @@ function FlatSection({
   settings,
   seuilsRendement,
   cashflowSeuils,
+  simuKpi,
   isFirst,
   isLast,
 }: {
@@ -561,6 +567,7 @@ function FlatSection({
   settings: AppSettings;
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
+  simuKpi?: SimulationResult | null;
   isFirst: boolean;
   isLast: boolean;
 }) {
@@ -645,27 +652,35 @@ function FlatSection({
             </div>
           )}
 
-          {/* Highlights as neutral metric-style cards */}
-          {bloc.highlights && bloc.highlights.length > 0 && (() => {
-            const filtered = bloc.cle === "simulation"
-              ? bloc.highlights.filter((h) => !h.label.includes("année 1"))
-              : bloc.highlights;
-            return filtered.length > 0 && (
-              <div className={`grid gap-3 ${filtered.length === 1 ? "max-w-[50%]" : "grid-cols-2"}`}>
-                {filtered.map((h, i) => (
-                  <HighlightStatCard key={i} highlight={h} apartment={apartment} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
-                ))}
-              </div>
-            );
-          })()}
+          {/* Simulation bloc: 2-col layout — cashflow waterfall left, details right */}
+          {bloc.cle === "simulation" && simuKpi ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-10">
+              <CashflowWaterfall apartment={apartment} simuKpi={simuKpi} cashflowSeuils={cashflowSeuils} />
+              <SimulationDetails bloc={bloc} simuKpi={simuKpi} />
+            </div>
+          ) : (
+            <>
+              {/* Highlights as neutral metric-style cards */}
+              {bloc.highlights && bloc.highlights.length > 0 && (() => {
+                const filtered = bloc.highlights;
+                return filtered.length > 0 && (
+                  <div className={`grid gap-3 ${filtered.length === 1 ? "max-w-[50%]" : "grid-cols-2"}`}>
+                    {filtered.map((h, i) => (
+                      <HighlightStatCard key={i} highlight={h} apartment={apartment} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
+                    ))}
+                  </div>
+                );
+              })()}
 
-          {/* Facts */}
-          {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
-            <ul className="divide-y divide-ink-100/50">
-              {bloc.faits.map((f, i) => (
-                <FaitRow key={i} fait={f} />
-              ))}
-            </ul>
+              {/* Facts */}
+              {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
+                <ul className="divide-y divide-ink-100/50">
+                  {bloc.faits.map((f, i) => (
+                    <FaitRow key={i} fait={f} />
+                  ))}
+                </ul>
+              )}
+            </>
           )}
 
           {/* Missing data */}
@@ -762,5 +777,142 @@ function FaitRow({ fait }: { fait: Fait }) {
         </div>
       )}
     </li>
+  );
+}
+
+// ── Cash-flow waterfall (inline in simulation bloc) ────────────────────────
+
+function CashflowWaterfall({
+  apartment,
+  simuKpi,
+  cashflowSeuils,
+}: {
+  apartment: ApartmentWithComputed;
+  simuKpi: SimulationResult;
+  cashflowSeuils: CashflowSeuils;
+}) {
+  const cfLMNP = simuKpi.cashflowMensuelMoyenLMNP;
+  const cfTone = TONE_PANEL_STYLES[cashflowTone(cfLMNP, cashflowSeuils)];
+
+  const exoAnnees = simuKpi.annees.filter((a) => a.impot < 1);
+  const lmnpAnnees = exoAnnees.length > 0
+    ? (exoAnnees[0].annee === 1 ? exoAnnees : [simuKpi.annees[0], ...exoAnnees])
+    : [simuKpi.annees[0]];
+  const nLmnp = lmnpAnnees.length;
+  const avgM = (f: (a: (typeof simuKpi.annees)[number]) => number) =>
+    lmnpAnnees.reduce((s, a) => s + f(a), 0) / nLmnp / 12;
+  const loyerMoyenM = avgM((a) => a.loyers);
+  const chargesMoyennesM = avgM((a) => a.chargesExploitation);
+  const impotMoyenM = avgM((a) => a.impot);
+
+  return (
+    <div className="flex flex-col rounded-xl border border-ink-100 bg-white p-4">
+      <p className="text-xs font-medium text-ink-500">Cash-flow mensuel</p>
+      <ul className="mt-3 divide-y divide-ink-100/50 text-sm">
+        <CfRow
+          label="Loyers encaissés"
+          value={loyerMoyenM}
+          plus
+          badge={isAiEstimated(apartment, "loyer_retenu") && <AiEstimatedBadge />}
+        />
+        <CfRow label="Mensualité de crédit" value={-simuKpi.mensualiteTotale} />
+        <CfRow label="Charges" value={-chargesMoyennesM} />
+        <CfRow label="Impôt LMNP (moy.)" value={-impotMoyenM} />
+      </ul>
+      <div className={`mt-3 flex flex-1 items-center rounded-xl p-4 ${cfTone.wrap}`}>
+        <div className="flex w-full items-center justify-between gap-3">
+          <div>
+            <span className={`text-sm font-semibold ${cfTone.label}`}>Cash-flow mensuel</span>
+            <p className={`mt-0.5 text-xs ${cfTone.sub}`}>
+              {simuKpi.anneesExonerees > 1
+                ? `Moyen sur ${simuKpi.anneesExonerees} ans sans impôt`
+                : simuKpi.anneesExonerees === 1
+                  ? "Année 1, sans impôt"
+                  : "Année 1, après impôt"}
+            </p>
+          </div>
+          <span className={`font-mono text-2xl font-bold tabular-nums ${cfTone.value}`}>
+            {formatEurosSigned(cfLMNP)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CfRow({
+  label,
+  value,
+  plus = false,
+  badge,
+}: {
+  label: string;
+  value: number;
+  plus?: boolean;
+  badge?: React.ReactNode;
+}) {
+  const abs = Math.round(Math.abs(value)) || 0;
+  const formatted = abs.toLocaleString("fr-FR");
+  return (
+    <li className="flex items-center justify-between py-2">
+      <span className="flex items-center gap-1.5 text-ink-600">
+        <span className="mr-1.5 inline-block w-3 text-center font-semibold text-ink-400">{plus ? "+" : "−"}</span>
+        {label}
+        {badge}
+      </span>
+      <span className="font-medium text-ink-800">{formatted} €</span>
+    </li>
+  );
+}
+
+function SimulationDetails({ bloc, simuKpi }: { bloc: BlocAnalyse; simuKpi: SimulationResult }) {
+  const faits = (bloc.faits ?? []).filter((f) => f.label !== "Mensualité de crédit");
+  const amort = simuKpi.amortissements;
+  const totalAmort = amort.bati + amort.travaux + amort.notaire;
+  const fmt = (n: number) => Math.round(n).toLocaleString("fr-FR");
+  const anneesExo = simuKpi.anneesExonerees;
+  const impotAn1 = simuKpi.annees[0]?.impot ?? 0;
+  const resultatImposableAn1 = simuKpi.annees[0]?.resultatImposable ?? 0;
+
+  return (
+    <div className="flex flex-col gap-4 self-start">
+      {faits.length > 0 && (
+        <ul className="divide-y divide-ink-100/50">
+          {faits.map((f, i) => (
+            <FaitRow key={i} fait={f} />
+          ))}
+        </ul>
+      )}
+
+      {totalAmort > 0 && (
+        <div className="rounded-xl border border-ink-100 bg-ink-50/40 p-4">
+          <p className="text-sm font-semibold text-ink-800">
+            {impotAn1 === 0
+              ? `Pourquoi 0 € d'impôt ?`
+              : `Impôt année 1 : ${fmt(impotAn1)} €`}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-ink-600">
+            {impotAn1 === 0 ? (
+              <>
+                En LMNP au réel, tu déduis l&apos;usure du bien (amortissements) de tes revenus locatifs.
+                Ici, <strong className="font-semibold text-ink-800">{fmt(totalAmort)} €/an</strong>{" "}d&apos;amortissements absorbent
+                tes revenus nets → résultat imposable = 0 € pendant{" "}
+                <strong className="font-semibold text-ink-800">{anneesExo} {anneesExo > 1 ? "ans" : "an"}</strong>.
+              </>
+            ) : (
+              <>
+                Les amortissements LMNP (<strong className="font-semibold text-ink-800">{fmt(totalAmort)} €/an</strong>)
+                réduisent tes revenus imposables à {fmt(resultatImposableAn1)} €/an.
+              </>
+            )}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-500">
+            <span>Bâti {fmt(amort.bati)} €</span>
+            {amort.travaux > 0 && <span>Travaux {fmt(amort.travaux)} €</span>}
+            {amort.notaire > 0 && <span>Notaire {fmt(amort.notaire)} €</span>}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
