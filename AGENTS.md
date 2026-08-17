@@ -86,8 +86,11 @@ dans les boutons CTA.
   jamais de chaîne `"Immoscore"` codée en dur dans un nouveau composant.
 - **Couleurs** (définies dans `src/app/globals.css`, `@theme inline`) :
   - `ink-50` → `ink-900` : neutre teinté violet (fond, texte, bordures),
-    remplace `slate-*`. Fond de page par défaut : `ink-50` (#efecf6,
-    "Bruyère").
+    remplace `slate-*`. Fond de page par défaut : `ink-50` (#fafafd) — source
+    de vérité `--color-ink-50` / `--background` dans `globals.css`.
+    ⚠️ `ink-50` est quasi BLANC : inutilisable comme fond pour détacher un bloc
+    posé sur une carte blanche. Pour ça, prendre le divider `ink-100/50`, ou
+    `ink-100` en aplat.
   - `accent-50` → `accent-900` : violet d'encre, seul accent de marque,
     remplace `indigo-*`. Base `accent-600` (#3d3580).
   - `signal-50/100/300/500/600/700` : argile, **définie mais non utilisée
@@ -147,28 +150,52 @@ dans les boutons CTA.
   Pour un flux de suppression, réutiliser `useDeleteApartment.tsx`
   (mutualisé entre `ApartmentsTable`, `ApartmentsCardList`,
   `ApartmentDetail`) plutôt que ré-écrire l'appel DELETE à chaque écran.
-- **Navbar** (`Navbar.tsx`) : sticky (`sticky top-0 z-40`) avec un liseré
+- **Navbar** (`Navbar.tsx`) : sticky (`sticky top-0 z-40`, sauf sur la fiche
+  bien où elle passe en `relative` — scroll-away) avec un liseré
   dégradé `accent-600 → accent-400 → accent-600` de 3px en tout haut. Lien
   actif signalé par une couleur (`text-accent-700`) + un soulignement
   (`bg-accent-600`), jamais par un fond plein. Le hover des liens inactifs
   reprend la couleur de l'état actif en plus léger (`hover:bg-accent-50
   hover:text-accent-700`).
-  - **Disposition** : wordmark puis `NAV_LINKS` **à gauche**, collés l'un à
-    l'autre ; `ml-auto` sur le groupe de droite pousse le `UserMenu` à
-    l'autre bout. Conteneur en **pleine largeur** (voir « Largeur de page »)
-    : pas de `mx-auto max-w-*`.
-  - **`NAV_LINKS`** : « Mes biens » (`/`) et « Profil investisseur »
-    (`/parametres`). Chaque entrée porte un prédicat **`match(pathname)`**,
-    pas une égalité stricte sur `href` : « Mes biens » doit rester actif sur
-    `/appartements/…`.
+  - **Disposition** : wordmark **à gauche** ; `ml-auto` sur le groupe de droite
+    pousse le `UserMenu` à l'autre bout. Conteneur en **pleine largeur** (voir
+    « Largeur de page ») : pas de `mx-auto max-w-*`.
+  - **AUCUN lien de navigation** : wordmark à gauche, `UserMenu` à droite, rien
+    entre les deux. Les deux liens historiques ont été retirés, chacun pour sa
+    raison :
+    - « Profil investisseur » (`/parametres`) — réglé à la mise en route puis
+      quasiment jamais retouché (taux, durée, TMI, seuils). Un créneau
+      permanent à côté de l'écran de travail le surdimensionnait. Il vit dans
+      le `UserMenu`.
+    - « Mes biens » (`/`) — le **wordmark pointe déjà vers `/`**, et une fiche
+      bien porte son propre « Retour à la liste ». Deux affordances pour la
+      même destination, à 40 px l'une de l'autre.
+
+    ⚠️ Avant de rétablir un lien dans la barre, vérifier que la destination
+    n'est PAS déjà atteignable depuis le wordmark ou depuis l'écran courant —
+    c'est ce qui a disqualifié les deux précédentes. Le pattern « lien actif =
+    couleur + soulignement » décrit plus haut reste la règle **si** un lien
+    revient un jour ; il n'a plus de porteur aujourd'hui.
   - **État connecté** : `UserMenu` — avatar circulaire (initiale de l'email,
-    fond `accent-100`, 36px) avec dropdown : en-tête email → liens de
-    navigation (« Profil investisseur » en `sm:hidden`, « Mon compte ») →
+    fond `accent-100`, 36px) avec dropdown : en-tête email → « Profil
+    investisseur » + « Mon compte », **tous deux à toutes les tailles** →
     séparateur → « Déconnexion ». Dismiss : click-outside + Escape +
     auto-close au changement de route.
-    ⚠️ « Mes biens » n'est **pas** repris dans le dropdown en `sm:hidden`,
-    contrairement à « Profil investisseur » : le wordmark pointe déjà vers
-    `/` et reste visible sur mobile.
+    ⚠️ Les deux entrées portent une **sous-ligne** (`text-xs ink-500`), et ce
+    n'est pas décoratif : « Profil investisseur » et « Mon compte » sonnent
+    pareil. Tant que le premier vivait dans la navbar, c'est la POSITION qui
+    les distinguait (barre = calculs, avatar = abonné) ; réunis dans le même
+    menu, ce repère disparaît et doit être remplacé par du texte.
+    `ink-500` et non `ink-400` — ce dernier tombe à 3,64:1 sur blanc, sous AA.
+    ⚠️ « Mes biens » n'est **pas** repris dans le dropdown : le wordmark pointe
+    déjà vers `/` et reste visible sur mobile.
+  - ⚠️ **`/parametres` n'est atteignable QUE depuis le `UserMenu`** — jamais
+    depuis une fiche bien, et c'est volontaire : le profil est global, le
+    modifier depuis un bien invaliderait l'analyse de tous les autres, soit un
+    effet global déclenché depuis un contexte local. Une fiche ne modifie que
+    les données de SON bien. Ne pas ajouter de raccourci depuis la bannière
+    « Ton profil investisseur a changé », `ChampHerite` ou les sous-titres du
+    Playground, qui nomment tous le profil sans y mener.
   - **État déconnecté** : bouton « Se connecter » (`bg-accent-600`, petit
     format navbar).
 

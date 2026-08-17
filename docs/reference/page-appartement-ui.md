@@ -4,17 +4,24 @@
 > `ApartmentDetail.tsx` (en-tête, onglets, onglet Description) ou
 > `AddApartmentFlow.tsx`. Pointeur depuis `AGENTS.md`.
 
-## En-tête compact (`ApartmentDetail.tsx`)
+## Barre du bien — identité + tabs empilés (`ApartmentDetail.tsx`)
 
-L'en-tête utilise un layout inline flex (pas de blocs empilés) :
-**photo 16:9** (`aspect-video w-32` mobile / `sm:w-52` desktop) ·
-**titre + adresse + prix/décision + meta**. Pas de mini carte dans le header
-(déplacée dans l'onglet Description, carte "Localisation").
+L'en-tête est une **barre sticky** (`sticky top-0 z-40`) contenant deux lignes
+empilées dans un seul conteneur :
 
-- **Photo** → lien vers l'annonce (`apt.url`). Fallback : icône `Home` sur
-  fond `ink-50`. Format **16:9**, pas carré : c'est le cadrage des visuels
-  d'annonce. Les dimensions passent par `aspect-video` + une largeur — ne pas
-  revenir à un couple `h-*`/`w-*` figé.
+- **Ligne 1 — identité** : flèche retour + photo miniature (40×30 px,
+  `hidden sm:block`) + titre (`formatApartmentTitle` + prix, `text-sm
+  font-semibold truncate`) + méta-ligne (localisation, prix/m², quartier, date,
+  plateforme, liens, bouton supprimer) + badge décision (`DECISION_CHIP`,
+  `flex-shrink-0`).
+- **Ligne 2 — onglets** : même tabs qu'avant, déplacés dans le conteneur sticky.
+
+La Navbar (`Navbar.tsx`) est **scroll-away** sur la fiche bien : elle détecte
+`/appartements/` via `usePathname()` et passe de `sticky top-0` à `relative`.
+La barre du bien la remplace comme repère visuel permanent.
+
+- **Photo miniature** → lien vers l'annonce (`apt.url`). Fallback : icône
+  `Home` sur fond `ink-50`. Masquée sur mobile pour maximiser l'espace titre.
   ⚠️ Le lien porte un **`aria-label`** : il n'enveloppe qu'une image
   décorative (`alt=""`), donc sans lui son nom accessible est **vide**.
 
@@ -61,14 +68,10 @@ Quatre règles portées par le module :
 Le module déduplique aussi la commune quand un extracteur livre une `adresse`
 déjà complète, en ne retirant que des segments de QUEUE (jamais le premier).
 
-- **Ligne prix** : `apt.prix` en `font-mono text-xl` + la pastille de
-  décision (`DECISION_CHIP`, voir `docs/reference/couleurs-scoring.md`).
-- **Ligne meta** : prix/m² · quartier · date · plateforme · lien "Annonce"
-  (`ExternalLink`) · lien "Carte" (mobile uniquement, `sm:hidden`) · icône
-  poubelle `Trash2` (`-m-1.5 p-1.5`, `aria-label`).
-- **Mini carte** (`ApartmentLocationMap compact`) : masquée sur mobile,
-  cliquable → Google Maps à l'adresse exacte. `zoomControl={false}`,
-  `attributionControl={false}`, `dragging={false}`.
+- **Ligne meta** (sous le titre) : localisation · prix/m² · quartier · date ·
+  plateforme · lien "Annonce" (`ExternalLink`) · lien "Carte" (mobile
+  uniquement, `sm:hidden`) · icône poubelle `Trash2` (`-m-1 p-1`,
+  `aria-label`). Tout en `text-[11px] text-ink-400`.
 - **Google Maps URL** : construite par `lienGoogleMaps(apt, lat, lng)`,
   jamais à la main. Recherche par adresse (code postal compris) dès qu'une
   voie est connue ; sinon repli sur les coordonnées ; `null` si rien à
@@ -83,8 +86,7 @@ plus ni `dpeInfo`, ni les `kpi*`, ni l'appel à `simulate()` — tout est passé
 dans `AnalyseIA.tsx`. Historique du placement et arbitrage :
 `docs/reference/analyse-optimiser.md`.
 
-Conséquence : la barre d'onglets suit directement l'en-tête compact, et les
-onglets Description / Opération / Simulation n'affichent plus ces chiffres.
+Conséquence : seul l'onglet Analyse affiche ces chiffres.
 
 ## Onglets avec icônes
 
@@ -230,8 +232,8 @@ tri. L'état vide (`EmptyHomeState.tsx`) garde ses propres points d'entrée.
 
 ## Skeletons
 
-1. **Page-level** (`loading.tsx`) : Next.js Suspense, en-tête compact + tabs +
-   verdict + cards.
+1. **Page-level** (`loading.tsx`) : Next.js Suspense, barre sticky (identité +
+   tabs) + verdict + cards.
 2. **AnalyseIASkeleton** : affiché quand `analysisPending`.
 
 Les autres onglets (donnees, financiere, simulation) n'ont pas de skeleton

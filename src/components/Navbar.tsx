@@ -8,17 +8,29 @@ import { APP_NAME } from "@/lib/constants";
 import { deconnexion } from "@/app/(auth)/actions";
 
 /**
- * Liens de navigation, posés à GAUCHE juste après le wordmark : les deux
- * forment un seul bloc de marque + navigation, et l'espace restant met le
- * menu du compte franchement à l'autre bout de la barre.
+ * ── Pourquoi la barre ne porte AUCUN lien de navigation ───────────────────
  *
- * `match` plutôt qu'une égalité stricte sur `href` : « Mes biens » doit rester
- * actif sur la fiche d'un bien (`/appartements/…`), qui est la même section.
+ * Elle en portait deux, et les deux étaient superflus :
+ *
+ *  - « Profil investisseur » (`/parametres`) : taux, durée, TMI et seuils se
+ *    règlent à la mise en route puis ne bougent quasiment plus. Un créneau
+ *    permanent à côté de l'écran de travail le surdimensionnait — il vit
+ *    désormais dans le `UserMenu`, à toutes les tailles.
+ *  - « Mes biens » (`/`) : le wordmark pointe DÉJÀ vers `/`, et la fiche d'un
+ *    bien porte son propre « Retour à la liste ». Deux affordances pour la
+ *    même destination, à 40 px l'une de l'autre.
+ *
+ * Il ne reste donc que wordmark à gauche, `UserMenu` à droite. Avant de
+ * rétablir un `NAV_LINKS`, vérifier que la destination n'est PAS déjà
+ * atteignable depuis le wordmark ou depuis l'écran courant — c'est ce qui a
+ * disqualifié les deux précédentes.
+ *
+ * ⚠️ Corollaire pour `/parametres` : le `UserMenu` en est le SEUL chemin, et il
+ * ne doit pas en exister depuis une fiche bien. Le profil est global — le
+ * modifier depuis un bien invaliderait l'analyse de tous les autres, soit un
+ * effet global déclenché depuis un contexte local. Une fiche ne modifie que les
+ * données de SON bien.
  */
-const NAV_LINKS: { href: string; label: string; match: (pathname: string) => boolean }[] = [
-  { href: "/", label: "Mes biens", match: (p) => p === "/" || p.startsWith("/appartements") },
-  { href: "/parametres", label: "Profil investisseur", match: (p) => p === "/parametres" },
-];
 
 export function AppMark({ className }: { className?: string }) {
   return (
@@ -125,22 +137,40 @@ function UserMenu({ email }: { email: string }) {
             <p className="mt-0.5 truncate text-sm font-medium text-ink-700">{email}</p>
           </div>
 
+          {/* ⚠️ Les deux entrées portent une SOUS-LIGNE, et ce n'est pas
+              décoratif : « Profil investisseur » et « Mon compte » sonnent
+              pareil. Tant que le premier vivait dans la navbar, c'est la
+              POSITION qui les distinguait (barre = calculs, avatar = abonné) ;
+              réunis dans le même menu, ce repère disparaît et il faut le
+              remplacer par du texte.
+              Sous-ligne en `ink-500` et non `ink-400` : ce dernier tombe à
+              3,64:1 sur blanc, sous le seuil AA. */}
           <div className="py-1">
             <Link
               href="/parametres"
               role="menuitem"
-              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-600 transition-colors hover:bg-ink-50 hover:text-ink-900 sm:hidden"
+              className="flex items-start gap-2.5 px-4 py-2.5 transition-colors hover:bg-ink-50"
             >
-              <User className="size-4 text-ink-400" />
-              Profil investisseur
+              <User className="mt-0.5 size-4 shrink-0 text-ink-400" />
+              <span className="min-w-0">
+                <span className="block text-sm text-ink-700">Profil investisseur</span>
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  Taux, durée, TMI et seuils de calcul
+                </span>
+              </span>
             </Link>
             <Link
               href="/compte"
               role="menuitem"
-              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-600 transition-colors hover:bg-ink-50 hover:text-ink-900"
+              className="flex items-start gap-2.5 px-4 py-2.5 transition-colors hover:bg-ink-50"
             >
-              <Settings className="size-4 text-ink-400" />
-              Mon compte
+              <Settings className="mt-0.5 size-4 shrink-0 text-ink-400" />
+              <span className="min-w-0">
+                <span className="block text-sm text-ink-700">Mon compte</span>
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  Abonnement, mot de passe, suppression
+                </span>
+              </span>
             </Link>
           </div>
 
@@ -166,8 +196,10 @@ export default function Navbar({ email }: { email?: string }) {
   const pathname = usePathname();
   const surEcranAuth = ROUTES_AUTH.some((r) => pathname.startsWith(r));
 
+  const surFicheBien = pathname.startsWith("/appartements/");
+
   return (
-    <header className="sticky top-0 z-40 border-b border-ink-100/70 bg-white/80 backdrop-blur-md">
+    <header className={`${surFicheBien ? "relative z-50" : "sticky top-0 z-40"} border-b border-ink-100/70 bg-white/80 backdrop-blur-md`}>
       <div className="h-[3px] w-full bg-gradient-to-r from-accent-600 via-accent-400 to-accent-600" />
       {/* Pleine largeur, sans `max-w-*` : la barre est un bandeau d'application,
           elle s'ancre aux bords de la fenêtre et non à la colonne de contenu. */}
@@ -177,45 +209,18 @@ export default function Navbar({ email }: { email?: string }) {
         </Link>
 
         {surEcranAuth ? null : (
-          <>
-            {email && (
-              <nav className="hidden items-center gap-1 text-sm sm:flex">
-                {NAV_LINKS.map(({ href, label, match }) => {
-                  const active = match(pathname);
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      aria-current={active ? "page" : undefined}
-                      className={`relative rounded-md px-3 py-2 font-medium transition-colors ${
-                        active
-                          ? "text-accent-700"
-                          : "text-ink-500 hover:bg-accent-50 hover:text-accent-700"
-                      }`}
-                    >
-                      {label}
-                      {active && (
-                        <span className="absolute inset-x-3 -bottom-[7px] hidden h-0.5 rounded-full bg-accent-600 sm:block" />
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
+          <div className="ml-auto flex items-center">
+            {email ? (
+              <UserMenu email={email} />
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-lg bg-accent-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-700"
+              >
+                Se connecter
+              </Link>
             )}
-
-            <div className="ml-auto flex items-center">
-              {email ? (
-                <UserMenu email={email} />
-              ) : (
-                <Link
-                  href="/login"
-                  className="rounded-lg bg-accent-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-700"
-                >
-                  Se connecter
-                </Link>
-              )}
-            </div>
-          </>
+          </div>
         )}
       </div>
     </header>

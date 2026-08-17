@@ -188,42 +188,94 @@ L'écran affiche **TOUS les leviers** en cartes compactes empilées
 verticalement, avec un accordéon pour le détail. État local
 (`expandedIndex`), jamais dans l'URL.
 
-Chaque carte résumé montre :
+Chaque carte résumé montre, de gauche à droite :
 
-- **Icône colorée** dans un carré arrondi (`LEVIER_COLORS` : emerald/prix,
-  amber/travaux, sky/loyer, violet/financement).
+- **Icône du levier** (`LEVIER_ICON`) dans un carré `bg-ink-50`, glyphe
+  `text-ink-500`. **NEUTRE, sans couleur propre** — voir « Pourquoi le levier
+  n'a plus de couleur » ci-dessous.
 - **Titre** (`reco.titre`) au niveau CARTE — `TITRE_SECTION` (Fraunces
-  `text-lg`) posé sur un `<p>` et non un `<h*>` : le contenu d'un `<button>`
-  est du phrasing content, un heading y serait invalide. C'est le cas pour
-  lequel la constante est exportée — ne pas recopier les classes à la main.
-- **Description** (`reco.pourquoi`) en `text-sm ink-500`, `line-clamp-2` sur
-  mobile et `sm:line-clamp-1` au-delà.
-- **Badge « Achète »** si `flipVersAchat` — pastille emerald.
-- **Badge impact** : Δ rendement (`+X,X % rdt`) ou Δ cash-flow
-  (`+XX €/mois`), ou « Info » si l'impact est négligeable.
-- **Chevron** animé (rotation 180° à l'ouverture).
-- **Bordure gauche colorée** (4px, couleur du levier).
+  `text-lg`). Le contenu d'un `<button>` étant du phrasing content, tout le
+  corps de la rangée est en `<span>` (`block`/`flex`) : ni `<div>` ni `<h*>`
+  n'y sont valides. C'est le cas pour lequel la constante est exportée — ne pas
+  recopier les classes à la main.
+- **L'action chiffrée** (`reco.action`) en `font-mono text-sm font-semibold
+  text-accent-700`. ⚠️ Elle était enfouie dans le dépliant : c'est LA réponse
+  de la carte (« Négocie à 272 800 € »), elle se lit maintenant sans clic.
+  Affichée seulement si `reco.titre` existe, sinon le titre la porte déjà.
+- **Description** (`reco.pourquoi`) en `text-sm ink-500`.
+- **Marqueurs** : « Achète » (emerald, si `flipVersAchat`), « Bloqué » (red, si
+  `caveatBloquant`), « N faits » (neutre, nombre d'arguments sourcés).
+- **Bloc d'impact** (colonne de droite, `sm:w-56`) : voir ci-dessous.
+- **Chevron** animé (rotation 180° à l'ouverture), visible aux DEUX tailles.
 
-⚠️ Les deux pastilles sont déclarées **une fois** (`const badges`) et rendues à
-DEUX emplacements : sous le titre en `sm:hidden`, à droite en `hidden sm:flex`.
-À 375 px, trois éléments `shrink-0` sur la même ligne ne laissaient qu'une
-soixantaine de pixels au titre, qui se cassait sur quatre lignes (AGENTS.md,
-« les quatre pièges du mobile », n°4). Ne pas les remettre sur une seule
-ligne en pensant simplifier.
+### Pourquoi le levier n'a plus de couleur propre
 
-Au clic, la carte s'ouvre (accordéon, une seule ouverte à la fois) et montre
-le détail (`LevierDetail`) :
+`LEVIER_COLORS` donnait à chaque levier sa teinte (emerald/prix, amber/travaux,
+sky/loyer, violet/financement) sur un liseré gauche de 4 px et sur la pastille
+d'icône. Supprimé pour deux raisons :
 
-1. **L'action à faire** — `reco.action`, en `GroupTitle` (Fraunces
-   `text-base`, `h3`), dans un bandeau `accent-50/50`. ⚠️ Niveau GROUPE et non
-   section : le titre de la carte est déjà en `text-lg`, l'action est ce qu'il
-   contient — en `text-lg` ici, l'enfant pesait plus lourd que son parent.
-2. **Les chiffres impactés** — cartes `avant → après` (`buildPairs`).
-3. **Le caveat** (bandeau ambre ou rouge).
-4. **Les arguments** — « Les faits » puis « La méthode », chacun coiffé d'un
-   **`GroupHeader`** (`as="h4"`, `count`, sous-titre d'une phrase). Ils
-   portaient un `text-[11px] uppercase tracking-wider` maison, hors échelle
-   typographique et sans sous-titre.
+1. **Collision sémantique.** La charte réserve emerald/amber/red à la QUALITÉ
+   d'un chiffre. Sur cet écran les badges d'impact sont eux aussi emerald : le
+   vert disait à la fois « c'est le levier prix » et « c'est bon », et l'ambre du
+   levier travaux se lisait comme un avertissement sans rien signaler.
+2. **Redondance.** Le levier est déjà nommé en clair et porte une icône
+   distincte — la couleur n'ajoutait aucune information. Son champ `badge`
+   n'était d'ailleurs plus lu par personne.
+
+La couleur est rendue à son seul job : dire si un chiffre est un gain (emerald),
+une perte (red) ou sans effet (ink). Ne pas rétablir de teinte par levier.
+
+### Bloc d'impact : les DEUX mesures, toujours
+
+`impacts(reco)` rend **toujours deux lignes**, Rendement net puis Cash-flow,
+plus « À engager » quand `montantEngage` est présent.
+
+⚠️ L'ancienne version rendait UN badge en basculant d'unité selon le levier :
+« +0,7 % rdt » pour le prix, « + 36 €/mois » pour le financement. La colonne
+mélangeait donc deux unités et **on ne pouvait pas comparer deux cartes** —
+alors que ranger les leviers est précisément le job de l'écran.
+
+- Un levier qui ne bouge pas un indicateur affiche **« inchangé »** (`ink-400`),
+  pas « +0,0 % » : c'est une information (le financement ne touche pas le
+  rendement intrinsèque du bien), pas un trou à masquer. Seuils :
+  `SEUIL_DELTA_RENDEMENT` (0,1 pt) et `SEUIL_DELTA_CASHFLOW` (1 €/mois).
+- **`montantEngage` est une SORTIE de trésorerie** : rendu en `ink-700` neutre
+  sous un filet, jamais en vert (cf. le commentaire du champ dans
+  `analyse/types.ts`). Une carte qui n'afficherait que le gain sans l'argent à
+  sortir mentirait sur l'arbitrage.
+- Le signe du delta de rendement est posé à la main sur la valeur absolue :
+  `formatPercent` rendrait un trait d'union ASCII sur un négatif, pas le vrai
+  signe moins.
+- Le bloc est détaché par un **séparateur** et non par un fond : `ink-50` vaut
+  `#fafafd`, quasi blanc, donc invisible sur une carte blanche. Le trait suit la
+  mise en page — `border-t` quand le bloc passe sous le texte en mobile,
+  `sm:border-l` quand il devient une colonne.
+
+⚠️ Les marqueurs et le bloc d'impact vivent dans la même rangée mais la carte
+passe en **`flex-col` sous `sm`** : à 375 px, une colonne de droite `shrink-0`
+ne laissait qu'une soixantaine de pixels au titre, qui se cassait sur quatre
+lignes (AGENTS.md, « les quatre pièges du mobile », n°4).
+
+## Dépliant (`LevierDetail`) : DEUX zones, une seule teinte
+
+Au clic, la carte s'ouvre (accordéon, une seule ouverte à la fois).
+
+Le dépliant empilait TROIS traitements de fond : un pavé `accent-50/50`, un
+bandeau ambre ou rouge pleine largeur, puis du blanc — trois teintes pour un
+seul contenu, et le caveat coupait la carte en deux alors qu'il ne fait que
+nuancer les chiffres du dessus. Désormais :
+
+1. **« Ce que ça change »** (`bg-accent-50/40`) — `GroupHeader as="h4"`,
+   sous-titre = le pivot (`Prix affiché aujourd'hui : …`), `children` = le delta
+   du pivot en pastille. Puis le **caveat en alerte INLINE** (ambre, ou rouge si
+   `caveatBloquant`), puis les cartes `avant → après` (`buildPairs`).
+2. **Les arguments** (blanc, `border-t border-ink-100/50`) — « Les faits » puis
+   « La méthode », chacun coiffé d'un **`GroupHeader`** (`as="h4"`, `count`,
+   sous-titre d'une phrase).
+
+⚠️ **L'action n'est plus répétée ici** : elle est dans l'en-tête de la carte.
+Elle y était en `GroupTitle`, ce qui la dupliquait mot pour mot avec le titre
+replié dès que `reco.titre` était absent.
 
 ## États dégradés et terminaux : une seule carte (`DegradedCard`)
 

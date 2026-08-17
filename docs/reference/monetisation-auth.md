@@ -300,10 +300,14 @@ bookmarklet survit à une session expirée — l'annonce n'est pas perdue en rou
 
 ### Navbar sur les écrans d'auth
 
-`ROUTES_AUTH` (`Navbar.tsx`) masque les liens de navigation ET le `UserMenu`
-sur `/login`, `/signup` et `/mot-de-passe-oublie` : ils pointent tous vers
-des pages qui exigent une session, et y cliquer depuis l'écran de connexion ne
-ferait que ramener à l'écran de connexion. Le wordmark, lui, reste cliquable.
+`ROUTES_AUTH` (`Navbar.tsx`) masque le `UserMenu` sur `/login`, `/signup` et
+`/mot-de-passe-oublie` : il pointe vers des pages qui exigent une session, et y
+cliquer depuis l'écran de connexion ne ferait que ramener à l'écran de
+connexion. Le wordmark, lui, reste cliquable.
+
+La barre ne porte plus aucun lien de navigation (voir « Navbar » dans
+`AGENTS.md`) : la garde `surEcranAuth` ne couvre donc plus que le `UserMenu` et
+le bouton « Se connecter ».
 
 ### Écrans d'auth — split layout
 

@@ -195,6 +195,7 @@ interface BannerState {
   phase: BannerPhase;
   label: string;
   action?: { label: string; onClick: () => void };
+  stickyTop?: number;
 }
 
 function useBanner() {
@@ -281,6 +282,30 @@ export default function ApartmentDetail({
   const [activeTab, setActiveTab] = useState<Tab>(resolvedSpTab ?? resolvedInitialTab);
   const [editingDesc, setEditingDesc] = useState((resolvedSpTab ?? resolvedInitialTab) === "donnees" && (spEdit || !!initialEdit));
   const [optimiserSub, setOptimiserSub] = useState<OptimiserSub>("playground");
+
+  const heroRef = useRef<HTMLDivElement>(null);
+  const stickyBarRef = useRef<HTMLDivElement>(null);
+  const [heroVisible, setHeroVisible] = useState(true);
+  const [stickyBarH, setStickyBarH] = useState(41);
+
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeroVisible(entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = stickyBarRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setStickyBarH(entry.contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Depuis la Synthèse, un CTA de carte renvoie vers l'onglet ET la section
   // concernée (ancre) : on change d'onglet, puis on scrolle vers l'id une fois
@@ -774,161 +799,185 @@ export default function ApartmentDetail({
 
   return (
     <>
-    {banner ? (
-      <StickyBanner phase={banner.phase} label={banner.label} />
-    ) : motifObsolete ? (
-      <StickyBanner
-        phase="outdated"
-        label={motifObsolete}
-        action={{ label: "Mettre à jour", onClick: handleRelancerAnalyse }}
-      />
-    ) : null}
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-700"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Retour à la liste
-      </Link>
+    {/* ── Hero scroll-away : retour + photo | titre/meta, score en dessous ── */}
+    <div ref={heroRef} className="bg-white">
+      <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-ink-400 transition-colors hover:text-ink-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Retour à la liste
+        </Link>
 
-      {/* En-tête : photo 16:9 · titre / prix / méta · mini carte.
-          La photo est en 16:9 (et non plus carrée) parce que c'est le cadrage
-          des visuels d'annonce : un carré recadrait la façade au centre et
-          perdait les côtés. */}
-      <div className="flex items-center gap-4 sm:gap-5">
-        {/* Photo → ouvre l'annonce. Le lien porte un `aria-label` : il n'enveloppe
-            qu'une image décorative (`alt=""`), donc sans lui son nom accessible
-            serait vide et un lecteur d'écran annoncerait « lien » sans destination. */}
-        {apt.photo_url ? (
-          <a
-            href={apt.url || "#"}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={apt.url ? `Voir l'annonce sur ${apt.plateforme}` : "Photo du bien"}
-            className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-xl ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400 sm:w-52"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
-          </a>
-        ) : (
-          <div className="flex aspect-video w-32 shrink-0 items-center justify-center rounded-xl bg-ink-50 ring-1 ring-ink-200 sm:w-52">
-            <Home className="h-5 w-5 text-ink-300" />
-          </div>
-        )}
+        <div className="mt-5 flex items-start gap-5 pb-5">
+          {apt.photo_url ? (
+            <a
+              href={apt.url || "#"}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={apt.url ? `Voir l'annonce sur ${apt.plateforme}` : "Photo du bien"}
+              className="block aspect-video w-44 shrink-0 overflow-hidden rounded-lg ring-1 ring-ink-200 transition-shadow hover:ring-2 hover:ring-accent-400"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={apt.photo_url} alt="" className="h-full w-full object-cover" />
+            </a>
+          ) : (
+            <div className="flex aspect-video w-44 shrink-0 items-center justify-center rounded-lg bg-ink-50 ring-1 ring-ink-200">
+              <Home className="h-5 w-5 text-ink-300" />
+            </div>
+          )}
 
-        {/* Titre · adresse · prix + décision · meta */}
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-xl font-semibold text-ink-900 sm:text-2xl">
-            {formatApartmentTitle(apt)}
-          </h1>
-          {localisation && <p className="truncate text-sm text-ink-500">{localisation}</p>}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h1 className="truncate text-lg font-semibold text-ink-900 sm:text-xl">
+                {formatApartmentTitle(apt)}
+              </h1>
+              {apt.prix != null && (
+                <>
+                  <span className="text-lg font-semibold text-ink-900 sm:text-xl">·</span>
+                  <span className="shrink-0 text-lg font-semibold text-ink-900 sm:text-xl">
+                    {formatEuros(apt.prix)}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-ink-400">
+              {localisation && <span className="truncate">{localisation}</span>}
+              {apt.adresse && apt.quartier && (
+                <>
+                  <span>·</span>
+                  <span className="font-medium text-ink-500">{apt.quartier}</span>
+                </>
+              )}
+              <span>·</span>
+              <span>{apt.plateforme}</span>
+              {apt.url && (
+                <>
+                  <span>·</span>
+                  <a
+                    href={apt.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-0.5 text-accent-600 hover:text-accent-800"
+                  >
+                    Annonce <ExternalLink className="h-3 w-3" />
+                  </a>
+                </>
+              )}
+              {urlMaps && (
+                <>
+                  <span className="sm:hidden">·</span>
+                  <a
+                    href={urlMaps}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-0.5 text-accent-600 hover:text-accent-800 sm:hidden"
+                  >
+                    Carte <MapPin className="h-3 w-3" />
+                  </a>
+                </>
+              )}
+              <span>·</span>
+              <button
+                type="button"
+                onClick={(e) => requestDelete(e, apt)}
+                className="-m-1.5 rounded p-1.5 text-ink-300 transition-colors hover:text-red-500"
+                aria-label="Supprimer ce bien"
+                title="Supprimer ce bien"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
 
-          {/* Le prix manquait entièrement en tête de fiche — il ne vivait que
-              dans l'onglet « Détails de l'opération ». C'est le premier fait du
-              bien : il est ici, avec la décision qui le qualifie. */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            {apt.prix != null && (
-              <span className="font-mono text-xl font-semibold tracking-tight text-ink-900">
-                {formatEuros(apt.prix)}
-              </span>
-            )}
             {scoreGlobal != null && decisionEntete && (
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${DECISION_CHIP[decisionEntete].className}`}
+                className={`mt-2.5 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium ${DECISION_CHIP[decisionEntete].className}`}
               >
                 {DECISION_CHIP[decisionEntete].label}
                 <b className="font-mono font-semibold">{formatNote(scoreGlobal)}</b>
               </span>
             )}
           </div>
-
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-400">
-            {apt.prix_m2 != null && (
-              <>
-                <span className="font-mono">{formatEuros(apt.prix_m2)}/m²</span>
-                <span>·</span>
-              </>
-            )}
-            {/* Sans adresse précise, la sous-ligne `localisation` affiche déjà
-                « quartier, ville » — on n'affiche donc le quartier ici que
-                lorsqu'une adresse précise existe (la sous-ligne montre alors la
-                rue, pas le quartier), pour éviter le doublon. */}
-            {apt.adresse && apt.quartier && (
-              <>
-                <span className="font-medium text-ink-500">{apt.quartier}</span>
-                <span>·</span>
-              </>
-            )}
-            <span>{formatDate(apt.date_ajout)}</span>
-            <span>·</span>
-            <span>{apt.plateforme}</span>
-            {apt.url && (
-              <>
-                <span>·</span>
-                <a
-                  href={apt.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 text-accent-600 hover:text-accent-800"
-                >
-                  Annonce <ExternalLink className="h-3 w-3" />
-                </a>
-              </>
-            )}
-            {urlMaps && (
-              <>
-                <span className="sm:hidden">·</span>
-                <a
-                  href={urlMaps}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 text-accent-600 hover:text-accent-800 sm:hidden"
-                >
-                  Carte <MapPin className="h-3 w-3" />
-                </a>
-              </>
-            )}
-            <span>·</span>
-            <button
-              type="button"
-              onClick={(e) => requestDelete(e, apt)}
-              className="-m-1.5 rounded p-1.5 text-ink-300 transition-colors hover:text-red-500"
-              aria-label="Supprimer ce bien"
-              title="Supprimer ce bien"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
         </div>
-
       </div>
+    </div>
 
-      {/* Onglets */}
-      <div className="pb-6 sm:pb-8">
-        <nav className="no-scrollbar -mx-4 flex gap-6 overflow-x-auto border-b border-ink-100 px-4 sm:mx-0 sm:px-0">
-          {TABS.map((tab) => (
-            <Link
-              key={tab.key}
-              href={`/appartements/${apt.id}?tab=${tab.key}`}
-              onClick={(e) => {
-                e.preventDefault();
-                setActiveTab(tab.key);
-                router.push(`/appartements/${apt.id}?tab=${tab.key}`, { scroll: false });
-              }}
-              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition ${
-                activeTab === tab.key
-                  ? "border-accent-600 text-accent-600"
-                  : "border-transparent text-ink-500 hover:text-ink-700"
-              }`}
+    {/* ── Sticky bar : identité (quand hero scrollé) + onglets ── */}
+    <div ref={stickyBarRef} className="sticky top-0 z-40 border-b border-ink-100/70 bg-white">
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-out ${
+          heroVisible ? "max-h-0 opacity-0" : "max-h-16 opacity-100"
+        }`}
+      >
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2 sm:gap-4 sm:px-6">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="truncate text-sm font-semibold text-ink-900">
+                {formatApartmentTitle(apt)}
+              </span>
+              {apt.prix != null && (
+                <>
+                  <span className="text-sm font-semibold text-ink-900">·</span>
+                  <span className="shrink-0 text-sm font-semibold text-ink-900">
+                    {formatEuros(apt.prix)}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-400">
+              {localisation && <span className="truncate">{localisation}</span>}
+              <span>·</span>
+              <span>{apt.plateforme}</span>
+            </div>
+          </div>
+
+          {scoreGlobal != null && decisionEntete && (
+            <span
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${DECISION_CHIP[decisionEntete].className}`}
             >
-              <tab.icon className="size-4" />
-              <span className="sm:hidden">{tab.shortLabel}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
-            </Link>
-          ))}
-        </nav>
+              {DECISION_CHIP[decisionEntete].label}
+              <b className="font-mono font-semibold">{formatNote(scoreGlobal)}</b>
+            </span>
+          )}
+        </div>
       </div>
+
+      <nav className="no-scrollbar mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 sm:px-6">
+        {TABS.map((tab) => (
+          <Link
+            key={tab.key}
+            href={`/appartements/${apt.id}?tab=${tab.key}`}
+            onClick={(e) => {
+              e.preventDefault();
+              setActiveTab(tab.key);
+              router.push(`/appartements/${apt.id}?tab=${tab.key}`, { scroll: false });
+            }}
+            className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition ${
+              activeTab === tab.key
+                ? "border-accent-600 text-accent-600"
+                : "border-transparent text-ink-500 hover:text-ink-700"
+            }`}
+          >
+            <span className="sm:hidden">{tab.shortLabel}</span>
+            <span className="hidden sm:inline">{tab.label}</span>
+          </Link>
+        ))}
+      </nav>
+    </div>
+
+    {banner ? (
+      <StickyBanner phase={banner.phase} label={banner.label} stickyTop={stickyBarH} />
+    ) : motifObsolete ? (
+      <StickyBanner
+        phase="outdated"
+        label={motifObsolete}
+        action={{ label: "Mettre à jour", onClick: handleRelancerAnalyse }}
+        stickyTop={stickyBarH}
+      />
+    ) : null}
+
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
 
       {activeTab === "ia" && (
         <>
@@ -1613,11 +1662,11 @@ const BANNER_ICON: Record<BannerPhase, typeof Loader2> = {
   outdated: RotateCcw,
 };
 
-function StickyBanner({ phase, label, action }: BannerState) {
+function StickyBanner({ phase, label, action, stickyTop = 97 }: BannerState) {
   const s = BANNER_STYLES[phase];
   const Icon = BANNER_ICON[phase];
   return (
-    <div className={`sticky top-[67px] z-30 animate-banner-in border-b backdrop-blur ${s.bg} ${s.border}`}>
+    <div className={`sticky z-30 animate-banner-in border-b backdrop-blur ${s.bg} ${s.border}`} style={{ top: stickyTop }}>
       <div className={`mx-auto flex max-w-6xl items-center gap-2.5 px-4 py-3 text-xs font-medium sm:px-6 ${s.text}`}>
         <Icon className={`h-3.5 w-3.5 shrink-0 ${phase === "saving" ? "animate-spin" : ""}`} />
         <span className="flex-1">{label}</span>
