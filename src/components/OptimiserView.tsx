@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   AlertTriangle,
   Banknote,
@@ -11,7 +11,11 @@ import {
   Landmark,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
-import { GroupHeader, SectionTitle, TITRE_SECTION } from "@/components/SectionHeader";
+import {
+  GroupHeader,
+  SectionTitle,
+  TITRE_RECOMMANDATION,
+} from "@/components/SectionHeader";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { isImmeuble } from "@/lib/types";
@@ -36,27 +40,31 @@ const LEVIER_ICON: Record<RecommandationLevier, typeof Banknote> = {
 };
 
 /**
- * ── Pourquoi le levier n'a plus de COULEUR propre ─────────────────────────
+ * Teinte de chaque levier, portée par la SEULE pastille d'icône.
  *
- * Chaque levier portait sa teinte (emerald/prix, amber/travaux, sky/loyer,
- * violet/financement) sur un liseré gauche de 4 px et sur sa pastille d'icône.
- * Deux problèmes, pas un :
+ * ── Pourquoi elle peut revenir ────────────────────────────────────────────
+ * Elle avait été retirée parce qu'elle entrait en collision avec le système
+ * sémantique : la charte réserve emerald/amber/red à la QUALITÉ d'un chiffre, et
+ * la carte affichait alors des deltas d'impact en emerald juste à côté du levier
+ * prix, lui aussi emerald. Le vert disait deux choses à la fois.
  *
- *  1. **Collision sémantique.** La charte réserve emerald/amber/red à la
- *     QUALITÉ d'un chiffre. Sur cet écran, les badges d'impact sont eux aussi
- *     en emerald : le vert disait donc à la fois « c'est le levier prix » et
- *     « c'est bon », et l'ambre du levier travaux se lisait comme un
- *     avertissement alors qu'il ne signalait rien.
- *  2. **Redondance.** Le levier est déjà nommé en clair et porte une icône
- *     distincte. La couleur n'ajoutait aucune information.
+ * La carte repliée ne porte plus aucun chiffre — impact et pastilles d'état ont
+ * migré dans le dépliant. Il n'y a donc plus de vert sémantique sur la même
+ * ligne, et la teinte redevient ce qu'elle doit rester : un repère de FAMILLE,
+ * qui aide à retrouver un levier d'un coup d'œil dans la liste.
  *
- * Le levier est donc NEUTRE (`ink`), et la couleur est rendue à son seul job :
- * dire si un chiffre est un gain, une perte ou un blocage. Ne pas rétablir de
- * teinte par levier — le champ `badge` de l'ancienne table n'était d'ailleurs
- * même plus lu.
+ * ⚠️ Deux limites à ne pas franchir :
+ *  - la teinte reste sur la pastille d'icône, PAS sur un liseré de carte ni sur
+ *    du texte — un aplat coloré pleine hauteur relancerait la confusion ;
+ *  - ne rien réintroduire de chiffré en emerald/red dans la rangée repliée sans
+ *    reconsidérer ces couleurs d'abord.
  */
-const SEUIL_DELTA_RENDEMENT = 0.001; // 0,1 point
-const SEUIL_DELTA_CASHFLOW = 1; // 1 €/mois
+const LEVIER_COLORS: Record<RecommandationLevier, { bg: string; text: string }> = {
+  prix: { bg: "bg-emerald-50", text: "text-emerald-600" },
+  travaux: { bg: "bg-amber-50", text: "text-amber-600" },
+  loyer: { bg: "bg-sky-50", text: "text-sky-600" },
+  financement: { bg: "bg-violet-50", text: "text-violet-600" },
+};
 
 const fmtCashflow = formatEurosSigned;
 const fmtRendement = (n: number | null): string => (n == null ? "—" : formatPercent(n));
@@ -84,6 +92,39 @@ function buildPivot(reco: Recommandation): Pivot | null {
   if (reco.montantEngage != null) return null;
   return null;
 }
+
+/**
+ * LE chiffre de la rangée repliée — un seul, à droite du titre.
+ *
+ * Règle : **le chiffre qui complète l'action sans la répéter.**
+ *
+ * - prix et loyer : l'ampleur du mouvement (`−9 %`, `+12 %`). Le titre donne la
+ *   cible en euros, jamais l'écart — les deux se complètent.
+ * - travaux et financement : `buildPivot` ne rend PAS de delta pour eux, et leur
+ *   effort est déjà le titre (« Rénove pour ≈ 24 000 € »). Le répéter à droite
+ *   ne dirait rien de neuf : on montre donc ce que le levier RAPPORTE, en
+ *   cash-flow mensuel.
+ *
+ * ⚠️ Sans ce repli, deux cartes sur quatre auraient une colonne droite vide.
+ *
+ * Rendu en TAG teinté, et la teinte suit le SENS, jamais l'emplacement : vert
+ * si le levier améliore, rouge s'il dégrade. Un tag toujours vert finirait par
+ * ne plus rien dire — c'est ce qui avait fait retirer les couleurs de levier.
+ * Les deltas de pivot (prix, loyer) sont des gains par construction : le moteur
+ * ne propose que des mouvements favorables.
+ */
+function chiffreCle(reco: Recommandation): { valeur: string; tone: "gain" | "perte" } | null {
+  const delta = buildPivot(reco)?.delta;
+  if (delta) return { valeur: delta, tone: "gain" };
+  const dCF = (reco.cashflowApres ?? 0) - (reco.cashflowAvant ?? 0);
+  if (Math.abs(dCF) < 1) return null;
+  return { valeur: `${formatEurosSigned(dCF)}/mois`, tone: dCF > 0 ? "gain" : "perte" };
+}
+
+const CHIFFRE_TONE: Record<"gain" | "perte", string> = {
+  gain: "bg-emerald-100/70 text-emerald-800",
+  perte: "bg-red-100/70 text-red-800",
+};
 
 type PairKind = "prixm2" | "loyer" | "rendement" | "cashflow";
 type Pair = {
@@ -134,48 +175,6 @@ function buildPairs(
   });
   return pairs;
 }
-
-type Impact = { label: string; valeur: string; tone: "gain" | "perte" | "neutre" };
-
-/**
- * Les DEUX effets d'un levier, toujours dans le même ordre et toujours les deux.
- *
- * ⚠️ L'ancienne version rendait UN badge, en basculant d'unité selon le levier :
- * « +0,7 % rdt » pour le prix, « + 36 €/mois » pour le financement. Résultat, la
- * colonne mélangeait deux unités et on ne pouvait PAS comparer deux cartes entre
- * elles — alors que ranger les leviers est précisément le job de l'écran.
- *
- * Un levier qui ne bouge pas un indicateur affiche « inchangé » plutôt que
- * « +0,0 % » : c'est une information (le financement ne touche pas le rendement
- * intrinsèque du bien), pas un trou à masquer.
- */
-function impacts(reco: Recommandation): Impact[] {
-  const dR = (reco.rendementApres ?? 0) - (reco.rendementAvant ?? 0);
-  const dCF = (reco.cashflowApres ?? 0) - (reco.cashflowAvant ?? 0);
-  const plat = (d: number, seuil: number) => Math.abs(d) < seuil;
-  return [
-    {
-      label: "Rendement net",
-      valeur: plat(dR, SEUIL_DELTA_RENDEMENT)
-        ? "inchangé"
-        // Signe posé à la main sur la valeur absolue : `formatPercent` rendrait
-        // un trait d'union ASCII sur un négatif, pas le vrai signe moins.
-        : `${dR > 0 ? "+" : "\u2212"}${formatPercent(Math.abs(dR))}`,
-      tone: plat(dR, SEUIL_DELTA_RENDEMENT) ? "neutre" : dR > 0 ? "gain" : "perte",
-    },
-    {
-      label: "Cash-flow",
-      valeur: plat(dCF, SEUIL_DELTA_CASHFLOW) ? "inchangé" : `${formatEurosSigned(dCF)}/mois`,
-      tone: plat(dCF, SEUIL_DELTA_CASHFLOW) ? "neutre" : dCF > 0 ? "gain" : "perte",
-    },
-  ];
-}
-
-const IMPACT_TONE: Record<Impact["tone"], string> = {
-  gain: "text-emerald-700",
-  perte: "text-red-700",
-  neutre: "text-ink-400",
-};
 
 export default function OptimiserView({
   apartment: apt,
@@ -280,112 +279,98 @@ function LevierCard({
   onOpenCashflow: (apt: ApartmentWithComputed, seuils: CashflowSeuils, settings: AppSettings) => void;
 }) {
   const Icon = LEVIER_ICON[reco.levier];
-  const mesures = impacts(reco);
-  const nbFaits = (reco.arguments ?? []).filter((a) => a.source).length;
-
-  // Marqueurs d'état, déclarés une fois et rendus à deux emplacements selon la
-  // largeur. « Bloqué » est le plus important des trois : sans lui, un levier
-  // dont le caveat est rédhibitoire paraissait aussi attirant que les autres
-  // tant qu'on ne l'avait pas déplié.
-  const marqueurs = (
-    <>
-      {reco.flipVersAchat && (
-        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-          Achète
-        </span>
-      )}
-      {reco.caveatBloquant && (
-        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
-          Bloqué
-        </span>
-      )}
-      {nbFaits > 0 && (
-        <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-medium text-ink-600">
-          {nbFaits} fait{nbFaits > 1 ? "s" : ""}
-        </span>
-      )}
-    </>
-  );
-
-  // Bloc d'impact : deux mesures alignées, plus la trésorerie à sortir. Rendu
-  // en tableau de données et non en pastille — c'est le chiffre pour lequel on
-  // vient, il ne peut pas être l'élément le plus discret de la carte.
-  const blocImpact = (
-    // Détaché par un SÉPARATEUR, pas par un fond : `ink-50` vaut `#fafafd`,
-    // quasi blanc, donc invisible sur une carte blanche. Le trait reprend le
-    // token de divider de la charte (`ink-100/50`) et change d'orientation avec
-    // la mise en page — au-dessus quand le bloc passe sous le texte en mobile,
-    // à gauche quand il devient une colonne à partir de `sm`.
-    <span className="block flex-1 border-t border-ink-100/50 pt-3 sm:w-56 sm:flex-none sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
-      {mesures.map((m) => (
-        <span key={m.label} className="flex items-baseline justify-between gap-3 py-0.5">
-          <span className="text-xs text-ink-500">{m.label}</span>
-          <span className={`whitespace-nowrap font-mono text-sm font-semibold tabular-nums ${IMPACT_TONE[m.tone]}`}>
-            {m.valeur}
-          </span>
-        </span>
-      ))}
-      {reco.montantEngage != null && (
-        // Sortie de trésorerie : NEUTRE, jamais en vert (cf. le commentaire de
-        // `montantEngage` dans `analyse/types.ts`). Une carte qui n'afficherait
-        // que le gain sans l'argent à sortir mentirait sur l'arbitrage.
-        <span className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-ink-200/60 pt-1.5">
-          <span className="text-xs text-ink-500">À engager</span>
-          <span className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-ink-700">
-            {fmtEuros(reco.montantEngage)}
-          </span>
-        </span>
-      )}
-    </span>
-  );
+  const colors = LEVIER_COLORS[reco.levier];
+  // Identifiants stables pour `aria-controls` / `aria-labelledby` : un
+  // accordéon doit relier sa gâchette à la région qu'il ouvre, sinon un
+  // lecteur d'écran annonce un bouton sans dire ce qu'il déploie.
+  const chiffre = chiffreCle(reco);
+  const uid = useId();
+  const titreId = `${uid}-titre`;
+  const panneauId = `${uid}-panneau`;
+  // L'action EST le titre de la carte, `pourquoi` son sous-titre.
+  //
+  // ⚠️ Le nom du levier (`reco.titre`) n'est PLUS affiché en surtitre : il
+  // répétait le verbe de l'action mot pour mot (« Négocier le prix d'achat » /
+  // « Négocie à 190 000 € »), et l'icône colorée identifie déjà la famille. La
+  // place ainsi libérée revient à la phrase chiffrée, qui elle JUSTIFIE la
+  // recommandation au lieu de la paraphraser.
+  const titre = reco.action ?? reco.titre;
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border bg-white transition-shadow ${
-        expanded ? "border-ink-200 shadow-sm" : "border-ink-100"
+      // `transition-colors` en plus de l'ombre : la bordure qui fonce au survol
+      // dit « cette carte est cliquable » sans texte ni icône supplémentaires.
+      className={`overflow-hidden rounded-xl border bg-white transition-[box-shadow,border-color] ${
+        expanded ? "border-ink-200 shadow-sm" : "border-ink-100 hover:border-ink-200"
       }`}
     >
-      {/* Summary row — always visible. Uniquement des `<span>` : le contenu d'un
-          `<button>` est du phrasing content, un `<div>` y est invalide. */}
+      {/* Rangée repliée — UN titre, UN surtitre, rien d'autre.
+          ── Ce qui n'y est plus, et où c'est parti ──────────────────────────
+          `pourquoi`, les pastilles d'état (« Achète », « Bloqué », « N faits »)
+          et le bloc des deux impacts vivaient ici : une carte de liste portait
+          sept informations, dont deux chiffres à comparer. Tout est descendu
+          dans le dépliant, qui est fait pour ça.
+          ⚠️ Conséquence assumée : on ne classe plus les leviers, et un levier
+          au caveat rédhibitoire ne se distingue plus, sans ouvrir la carte.
+          Ne pas « rattraper » ça en réinjectant une pastille chiffrée sans
+          relire le commentaire de `LEVIER_COLORS`.
+
+          Uniquement des `<span>` : le contenu d'un `<button>` est du phrasing
+          content, un `<div>` ou un `<h*>` y sont invalides. */}
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full flex-col gap-4 p-5 text-left transition-colors hover:bg-ink-50/50 sm:flex-row sm:items-center sm:gap-5"
+        // ⚠️ `aria-expanded` est OBLIGATOIRE sur une gâchette d'accordéon : sans
+        // lui, un lecteur d'écran annonce « bouton » sans dire si la carte est
+        // ouverte ou fermée. `aria-controls` la relie à la région déployée.
+        aria-expanded={expanded}
+        aria-controls={panneauId}
+        // `cursor-pointer` explicite : Tailwind v4 a retiré ce reset sur
+        // `button`, le curseur restait donc en flèche sur une carte cliquable.
+        // Anneau de focus sur la convention du projet (`ring-2 accent-500/20`) :
+        // sans lui, la navigation au clavier ne montre plus où elle est.
+        className="flex w-full cursor-pointer items-center gap-4 p-5 text-left transition-colors hover:bg-ink-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
       >
-        <span className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-ink-50">
-            <Icon className="size-5 text-ink-500" aria-hidden />
-          </span>
-          <span className="min-w-0">
-            <span className={`block ${TITRE_SECTION}`}>{reco.titre ?? reco.action}</span>
-            {/* L'action chiffrée était enfouie dans le dépliant : c'est LA
-                réponse de la carte (« Négocie à 272 800 € »), elle se lit
-                maintenant sans clic. En `font-mono`, comme tout chiffre clé. */}
-            {reco.titre && reco.action && (
-              <span className="mt-1 block font-mono text-sm font-semibold tabular-nums text-accent-700">
-                {reco.action}
-              </span>
-            )}
-            {reco.pourquoi && (
-              <span className="mt-1.5 block text-sm text-ink-500">{reco.pourquoi}</span>
-            )}
-            <span className="mt-2.5 flex flex-wrap items-center gap-1.5">{marqueurs}</span>
-          </span>
+        <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${colors.bg}`}>
+          <Icon className={`size-5 ${colors.text}`} aria-hidden />
         </span>
-
-        <span className="flex items-center gap-3 sm:shrink-0 sm:gap-4">
-          {blocImpact}
-          <ChevronDown
-            className={`size-4 shrink-0 text-ink-400 transition-transform duration-200 ${
-              expanded ? "rotate-180" : ""
-            }`}
-            aria-hidden
-          />
+        <span className="min-w-0 flex-1">
+          {/* La vraie recommandation, en titre de carte : c'est la phrase pour
+              laquelle on ouvre cet écran. */}
+          <span id={titreId} className={`block ${TITRE_RECOMMANDATION}`}>
+            {titre}
+          </span>
+          {/* Sous-titre : état chiffré + conséquence chiffrée, rédigé par le
+              moteur (`pourquoi`). Une analyse antérieure au chiffrage porte
+              encore une phrase générique — c'est du texte PERSISTÉ, il ne
+              change qu'à la relance de l'analyse. */}
+          {reco.pourquoi && (
+            <span className="mt-1 block text-sm leading-relaxed text-ink-500">
+              {reco.pourquoi}
+            </span>
+          )}
         </span>
+        {chiffre && (
+          <span
+            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 font-mono text-sm font-semibold tabular-nums ${CHIFFRE_TONE[chiffre.tone]}`}
+          >
+            {chiffre.valeur}
+          </span>
+        )}
+        {/* La rotation PORTE l'information « ouvert / fermé » : elle reste, mais
+            `motion-reduce` la coupe pour qui demande moins d'animation — l'état
+            est déjà annoncé par `aria-expanded` et lisible au contenu. */}
+        <ChevronDown
+          className={`size-5 shrink-0 text-ink-400 transition-transform duration-200 motion-reduce:transition-none ${
+            expanded ? "rotate-180" : ""
+          }`}
+          aria-hidden
+        />
       </button>
 
-      {/* Expanded detail */}
+      {/* Expanded detail — région nommée par le titre de la carte. */}
       {expanded && (
+        <div id={panneauId} role="region" aria-labelledby={titreId}>
         <LevierDetail
           reco={reco}
           apt={apt}
@@ -395,6 +380,7 @@ function LevierCard({
           onOpenRendement={onOpenRendement}
           onOpenCashflow={onOpenCashflow}
         />
+        </div>
       )}
     </div>
   );
@@ -447,17 +433,14 @@ function LevierDetail({
     // `GroupHeader`, comme partout ailleurs dans l'onglet.
     <div className="border-t border-ink-100/50">
       <div className="bg-accent-50/40 p-5 sm:p-6">
+        {/* Plus de pastille de delta ici : elle est REMONTÉE dans la rangée
+            repliée (`chiffreCle`). L'afficher aux deux endroits la dupliquerait
+            à quinze pixels d'intervalle une fois la carte ouverte. */}
         <GroupHeader
           as="h4"
           title="Ce que ça change"
           subtitle={pivot?.avant ? `${pivot.label} aujourd'hui : ${pivot.avant}` : undefined}
-        >
-          {pivot?.delta && (
-            <span className="rounded-md bg-emerald-100/70 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-emerald-800">
-              {pivot.delta}
-            </span>
-          )}
-        </GroupHeader>
+        />
 
         {/* Le caveat vit DANS cette zone, sous le titre : il qualifie ces
             chiffres. Rouge uniquement si `caveatBloquant` — une simple réserve
@@ -473,6 +456,19 @@ function LevierDetail({
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p className="text-sm leading-relaxed">{reco.caveat}</p>
           </div>
+        )}
+
+        {/* Trésorerie à sortir. Vivait dans la rangée repliée ; elle descend ici
+            plutôt que d'être perdue. NEUTRE, jamais en vert : c'est une SORTIE
+            (cf. le commentaire de `montantEngage` dans `analyse/types.ts`). Une
+            carte qui ne montre que le gain mentirait sur l'arbitrage. */}
+        {reco.montantEngage != null && (
+          <p className="mb-4 text-sm text-ink-600">
+            Trésorerie à engager :{" "}
+            <span className="font-mono font-semibold tabular-nums text-ink-900">
+              {fmtEuros(reco.montantEngage)}
+            </span>
+          </p>
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

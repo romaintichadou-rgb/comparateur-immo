@@ -288,9 +288,18 @@ curseur, en-tête de colonne) on quitte Fraunces pour `LABEL_BLOC`
 de Fraunces sous 16 px se lit comme un bug de police, pas comme un cran
 hiérarchique.
 
-Deux exceptions assumées : **Verdict de l'Analyse** (`text-4xl sm:text-5xl`,
-c'est LE résultat de l'écran) et **en-tête compact de la fiche bien**
-(`text-xl sm:text-2xl`, un cran sous un H1 de page).
+Trois exceptions assumées : **Verdict de l'Analyse** (`text-4xl sm:text-5xl`,
+c'est LE résultat de l'écran), **en-tête compact de la fiche bien**
+(`text-xl sm:text-2xl`, un cran sous un H1 de page), et **titre d'une carte de
+recommandation** (`TITRE_RECOMMANDATION`, `SectionHeader.tsx`).
+
+⚠️ Cette dernière est le **seul titre de l'app en IBM Plex Sans** et non en
+Fraunces, `text-xl`. La règle « tous les titres en `font-display` » vaut pour
+des titres qui NOMMENT une section ; là, la ligne EST la recommandation, une
+phrase courte portant un montant (« Négocie à 240 000 € »). Fraunces y traitait
+les chiffres en caractères de titrage, donnant à une donnée un air de titre de
+magazine au milieu d'un écran de chiffres. Ne pas la « corriger » en Fraunces :
+c'est un choix, pas un oubli.
 
 Les micro-libellés en capitales des panneaux latéraux (`text-xs uppercase
 tracking-wide`) ne font **pas** partie de cette échelle — pas de Fraunces.

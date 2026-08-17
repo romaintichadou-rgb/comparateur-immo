@@ -319,6 +319,48 @@ const CHART_H = 200;
 const PAD = { top: 18, right: 12, bottom: 32, left: 44 };
 const PLOT_W = CHART_W - PAD.left - PAD.right;
 const PLOT_H = CHART_H - PAD.top - PAD.bottom;
+const ETIQ_H = 18;
+
+type Boite = { x: number; y: number; w: number; h: number };
+
+/**
+ * Ordonnée d'une étiquette de courbe qui ne recouvre AUCUN obstacle.
+ *
+ * ── Cascade de priorité, du plus figé au plus mobile ──────────────────────
+ *  1. **Valeur courante** (accent) — ancre, ne bouge jamais : elle suit le
+ *     curseur du simulateur, la déplacer ferait sauter l'étiquette qu'on lit.
+ *  2. **Survol** — cède à la courante seulement.
+ *  3. **Annonce** — cède aux deux.
+ *
+ * Chacune ne connaît donc que celles qui lui sont prioritaires, ce qui rend le
+ * placement déterministe : aucune paire ne peut se disputer la même place.
+ *
+ * ⚠️ Les positions de repli se calent sur la BOÎTE de l'obstacle, jamais sur le
+ * point de l'étiquette : un décalage relatif à son propre point ne dégage rien
+ * quand deux points sont proches en ordonnée (constaté à 288 000 €, où deux
+ * pastilles se recouvraient encore de 1,5 px après déplacement).
+ */
+function placerEtiquette(x: number, w: number, yPref: number, obstacles: Boite[]): number {
+  const bas = PAD.top + PLOT_H;
+  const heurte = (y: number) =>
+    obstacles.some((o) => x < o.x + o.w && x + w > o.x && y < o.y + o.h && y + ETIQ_H > o.y);
+  const tient = (y: number) => y >= PAD.top && y + ETIQ_H <= bas;
+  // Repli juste sous, puis juste au-dessus de chaque obstacle. Le filtre
+  // `!heurte` élimine les candidats qui retomberaient sur un AUTRE obstacle.
+  const candidats = [yPref, ...obstacles.flatMap((o) => [o.y + o.h + 4, o.y - ETIQ_H - 4])];
+  const libres = candidats.filter((y) => tient(y) && !heurte(y));
+  // Nulle part où se mettre : on garde la préférence, bornée au tracé. Mieux
+  // vaut un chevauchement résiduel qu'une étiquette hors du graphique.
+  if (libres.length === 0) return Math.max(PAD.top, Math.min(yPref, bas - ETIQ_H));
+  return libres.sort((a, b) => Math.abs(a - yPref) - Math.abs(b - yPref))[0];
+}
+
+/** Géométrie commune aux trois étiquettes : même gabarit, même centrage. */
+function gabaritEtiquette(cxBrut: number, label: string): { cx: number; x: number; w: number } {
+  const cx = Math.max(36, Math.min(CHART_W - 36, cxBrut));
+  const w = Math.max(48, label.length * 5.5 + 16);
+  return { cx, x: cx - w / 2, w };
+}
 
 
 function ThresholdChart({
@@ -393,6 +435,24 @@ function ThresholdChart({
       }
     }
     return null;
+  })();
+
+  /**
+   * Boîte de l'étiquette de la valeur COURANTE (la pastille accent).
+   *
+   * Hissée hors du JSX parce que l'étiquette « Annonce » doit pouvoir
+   * l'ÉVITER : les deux étaient placées chacune de son côté, sans se
+   * connaître, et se chevauchaient dès que le curseur approchait du prix
+   * d'annonce — le cas le plus fréquent, puisque c'est là qu'on démarre.
+   */
+  const boiteCourante = (() => {
+    if (currentY == null) return null;
+    const sx = scaleX(currentX);
+    const label = formatY(currentY);
+    const w = Math.max(48, label.length * 5.5 + 16);
+    const flipLeft = sx + w + 8 > CHART_W;
+    const x = flipLeft ? sx - w - 8 : sx + 8;
+    return { label, x, y: scaleY(currentY) - 10, w, h: 18 };
   })();
 
   const hoverY = hoveredIndex != null && hoveredIndex < data.length ? getY(data[hoveredIndex]) : null;
@@ -530,10 +590,45 @@ function ThresholdChart({
               const gx = Math.max(36, Math.min(CHART_W - 36, scaleX(ghostPoint.x)));
               const gLabel = formatY(ghostPoint.y);
               const gLabelW = Math.max(48, gLabel.length * 5.5 + 16);
+              const gy0 = scaleY(ghostPoint.y!);
+              // Position par défaut : au-dessus du point.
+              let gy = gy0 - 22;
+              const chevauche = (y: number) =>
+                boiteCourante != null &&
+                gx - gLabelW / 2 < boiteCourante.x + boiteCourante.w &&
+                gx + gLabelW / 2 > boiteCourante.x &&
+                y < boiteCourante.y + boiteCourante.h &&
+                y + 18 > boiteCourante.y;
+              // ⚠️ C'est l'étiquette « Annonce » qui cède, jamais la valeur
+              // courante : cette dernière suit le curseur, la déplacer ferait
+              // sauter l'étiquette qu'on est en train de lire.
+              //
+              // ⚠️ On se cale sur la BOÎTE de l'étiquette courante, pas sur le
+              // point de l'annonce. Un simple « 6 px sous mon point » ne dégage
+              // rien quand les deux points sont proches en ordonnée : constaté
+              // à 288 000 €, où les deux pastilles se recouvraient encore de
+              // 1,5 px après déplacement.
+              if (chevauche(gy)) {
+                const b = boiteCourante!;
+                const dessous = b.y + b.h + 4;
+                const dessus = b.y - 18 - 4;
+                const tientDessous = dessous + 18 <= PAD.top + PLOT_H;
+                const tientDessus = dessus >= PAD.top;
+                // À défaut de place des deux côtés, on prend le plus proche du
+                // point d'annonce pour que le lien visuel reste lisible.
+                gy =
+                  tientDessous && (!tientDessus || Math.abs(dessous - gy0) <= Math.abs(dessus - gy0))
+                    ? dessous
+                    : tientDessus
+                      ? dessus
+                      : dessous;
+              } else {
+                gy = Math.max(PAD.top, Math.min(gy, PAD.top + PLOT_H - 18));
+              }
               return (
                 <>
-                  <rect x={gx - gLabelW / 2} y={scaleY(ghostPoint.y) - 22} width={gLabelW} height="18" rx="4" fill="white" stroke="#b0a8c0" strokeWidth=".8" />
-                  <text x={gx} y={scaleY(ghostPoint.y) - 10} textAnchor="middle" fontSize="8" fontWeight="600" fill="#6b6280" fontFamily="'Geist Mono', monospace">
+                  <rect x={gx - gLabelW / 2} y={gy} width={gLabelW} height="18" rx="4" fill="white" stroke="#b0a8c0" strokeWidth=".8" />
+                  <text x={gx} y={gy + 12} textAnchor="middle" fontSize="8" fontWeight="600" fill="#6b6280" fontFamily="'Geist Mono', monospace">
                     {gLabel}
                   </text>
                 </>
@@ -573,21 +668,14 @@ function ThresholdChart({
                 <animate attributeName="opacity" values=".3;.1;.3" dur="2.5s" repeatCount="indefinite" />
               </circle>
             )}
-            {(() => {
-              const sx = scaleX(currentX);
-              const label = formatY(currentY);
-              const labelW = Math.max(48, label.length * 5.5 + 16);
-              const flipLeft = sx + labelW + 8 > CHART_W;
-              const rx = flipLeft ? sx - labelW - 8 : sx + 8;
-              return (
-                <>
-                  <rect x={rx} y={scaleY(currentY) - 10} width={labelW} height="18" rx="4" fill="#3d3580" />
-                  <text x={rx + labelW / 2} y={scaleY(currentY) + 2} textAnchor="middle" fill="white" fontSize="8" fontWeight="600" fontFamily="'Geist Mono', monospace">
-                    {label}
-                  </text>
-                </>
-              );
-            })()}
+            {boiteCourante && (
+              <>
+                <rect x={boiteCourante.x} y={boiteCourante.y} width={boiteCourante.w} height={boiteCourante.h} rx="4" fill="#3d3580" />
+                <text x={boiteCourante.x + boiteCourante.w / 2} y={boiteCourante.y + 12} textAnchor="middle" fill="white" fontSize="8" fontWeight="600" fontFamily="'Geist Mono', monospace">
+                  {boiteCourante.label}
+                </text>
+              </>
+            )}
           </>
         )}
 
@@ -696,12 +784,12 @@ function ComboSimulator({
         title="Simulateur prix, loyer et apport"
         subtitle="Déplacez les curseurs : rendement, mensualité et cash-flow se recalculent à chaque mouvement. Rien n'est enregistré."
       />
-      <div className="rounded-xl border border-ink-100 bg-white">
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_280px]">
-          {/* Left column: stacked sliders */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_280px]">
+        {/* Left card: sliders */}
+        <div className="rounded-xl border border-ink-100 bg-white">
           <div className="space-y-8 p-5 sm:p-6">
             {/* Prix d'achat slider */}
-            <div>
+            <div className="slider-row">
               <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <span className={LABEL_BLOC}>Prix d&apos;achat</span>
               {seuilVertPrix != null && Math.abs(comboPrix - Math.round(seuilVertPrix)) > 1000 && (
@@ -763,7 +851,7 @@ function ComboSimulator({
               <div className="relative h-6">
                 <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
                   <div
-                    className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
+                    className="slider-fill h-full rounded-full bg-accent-500 transition-[width] duration-75"
                     style={{ width: `${prixPct}%` }}
                   />
                 </div>
@@ -781,7 +869,7 @@ function ComboSimulator({
                   step={1000}
                   value={comboPrix}
                   onChange={(e) => onComboPrixChange(Number(e.target.value))}
-                  className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
+                  className={`slider-thumb-in absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
                 />
               </div>
               <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
@@ -797,7 +885,7 @@ function ComboSimulator({
             </div>
 
             {/* Loyer mensuel slider */}
-            <div>
+            <div className="slider-row [--slider-delay:90ms]">
               <div className="mb-2.5 flex items-center justify-between gap-3">
                 <span className={LABEL_BLOC}>Loyer mensuel</span>
                 <div className="flex items-center gap-0.5 rounded-lg border border-ink-200 bg-ink-50/50 px-1">
@@ -818,7 +906,7 @@ function ComboSimulator({
               <div className="relative h-6">
                 <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
                   <div
-                    className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
+                    className="slider-fill h-full rounded-full bg-accent-500 transition-[width] duration-75"
                     style={{ width: `${loyerPct}%` }}
                   />
                 </div>
@@ -836,7 +924,7 @@ function ComboSimulator({
                   step={5}
                   value={comboLoyer}
                   onChange={(e) => onComboLoyerChange(Number(e.target.value))}
-                  className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
+                  className={`slider-thumb-in absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
                 />
               </div>
               <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
@@ -852,7 +940,7 @@ function ComboSimulator({
             </div>
 
             {/* Apport slider */}
-            <div>
+            <div className="slider-row [--slider-delay:180ms]">
               <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <span className={LABEL_BLOC}>Apport</span>
                 {seuilVertApport != null && Math.abs(combo.apport - Math.round(seuilVertApport)) > 1000 && (
@@ -897,7 +985,7 @@ function ComboSimulator({
               <div className="relative h-6">
                 <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ink-100">
                   <div
-                    className="h-full rounded-full bg-accent-500 transition-[width] duration-75"
+                    className="slider-fill h-full rounded-full bg-accent-500 transition-[width] duration-75"
                     style={{ width: `${apportPct}%` }}
                   />
                 </div>
@@ -915,7 +1003,7 @@ function ComboSimulator({
                   step={1000}
                   value={combo.apport}
                   onChange={(e) => onComboApportChange(Number(e.target.value))}
-                  className={`absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
+                  className={`slider-thumb-in absolute inset-0 z-10 w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB}`}
                 />
               </div>
               <div className="relative mt-0.5 flex justify-between text-[11px] text-ink-400">
@@ -930,56 +1018,45 @@ function ComboSimulator({
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Right column: results card */}
-          <div className="flex flex-col border-t border-ink-100/50 sm:border-l sm:border-t-0">
-            {/* Hero rendement */}
-            <div className={`flex flex-1 flex-col items-center justify-center px-5 py-6 ${TONE_PANEL_STYLES[rdtTone].wrap} sm:rounded-tr-xl`}>
-              <p className={`mb-1 text-xs font-medium ${TONE_PANEL_STYLES[rdtTone].label}`}>Rendement net simulé</p>
-              <p className={`font-mono text-3xl font-bold tabular-nums ${TONE_PANEL_STYLES[rdtTone].value}`}>
-                {rendementCombo != null ? formatPercent(rendementCombo) : "—"}
-              </p>
-              {/* ⚠️ Le rendement net divise par le coût de l'opération : il ne
-                  dépend PAS du financement. Sans cette mention, le curseur
-                  d'apport passe pour cassé — on le bouge, le grand chiffre ne
-                  bronche pas. Les lignes en dessous sont sa vraie réponse. */}
-              {ecartApport !== 0 && (
-                <p className={`mt-1.5 text-center text-[10px] leading-tight ${TONE_PANEL_STYLES[rdtTone].label}`}>
-                  Inchangé par l&apos;apport — voir mensualité et cash-flow
-                </p>
-              )}
+        {/* Right card: impacts */}
+        <div className="flex flex-col rounded-xl border border-ink-100 bg-white">
+          {/* Hero rendement */}
+          <div className={`flex flex-1 flex-col items-center justify-center rounded-t-xl px-5 py-6 ${TONE_PANEL_STYLES[rdtTone].wrap}`}>
+            <p className={`mb-1 text-xs font-medium ${TONE_PANEL_STYLES[rdtTone].label}`}>Rendement net</p>
+            <p className={`font-mono text-3xl font-bold tabular-nums ${TONE_PANEL_STYLES[rdtTone].value}`}>
+              {rendementCombo != null ? formatPercent(rendementCombo) : "—"}
+            </p>
+          </div>
+
+          {/* Detail rows */}
+          <div className="divide-y divide-ink-100/50 px-5 text-sm">
+            <div className="flex items-center justify-between gap-2 py-2.5">
+              <span className="text-ink-500">Cash-flow mensuel</span>
+              <span className={`whitespace-nowrap font-mono font-semibold tabular-nums ${TONE_PANEL_STYLES[cfTone].value}`}>
+                {cashflowCombo != null ? formatCashflow(cashflowCombo) : "—"}
+              </span>
             </div>
-
-            {/* Detail rows */}
-            <div className="divide-y divide-ink-100/50 px-5 text-sm">
-              <div className="flex items-center justify-between gap-2 py-2.5">
-                <span className="text-ink-500">Cash-flow mensuel</span>
-                <span className={`whitespace-nowrap font-mono font-semibold tabular-nums ${TONE_PANEL_STYLES[cfTone].value}`}>
-                  {cashflowCombo != null ? formatCashflow(cashflowCombo) : "—"}
-                </span>
-              </div>
-              {/* Les deux grandeurs que l'apport pilote directement. */}
-              <div className="flex items-center justify-between gap-2 py-2.5">
-                <span className="text-ink-500">Mensualité</span>
-                <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-600">
-                  {combo.sim != null ? formatEuros(Math.round(combo.sim.mensualiteTotale)) : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 py-2.5">
-                <span className="text-ink-500">Emprunt</span>
-                <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-600">
-                  {combo.sim != null ? formatEuros(combo.sim.montantEmprunte) : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2.5">
-                <span className="text-ink-500">Δ prix d&apos;achat</span>
-                <span className="font-mono text-xs tabular-nums text-ink-600">
-                  {ecartPrix !== 0
-                    ? `${formatEurosSigned(ecartPrix)}${apt.prix ? ` (${formatPercent(ecartPrix / apt.prix)})` : ""}`
-                    : "—"
-                  }
-                </span>
-              </div>
+            {/* ⚠️ Le héros « Rendement net » ne bouge PAS avec l'apport
+                (il divise par le coût de l'opération, pas par le financement).
+                Mensualité et cash-flow sont les seules réponses du panneau au
+                curseur d'apport — ne pas retirer la ligne ci-dessous sans lui
+                substituer un autre indicateur sensible au financement. */}
+            <div className="flex items-center justify-between gap-2 py-2.5">
+              <span className="text-ink-500">Mensualité</span>
+              <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-600">
+                {combo.sim != null ? formatEuros(Math.round(combo.sim.mensualiteTotale)) : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-ink-500">Δ prix d&apos;achat</span>
+              <span className="font-mono text-xs tabular-nums text-ink-600">
+                {ecartPrix !== 0
+                  ? `${formatEurosSigned(ecartPrix)}${apt.prix ? ` (${formatPercent(ecartPrix / apt.prix)})` : ""}`
+                  : "—"
+                }
+              </span>
             </div>
           </div>
         </div>
@@ -1299,13 +1376,11 @@ export default function PlaygroundView({
 
         {dataPoints.length > 0 && (
           <div
-            // ⚠️ Une seule colonne sur l'axe apport : le rendement net ne dépend
-            // pas du financement, sa courbe serait une droite horizontale. Une
-            // grille à deux colonnes laisserait un trou, ou pire, un graphe plat
-            // qu'on lirait comme « rien ne s'améliore ».
-            className={`grid grid-cols-1 gap-8 transition-opacity duration-150 ${
-              facteur === "apport" ? "" : "sm:grid-cols-2"
-            }`}
+            // La grille reste à DEUX colonnes sur l'axe apport, où seule la
+            // courbe cash-flow s'affiche : elle garde ainsi exactement la taille
+            // des autres graphiques. En pleine largeur, le même graphe changeait
+            // d'échelle d'un facteur à l'autre et devenait incomparable.
+            className="grid grid-cols-1 gap-8 transition-opacity duration-150 sm:grid-cols-2"
             style={{ opacity: transitioning ? 0 : 1 }}
           >
             {facteur !== "apport" && (

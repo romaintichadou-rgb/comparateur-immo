@@ -1,8 +1,14 @@
 import { isImmeuble, type Apartment, type ApartmentWithComputed, type PrecisionLocalisation } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { computeDerived } from "@/lib/calculations";
+import { formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
 import { capitalEffectif, resolveInputs, simulate } from "@/lib/simulation";
-import { buildVerdicts, computeScoreGlobal, type RendementSeuils } from "./scoring";
+import {
+  buildVerdicts,
+  cashflowSeuilsFromSettings,
+  computeScoreGlobal,
+  type RendementSeuils,
+} from "./scoring";
 import { computeDecision, ecartPrixMarche } from "./decision";
 import { buildBlocPrix } from "./blocs/prix";
 import { buildBlocLocation } from "./blocs/location";
@@ -93,7 +99,8 @@ function pasArrondi(n: number): number {
  *   haut casserait la garantie. Le loyer cible est déjà plafonné au réaliste :
  *   l'arrondi supérieur le ferait sortir de la fourchette validée.
  * - `"haut"` pour ce qu'il faut ENGAGER (travaux, apport). L'apport est le
- *   minimum qui ramène le cash-flow à l'équilibre : arrondir vers le bas
+ *   minimum qui porte le cash-flow au SEUIL VERT du profil (pas à zéro :
+ *   `cashflowSeuilVertEuros` est réglable) : arrondir vers le bas
  *   manquerait la cible et rendrait la reco fausse. Un budget travaux
  *   sous-estimé est un piège du même ordre.
  */
@@ -129,7 +136,33 @@ function plusGrandQuiConvient(
   return lo;
 }
 
-const fmtEuros = (n: number) => `${Math.round(n).toLocaleString("fr-FR")} €`;
+/**
+ * ⚠️ Passe par `formatEuros` partagé, et NON par une concaténation maison.
+ * La version locale collait un « € » après une espace ORDINAIRE : les montants
+ * se coupaient en deux en fin de ligne (« Revalorise à 1 480 » / « €/mois »),
+ * exactement le piège n°3 d'AGENTS.md — qui exige de corriger au FORMATEUR, pas
+ * par un `whitespace-nowrap` local. `formatEuros` garantit l'espace insécable.
+ */
+const fmtEuros = (n: number) => formatEuros(Math.round(n));
+
+/**
+ * `pourquoi` — le sous-titre de la carte de recommandation.
+ *
+ * ── Le patron : ÉTAT chiffré, puis CONSÉQUENCE chiffrée ───────────────────
+ * « Le prix est déjà 8 % sous le marché. 5 % de plus porteraient le rendement
+ * à 6,1 %. » Une phrase qui ne contient aucun chiffre ne justifie rien : elle
+ * paraphrase le titre. Les précédentes étaient toutes de ce genre (« chaque
+ * euro négocié augmente directement rendement et cash-flow »).
+ *
+ * Tout vient de données DÉJÀ calculées — rendement et cash-flow après action,
+ * écart au marché, montants. Aucun appel supplémentaire, aucune IA : ces
+ * phrases sont déterministes et reproductibles.
+ *
+ * ⚠️ `pourquoi` est PERSISTÉ dans `analyse_ia` : les biens déjà analysés
+ * gardent leur ancienne phrase jusqu'à une relance d'analyse.
+ */
+const fmtRdt = (v: number | null): string | null =>
+  v == null ? null : formatPercent(v);
 
 const delta = (avant: number | null, apres: number | null): number =>
   avant == null || apres == null ? 0 : apres - avant;
@@ -462,7 +495,15 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       return out;
     };
 
-    const carte = (prixCible: number, extra: Partial<Recommandation>): Recommandation => {
+    // `motif` plutôt qu'un `pourquoi` tout fait : seule `carte` connaît le
+    // rendement APRÈS négociation (elle rejoue les blocs au prix cible), donc
+    // seule elle peut chiffrer la conséquence. Les appelants disent le CAS,
+    // elle rédige.
+    type MotifPrix = "dejaAchat" | "flip" | "bloque";
+    const carte = (
+      prixCible: number,
+      extra: Partial<Recommandation> & { motif: MotifPrix }
+    ): Recommandation => {
       // Arrondi AVANT de dériver quoi que ce soit : `blocsAtPrice`, le patch,
       // les arguments et le cash-flow affiché doivent tous décrire le prix
       // réellement annoncé, sinon l'écran promet un impact calculé sur un prix
@@ -474,6 +515,20 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       const { mod } = blocsAtPrice(cible);
       const baisse = apt.prix! - cible;
       const pct = Math.round((baisse / apt.prix!) * 100);
+      const { motif, ...reste } = extra;
+      const rdt = fmtRdt(mod.rendement_net);
+      const ecart = ecartPrixMarche(ctx.baseBlocs.prix);
+      // « déjà X % sous le marché » n'est vrai que si l'écart est négatif ET
+      // connu : sans DVF exploitable, `ecartPrixMarche` rend `null` et la
+      // phrase doit se replier sur ce qu'on sait vraiment.
+      const sousMarche = ecart != null && ecart < 0 ? Math.abs(Math.round(ecart)) : null;
+      const consequence = rdt ? ` porterait le rendement à ${rdt}` : " améliorerait la rentabilité";
+      const pourquoi =
+        motif === "flip"
+          ? `À ce prix, le bien passe en « Achète »${rdt ? ` et le rendement atteint ${rdt}` : ""}.`
+          : sousMarche != null
+            ? `Le prix est déjà ${sousMarche} % sous le marché. Négocier ${pct} % de plus${consequence}.`
+            : `Négocier ${pct} %${consequence}.`;
       return {
         levier: "prix",
         titre: dejaAchat ? "Négocier pour acheter mieux" : "Négocier le prix d'achat",
@@ -496,8 +551,8 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         baissePct: pct,
         patch: { prix: cible, simulation_inputs: inputsAtPrice(cible) },
         arguments: argsPrix(cible),
-        pourquoi: "",
-        ...extra,
+        pourquoi,
+        ...reste,
       };
     };
 
@@ -507,10 +562,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         prixMarche != null && prixMarche < apt.prix
           ? Math.max(prixMarche, Math.round(apt.prix * 0.85))
           : Math.round(apt.prix * 0.92);
-      return carte(cible, {
-        verdictApres: "achete",
-        pourquoi: "Déjà rentable : chaque euro négocié augmente directement rendement et cash-flow.",
-      });
+      return carte(cible, { motif: "dejaAchat", verdictApres: "achete" });
     }
 
     // Mode "en faire un achat" : cherche le prix le PLUS HAUT donnant "achete".
@@ -526,11 +578,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       // BAS — un prix plus bas que le seuil reste « Achète » (décision
       // monotone), donc la garantie tient. Ne pas pré-arrondir ici : ça faisait
       // deux pas d'arrondi concurrents (1 000 € ici, adaptatif là-bas).
-      return carte(lo, {
-        verdictApres: "achete",
-        flipVersAchat: true,
-        pourquoi: "À ce prix, le bien passe en « Achète » : rendement, cash-flow et marché au vert.",
-      });
+      return carte(lo, { motif: "flip", verdictApres: "achete", flipVersAchat: true });
     }
 
     // Le prix seul ne suffit pas : identifier le frein bloquant (à prix très bas).
@@ -548,8 +596,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     // les deux se recouvraient, l'UI affiche l'un sous l'action et l'autre en
     // bandeau d'alerte.
     return carte(cible, {
-      pourquoi:
-        "Le prix reste le levier le plus direct : chaque euro négocié allège l'emprunt, le rendement et le cash-flow.",
+      motif: "bloque",
       caveat: `${frein} bloque l'achat quel que soit le prix. Traite ce frein d'abord.`,
       caveatBloquant: true,
     });
@@ -666,7 +713,12 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
           },
         ];
       })(),
-      pourquoi: `DPE ${dpeCourant}→${dpeCible} : lève l'interdiction de louer et justifie un loyer premium.`,
+      pourquoi: (() => {
+        const rdt = fmtRdt(mod.rendement_net);
+        return `DPE ${dpeCourant}→${dpeCible} : lève l'interdiction de louer${
+          rdt ? ` et porte le rendement à ${rdt}` : " et justifie un loyer premium"
+        }.`;
+      })(),
       caveat: "Coût des travaux et loyer premium estimés — à affiner avec des devis.",
     };
   }
@@ -693,7 +745,25 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     // sortir la cible de ce que le moteur a validé.
     const loyerCible = arrondiLisible(Math.min(loyerMaxAnil, plafondRealiste), "bas");
     if (loyerCible <= apt.loyer_retenu * 1.02) return null;
+
+    // ⚠️ Écart à la MÉDIANE, et non au haut de fourchette.
+    //
+    // Ce levier vise le HAUT de la fourchette ANIL : il se déclenche donc dès
+    // qu'il reste de la marge jusqu'à ce plafond, y compris sur un loyer déjà
+    // supérieur à la moyenne du secteur. La phrase affirmait pourtant « Loyer
+    // sous le marché » dans ce cas — constaté en vrai sur un bien à 1 254 €
+    // pour une référence à 1 127 €, soit +11 % AU-DESSUS de la moyenne, que
+    // l'écran déclarait sous le marché. « Il reste de la marge jusqu'au haut de
+    // fourchette » et « le loyer est sous le marché » sont deux affirmations
+    // différentes : ne pas les confondre à nouveau.
+    // Cible bridée par la hausse réaliste (+15 %) et non par le marché : le
+    // plein potentiel demande alors un changement de locataire. Usage LÉGITIME
+    // du drapeau — c'est seulement s'en servir pour affirmer « sous le marché »
+    // qui était faux.
     const bornéParRealisme = loyerCible < loyerMaxAnil;
+    const loyerRefCC = Math.round(refCC.medianM2 * apt.surface_m2);
+    const ecartRef =
+      loyerRefCC > 0 ? Math.round((apt.loyer_retenu / loyerRefCC - 1) * 100) : null;
 
     const mod = computeDerived({ ...apt, loyer_retenu: loyerCible });
     const blocs: Record<BlocKey, BlocAnalyse> = {
@@ -728,9 +798,16 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         const nbObsTxt =
           ctx.loyerRef.nbObs > 0 ? ` (${ctx.loyerRef.nbObs.toLocaleString("fr-FR")} annonces observées)` : "";
 
+        // Même piège que la phrase `pourquoi` : ce fait décrit une MARGE
+        // jusqu'au haut de fourchette, pas une position sous le marché. Le
+        // titre l'affirmait pourtant, y compris sur un loyer supérieur à la
+        // médiane du secteur.
         args.push({
-          titre: "Ton loyer est sous le marché du secteur",
-          detail: `Pour ${Math.round(surface)} m²${zone ? ` à ${zone}` : ""} (${ctx.loyerPerimetre}), la carte des loyers ANIL${annee}${nbObsTxt} situe le marché entre ${fmtEuros(loyerMinAnil)} et ${fmtEuros(loyerMaxAnil)}/mois. Tu es à ${fmtEuros(loyerActuel)}.`,
+          titre:
+            ecartRef != null && ecartRef >= 3
+              ? "Il reste de la marge jusqu'au haut de fourchette"
+              : "Ton loyer est sous le marché du secteur",
+          detail: `Pour ${Math.round(surface)} m²${zone ? ` à ${zone}` : ""} (${ctx.loyerPerimetre}), la carte des loyers ANIL${annee}${nbObsTxt} situe le marché entre ${fmtEuros(loyerMinAnil)} et ${fmtEuros(loyerMaxAnil)}/mois, pour une moyenne à ${fmtEuros(loyerRefCC)}. Tu es à ${fmtEuros(loyerActuel)}.`,
           source: "ANIL",
           chiffre: `+${fmtEuros(gain)}`,
           chiffreLabel: "de marge par mois",
@@ -767,34 +844,62 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         });
         return args;
       })(),
-      pourquoi: bornéParRealisme
-        ? "Loyer sous le marché : une revalorisation réaliste rehausse rendement et cash-flow."
-        : "Loyer aligné sur le haut du marché : rendement et cash-flow en hausse.",
+      pourquoi: (() => {
+        const gain = fmtEuros(loyerCible - apt.loyer_retenu!);
+        const rdt = fmtRdt(mod.rendement_net);
+        const etat =
+          ecartRef == null
+            ? `Le haut de fourchette du secteur monte à ${fmtEuros(loyerMaxAnil)}.`
+            : ecartRef <= -3
+              ? `Le loyer est ${Math.abs(ecartRef)} % sous la moyenne du secteur.`
+              : ecartRef >= 3
+                ? `Le loyer dépasse déjà la moyenne de ${ecartRef} %, mais le haut de fourchette monte à ${fmtEuros(loyerMaxAnil)}.`
+                : `Le loyer est dans la moyenne du secteur, dont le haut de fourchette monte à ${fmtEuros(loyerMaxAnil)}.`;
+        return rdt
+          ? `${etat} ${gain} de plus par mois porteraient le rendement à ${rdt}.`
+          : `${etat} Soit ${gain} de plus par mois.`;
+      })(),
       caveat: "Réalisable surtout à la relocation, selon l'état et les prestations du bien.",
     };
   }
 
   // --- Levier FINANCEMENT : renforcer l'apport ---------------------------
   function buildLevierFinancement(): Recommandation | null {
-    if (cashflowAvant == null || cashflowAvant >= 0) return null;
+    // ⚠️ CIBLE = le seuil VERT de cash-flow du profil, pas l'équilibre.
+    //
+    // Ce levier comparait à `0` en dur, aux deux endroits : la condition de
+    // déclenchement et la recherche du montant. Avec le défaut du profil
+    // (`cashflowSeuilVertEuros: 0`) les deux coïncidaient, donc le bug était
+    // invisible — mais dès que l'investisseur relève son seuil (« je veux
+    // +100 €/mois »), la reco visait toujours 0 et livrait un cash-flow AMBRE
+    // en promettant d'avoir réglé le problème. Et un bien déjà à +20 €/mois
+    // avec un seuil à +100 ne se voyait proposer aucun levier du tout, alors
+    // qu'un apport l'aurait porté au vert.
+    const seuilVert = cashflowSeuilsFromSettings(ctx.settings).vert;
+    if (cashflowAvant == null || cashflowAvant >= seuilVert) return null;
     // Même base que `loanAvant` : mode de financement du profil + plafond.
     const capitalActuel = loanAvant;
     const cf = (montant: number): number => {
       const s = simulate(aptBase, { ...inputs, montantEmprunte: Math.round(montant) });
       return s ? s.cashflowMensuelMoyenLMNP : -Infinity;
     };
-    if (cf(0) < 0) return null; // même au comptant le cash-flow reste négatif
+    // Même au comptant le seuil reste hors d'atteinte : aucun apport ne règle
+    // le problème, ne rien promettre.
+    if (cf(0) < seuilVert) return null;
 
-    // Plus grand montant emprunté ramenant le cash-flow d'année 1 à l'équilibre.
-    const lo = plusGrandQuiConvient(0, capitalActuel, (montant) => cf(montant) >= 0);
-    // L'apport est le MINIMUM qui ramène le cash-flow à l'équilibre : on
-    // l'arrondit vers le HAUT, donc on emprunte d'autant moins. Arrondir
-    // l'apport vers le bas repasserait sous l'équilibre et rendrait fausse la
-    // promesse du titre. `montantCible` est redérivé de l'apport arrondi pour
-    // que la simulation, le patch et l'affichage décrivent la même opération.
+    // Plus grand montant emprunté portant le cash-flow d'année 1 au seuil vert.
+    const lo = plusGrandQuiConvient(0, capitalActuel, (montant) => cf(montant) >= seuilVert);
+    // L'apport est le MINIMUM qui atteint le seuil : on l'arrondit vers le
+    // HAUT, donc on emprunte d'autant moins. Arrondir l'apport vers le bas
+    // repasserait sous le seuil et rendrait fausse la promesse du titre.
+    // `montantCible` est redérivé de l'apport arrondi pour que la simulation,
+    // le patch et l'affichage décrivent la même opération.
     const apportSupp = arrondiLisible(capitalActuel - lo, "haut");
     if (apportSupp <= 500) return null;
     const montantCible = Math.max(0, capitalActuel - apportSupp);
+    // « équilibre » ne décrit le seuil que s'il vaut 0. Au-delà, le nommer
+    // ainsi ferait promettre autre chose que ce que le calcul vise.
+    const cible = seuilVert === 0 ? "à l'équilibre" : `à ton seuil de ${fmtEuros(seuilVert)}/mois`;
 
     const mod = computeDerived({
       ...apt,
@@ -821,19 +926,35 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
       // Capital immobilisé en plus : sortie de trésorerie, affichée en neutre.
       montantEngage: apportSupp,
       arguments: (() => {
-        const deficit = Math.abs(cashflowAvant ?? 0);
+        const cfAvant = cashflowAvant ?? 0;
         const pctCapital = Math.round((apportSupp / capitalActuel) * 100);
+        // ⚠️ Le levier se déclenche sous le SEUIL VERT, pas sous zéro : un
+        // cash-flow de +40 €/mois avec un seuil à +100 le fait apparaître. Le
+        // premier fait affirmait pourtant « la mensualité dépasse ce que le bien
+        // encaisse » et affichait « −40 € », deux mensonges sur un cash-flow
+        // positif. Distinguer les deux situations est obligatoire.
+        const enDeficit = cfAvant < 0;
         return [
+          enDeficit
+            ? {
+                titre: "La mensualité dépasse ce que le bien encaisse",
+                detail: `${fmtEuros(capitalActuel)} empruntés pour ${fmtEuros(apt.loyer_retenu ?? 0)} de loyer mensuel : la différence sort de ta poche tous les mois.`,
+                source: "Calcul",
+                chiffre: formatEurosSigned(cfAvant),
+                chiffreLabel: "chaque mois",
+              }
+            : {
+                titre: "Le cash-flow reste sous ton seuil",
+                detail: `${fmtEuros(capitalActuel)} empruntés pour ${fmtEuros(apt.loyer_retenu ?? 0)} de loyer mensuel : l'opération s'autofinance, mais reste sous les ${fmtEuros(seuilVert)}/mois que tu vises.`,
+                source: "Calcul",
+                chiffre: formatEurosSigned(cfAvant),
+                chiffreLabel: "chaque mois",
+              },
           {
-            titre: "La mensualité dépasse ce que le bien encaisse",
-            detail: `${fmtEuros(capitalActuel)} empruntés pour ${fmtEuros(apt.loyer_retenu ?? 0)} de loyer mensuel : la différence sort de ta poche tous les mois.`,
-            source: "Calcul",
-            chiffre: `−${fmtEuros(deficit)}`,
-            chiffreLabel: "chaque mois",
-          },
-          {
-            titre: "L'apport qui ramène l'opération à l'équilibre",
-            detail: `En empruntant ${fmtEuros(montantCible)} au lieu de ${fmtEuros(capitalActuel)}, soit ${pctCapital} % de capital en moins, la mensualité redescend au niveau des loyers.`,
+            titre: `L'apport qui porte l'opération ${cible}`,
+            detail: `En empruntant ${fmtEuros(montantCible)} au lieu de ${fmtEuros(capitalActuel)}, soit ${pctCapital} % de capital en moins, la mensualité redescend ${
+              seuilVert === 0 ? "au niveau des loyers" : `sous les loyers d'au moins ${fmtEuros(seuilVert)}`
+            }.`,
             source: "Calcul",
             chiffre: fmtEuros(apportSupp),
             chiffreLabel: "d'apport en plus",
@@ -850,7 +971,12 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
           },
         ];
       })(),
-      pourquoi: "Cash-flow ramené à l'équilibre en empruntant moins.",
+      // ⚠️ `formatEurosSigned` et non `fmtEuros` sur les deux cash-flows : ce
+      // sont des FLUX signés, et `formatEuros` rend un trait d'union ASCII sur
+      // un négatif (« -515 € ») au lieu du vrai signe moins U+2212.
+      pourquoi: `Emprunter ${fmtEuros(apportSupp)} de moins porte le cash-flow de ${formatEurosSigned(
+        cashflowAvant
+      )} à ${formatEurosSigned(cashflowOf(mod))} par mois.`,
       caveat: "Améliore le cash-flow, pas la rentabilité du bien.",
     };
   }

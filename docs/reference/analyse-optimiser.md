@@ -193,20 +193,136 @@ Chaque carte résumé montre, de gauche à droite :
 - **Icône du levier** (`LEVIER_ICON`) dans un carré `bg-ink-50`, glyphe
   `text-ink-500`. **NEUTRE, sans couleur propre** — voir « Pourquoi le levier
   n'a plus de couleur » ci-dessous.
-- **Titre** (`reco.titre`) au niveau CARTE — `TITRE_SECTION` (Fraunces
-  `text-lg`). Le contenu d'un `<button>` étant du phrasing content, tout le
-  corps de la rangée est en `<span>` (`block`/`flex`) : ni `<div>` ni `<h*>`
-  n'y sont valides. C'est le cas pour lequel la constante est exportée — ne pas
-  recopier les classes à la main.
-- **L'action chiffrée** (`reco.action`) en `font-mono text-sm font-semibold
-  text-accent-700`. ⚠️ Elle était enfouie dans le dépliant : c'est LA réponse
-  de la carte (« Négocie à 272 800 € »), elle se lit maintenant sans clic.
-  Affichée seulement si `reco.titre` existe, sinon le titre la porte déjà.
-- **Description** (`reco.pourquoi`) en `text-sm ink-500`.
-- **Marqueurs** : « Achète » (emerald, si `flipVersAchat`), « Bloqué » (red, si
-  `caveatBloquant`), « N faits » (neutre, nombre d'arguments sourcés).
-- **Bloc d'impact** (colonne de droite, `sm:w-56`) : voir ci-dessous.
+- **Surtitre** (`reco.titre`) en `text-sm text-ink-500`, **casse normale**.
+  ⚠️ Il était en petites capitales espacées : à 12 px sur quatre ou cinq mots,
+  les capitales effacent la forme du mot et sonnent fort pour un simple libellé
+  de famille. Ne pas les rétablir.
+- **Ligne principale** (`reco.action`) — la recommandation elle-même, via
+  **`TITRE_RECOMMANDATION`** (`SectionHeader.tsx`) : `text-xl font-semibold` en
+  **IBM Plex Sans**, seule exception Fraunces de l'app, documentée dans
+  `AGENTS.md`. Ne pas recopier les classes à la main : c'est exactement ce qui
+  fait diverger les cartes quand le barème bouge.
+- **Sous-titre** = `reco.pourquoi`, en `text-sm ink-500` — la phrase qui
+  JUSTIFIE la recommandation. Voir « `pourquoi` » ci-dessous.
+- **UN chiffre**, en tag teinté à droite (`chiffreCle`) — voir ci-dessous.
+- **Pas de surtitre.** Le nom du levier (`reco.titre`) répétait le verbe de
+  l'action mot pour mot (« Négocier le prix d'achat » / « Négocie à 190 000 € »)
+  et l'icône colorée identifie déjà la famille. La place revient à la phrase.
+- **Pas de marqueurs d'état** : ils vivent dans le dépliant.
+
+### `pourquoi` : ÉTAT chiffré, puis CONSÉQUENCE chiffrée
+
+Patron imposé, tous leviers confondus :
+
+> « Le prix est déjà 8 % sous le marché. Négocier 5 % de plus porterait le
+> rendement à 6,1 %. »
+
+⚠️ **Une phrase sans aucun chiffre ne justifie rien** — elle paraphrase le titre.
+Les précédentes étaient toutes de ce genre (« chaque euro négocié augmente
+directement rendement et cash-flow »). Tout vient de données DÉJÀ calculées
+(rendement et cash-flow après action, écart au marché, montants) : aucun appel
+supplémentaire, aucune IA, phrases déterministes.
+
+- **Le levier prix rédige dans `carte()`, pas chez l'appelant** : seule `carte`
+  rejoue les blocs au prix cible, donc seule elle connaît le rendement APRÈS.
+  Les appelants passent un `motif` (`dejaAchat` / `flip` / `bloque`), elle rédige.
+- **« déjà X % sous le marché » n'est écrit que si l'écart est connu ET négatif** :
+  sans DVF exploitable `ecartPrixMarche` rend `null`, la phrase se replie alors
+  sur ce qu'on sait vraiment.
+- **Cash-flows en `formatEurosSigned`**, jamais `formatEuros` : ce sont des flux
+  signés, et `formatEuros` rend un trait d'union ASCII sur un négatif au lieu du
+  vrai signe moins.
+
+⚠️ **`pourquoi` est PERSISTÉ** dans `analyse_ia` : les biens déjà analysés
+gardent leur ancienne phrase générique jusqu'à une relance d'analyse.
+
+### ⚠️ Levier financement : le seuil vert n'implique PAS un déficit
+
+Depuis que le levier cible le seuil vert du profil (et non zéro), il se
+déclenche aussi sur un cash-flow **positif mais sous le seuil** : +40 €/mois
+avec un seuil à +100 le fait apparaître.
+
+Le premier fait affirmait alors « La mensualité dépasse ce que le bien encaisse »
+et affichait « −40 € » — deux mensonges sur un cash-flow positif. Deux
+formulations distinctes désormais, choisies sur le SIGNE et non sur le
+déclenchement :
+
+| `cashflowAvant` | Fait affiché |
+|---|---|
+| < 0 | « La mensualité dépasse ce que le bien encaisse » |
+| ≥ 0, < seuil | « Le cash-flow reste sous ton seuil » (l'opération s'autofinance) |
+
+⚠️ Même piège sur « la mensualité redescend au niveau des loyers » : vrai
+seulement si le seuil vaut 0. Au-delà, elle redescend SOUS les loyers.
+
+### Levier travaux : le loyer post-rénovation n'est PAS borné par le marché
+
+`loyerCible = loyer × (1 + LOYER_BOOST_RENO)` (+12 %), **sans plafond ANIL** —
+contrairement au levier loyer qui borne au haut de fourchette. Ce n'est pas un
+oubli : `buildBlocLocation` est appelé avec `renovePremium: true`, qui neutralise
+explicitement la pénalité « loyer optimiste », au motif documenté qu'un bien
+refait à neuf se loue au-dessus de la fourchette sans que ce soit un excès.
+
+⚠️ Ne pas « corriger » en ajoutant un plafond marché : les deux leviers ne
+répondent pas à la même question (aligner sur le marché vs sortir du marché par
+la rénovation).
+
+### ⚠️ Levier loyer : « marge jusqu'au haut de fourchette » ≠ « sous le marché »
+
+Le levier loyer vise le **haut de la fourchette ANIL**, borné à `LOYER_UPLIFT_MAX`
+(+15 %). Il se déclenche donc dès qu'il reste de la marge jusqu'à ce plafond —
+**y compris sur un loyer déjà supérieur à la moyenne du secteur.**
+
+La phrase et l'argument affirmaient pourtant « Ton loyer est sous le marché ».
+Constaté en vrai : un bien retenu à 1 254 €/mois pour une référence ANIL à
+1 127 € — soit **+11 % au-dessus** de la moyenne — que l'écran déclarait sous le
+marché, alors que le panneau « Détail du calcul du loyer » affichait « Écart au
+marché +11 % » deux clics plus loin. Deux écrans, deux affirmations opposées sur
+la même donnée.
+
+La position se mesure désormais contre `refCC.medianM2 × surface` (la médiane,
+CC meublé, corrigée de la surface — exactement le « Loyer de référence meublé »
+du panneau de détail), et non contre `loyerMaxAnil` :
+
+| Écart à la médiane | Formulation |
+|---|---|
+| ≤ −3 % | « Le loyer est X % sous la moyenne du secteur. » |
+| entre −3 et +3 % | « Le loyer est dans la moyenne du secteur, dont le haut de fourchette monte à Y. » |
+| ≥ +3 % | « Le loyer dépasse déjà la moyenne de X %, mais le haut de fourchette monte à Y. » |
+
+⚠️ `bornéParRealisme` (`loyerCible < loyerMaxAnil`) reste utilisé, mais **pour son
+seul usage juste** : signaler que le plein potentiel demande un changement de
+locataire. Ne pas s'en resservir comme preuve d'une position sous le marché — il
+ne dit rien de la position du loyer, seulement du bridage de la cible.
 - **Chevron** animé (rotation 180° à l'ouverture), visible aux DEUX tailles.
+
+### `chiffreCle` : le chiffre qui COMPLÈTE l'action, sans la répéter
+
+Un seul chiffre par carte, en tag `rounded-md` teinté, à gauche du chevron.
+
+| Levier | Chiffre | Pourquoi celui-là |
+|---|---|---|
+| prix, loyer | `pivot.delta` (`−9 %`, `+15 %`) | le titre donne la cible en euros, jamais l'écart |
+| travaux, financement | Δ cash-flow (`+ 520 €/mois`) | `buildPivot` ne rend pas de delta pour eux, et leur effort EST déjà le titre (« Rénove pour ≈ 24 000 € ») — le répéter à droite ne dirait rien |
+
+⚠️ **Sans ce repli, deux cartes sur quatre auraient une colonne droite vide** :
+`buildPivot` ne produit un `delta` que pour prix et loyer.
+
+⚠️ **La teinte suit le SENS** (`CHIFFRE_TONE`) : emerald si le levier améliore,
+red s'il dégrade. Un tag toujours vert finirait par ne plus rien dire — c'est
+exactement ce qui avait fait retirer les couleurs de levier. Les deltas de pivot
+sont des gains par construction, le moteur ne proposant que des mouvements
+favorables.
+
+⚠️ Le delta n'est plus affiché dans le `GroupHeader` du dépliant : il est
+**déplacé**, pas dupliqué. L'afficher aux deux endroits le répéterait à quinze
+pixels d'intervalle une fois la carte ouverte.
+
+⚠️ **Deux lignes, et deux seulement.** La carte en a porté jusqu'à sept
+(description, trois pastilles d'état, deux deltas chiffrés, trésorerie à
+engager). Une liste de recommandations se parcourt, elle ne se compare pas :
+tout le reste vit derrière le clic. Conséquence assumée : on ne classe plus les
+leviers et un levier au caveat rédhibitoire ne se distingue plus sans ouvrir.
 
 ### Pourquoi le levier n'a plus de couleur propre
 
@@ -225,36 +341,47 @@ d'icône. Supprimé pour deux raisons :
 La couleur est rendue à son seul job : dire si un chiffre est un gain (emerald),
 une perte (red) ou sans effet (ink). Ne pas rétablir de teinte par levier.
 
-### Bloc d'impact : les DEUX mesures, toujours
+### `montantEngage` : où il est passé
 
-`impacts(reco)` rend **toujours deux lignes**, Rendement net puis Cash-flow,
-plus « À engager » quand `montantEngage` est présent.
+La rangée repliée a porté un temps un bloc de deux mesures comparables
+(rendement + cash-flow) et la trésorerie à engager. Tout est descendu dans le
+dépliant avec le passage à deux lignes.
 
-⚠️ L'ancienne version rendait UN badge en basculant d'unité selon le levier :
-« +0,7 % rdt » pour le prix, « + 36 €/mois » pour le financement. La colonne
-mélangeait donc deux unités et **on ne pouvait pas comparer deux cartes** —
-alors que ranger les leviers est précisément le job de l'écran.
+⚠️ **`montantEngage` ne doit pas disparaître pour autant** : c'est une SORTIE de
+trésorerie (cf. le commentaire du champ dans `analyse/types.ts`), rendu en
+`ink-700` neutre dans « Ce que ça change », jamais en vert. Un écran qui
+n'affiche que le gain sans l'argent à sortir ment sur l'arbitrage.
 
-- Un levier qui ne bouge pas un indicateur affiche **« inchangé »** (`ink-400`),
-  pas « +0,0 % » : c'est une information (le financement ne touche pas le
-  rendement intrinsèque du bien), pas un trou à masquer. Seuils :
-  `SEUIL_DELTA_RENDEMENT` (0,1 pt) et `SEUIL_DELTA_CASHFLOW` (1 €/mois).
-- **`montantEngage` est une SORTIE de trésorerie** : rendu en `ink-700` neutre
-  sous un filet, jamais en vert (cf. le commentaire du champ dans
-  `analyse/types.ts`). Une carte qui n'afficherait que le gain sans l'argent à
-  sortir mentirait sur l'arbitrage.
-- Le signe du delta de rendement est posé à la main sur la valeur absolue :
-  `formatPercent` rendrait un trait d'union ASCII sur un négatif, pas le vrai
-  signe moins.
-- Le bloc est détaché par un **séparateur** et non par un fond : `ink-50` vaut
-  `#fafafd`, quasi blanc, donc invisible sur une carte blanche. Le trait suit la
-  mise en page — `border-t` quand le bloc passe sous le texte en mobile,
-  `sm:border-l` quand il devient une colonne.
+### Accordéon : ce qui est obligatoire et pourquoi
 
-⚠️ Les marqueurs et le bloc d'impact vivent dans la même rangée mais la carte
-passe en **`flex-col` sous `sm`** : à 375 px, une colonne de droite `shrink-0`
-ne laissait qu'une soixantaine de pixels au titre, qui se cassait sur quatre
-lignes (AGENTS.md, « les quatre pièges du mobile », n°4).
+Quatre points relevés à l'audit et absents à l'origine. Ils ne sont pas
+décoratifs — ne pas les retirer en « nettoyant » les classes.
+
+- **`aria-expanded`** sur la gâchette : sans lui, un lecteur d'écran annonce
+  « bouton » sans dire si la carte est ouverte. **`aria-controls`** la relie à la
+  région déployée, qui porte `role="region"` + `aria-labelledby` pointant sur le
+  titre. Identifiants dérivés de **`useId()`**, jamais de l'index.
+- **`cursor-pointer` explicite** : Tailwind v4 a retiré ce reset sur `button`,
+  le curseur restait donc une flèche sur une carte cliquable.
+- **Anneau de focus** `focus-visible:ring-2 ring-accent-500/40 ring-inset` — la
+  convention du projet. Sans lui, la navigation au clavier ne montre plus où
+  elle est, et « retirer les anneaux de focus » est un anti-pattern nommé.
+  ⚠️ `element.focus()` en JS ne déclenche PAS `:focus-visible` sous Chrome, qui
+  le réserve au clavier : une vérification programmatique conclura à tort que
+  l'anneau manque. Tester avec une vraie touche Tab.
+- **`motion-reduce:transition-none`** sur la rotation du chevron. La rotation
+  porte l'information « ouvert / fermé », donc elle reste par défaut ; elle est
+  coupée pour qui demande moins d'animation, l'état restant annoncé par
+  `aria-expanded`.
+
+La bordure de la carte fonce au survol (`hover:border-ink-200`) : c'est le
+signifiant de cliquabilité, sans ajouter ni texte ni icône.
+
+⚠️ **Le vide à droite de la carte est normal**, ne pas le « corriger » en
+réduisant la largeur de la liste : une rangée pleine largeur avec chevron à
+l'extrême droite est la convention de l'accordéon (réglages iOS, FAQ). Resserrer
+la liste la désalignerait de la sous-pill Playground, qui a besoin de la largeur
+pour ses courbes.
 
 ## Dépliant (`LevierDetail`) : DEUX zones, une seule teinte
 
@@ -355,9 +482,14 @@ rendement) : **`docs/reference/simulation-financiere.md`**, section
   curseur remettrait l'apport à sa valeur d'origine à chaque mouvement du
   curseur de prix.
 - ⚠️ **Le héros du panneau (« Rendement net simulé ») ne bouge pas** avec
-  l'apport. Une mention l'annonce dès que l'apport s'écarte du plan, et le
-  panneau porte les deux lignes que l'apport pilote vraiment : **Mensualité** et
-  **Emprunt**. Sans elles, le curseur passe pour cassé.
+  l'apport — il divise par le coût de l'opération, pas par le financement. Les
+  deux lignes qui répondent au curseur sont **Cash-flow mensuel** et
+  **Mensualité** ; ne pas retirer la seconde sans lui substituer un autre
+  indicateur sensible au financement.
+  **Emprunt** a été retiré du panneau : à taux, durée et assurance figés, la
+  mensualité vaut le capital × une constante (l'assurance est elle-même un %
+  du capital initial) — les deux lignes portaient la même information dans deux
+  unités, et l'euro par mois est la seule comparable au cash-flow juste au-dessus.
 - ⚠️ **Courbe rendement MASQUÉE sur l'axe apport** : elle serait une droite
   horizontale, qu'on lirait comme « rien ne s'améliore ». Seule la courbe
   cash-flow s'affiche, en pleine largeur, et le sous-titre dit pourquoi.
@@ -375,6 +507,32 @@ au-dessus d'elles est à apport figé.
 Les titres des deux courbes (`ThresholdChart`) sont sous le niveau H3 : ils
 utilisent `LABEL_BLOC` et non un `font-display text-sm`, qui n'existe nulle
 part dans l'échelle typographique.
+
+⚠️ **La grille reste à DEUX colonnes sur l'axe apport**, où seule la courbe
+cash-flow s'affiche : elle garde ainsi exactement la taille des deux autres. En
+pleine largeur, le même graphe changeait d'échelle d'un facteur à l'autre et
+devenait incomparable.
+
+### Étiquettes de courbe : l'« Annonce » cède, jamais la valeur courante
+
+Deux pastilles cohabitent sur chaque courbe — la valeur COURANTE (accent, suit
+le curseur) et le repère ANNONCE (blanc, au prix d'origine). Elles étaient
+placées chacune de son côté sans se connaître et se chevauchaient dès que le
+curseur approchait du prix d'annonce, c'est-à-dire **au démarrage**, le cas le
+plus fréquent.
+
+La géométrie de l'étiquette courante (`boiteCourante`) est donc hissée hors du
+JSX pour que celle de l'annonce puisse l'éviter.
+
+- **C'est l'« Annonce » qui se déplace.** La courante suit le curseur : la
+  bouger ferait sauter l'étiquette qu'on est justement en train de lire.
+- ⚠️ **Le déplacement se cale sur la BOÎTE de l'étiquette courante, pas sur le
+  point d'annonce.** Un « 6 px sous mon point » ne dégage rien quand les deux
+  points sont proches en ordonnée : constaté à 288 000 €, où les deux pastilles
+  se recouvraient encore de 1,5 px après déplacement. On place donc l'étiquette
+  entièrement sous (ou sur) la boîte adverse, en gardant le côté le plus proche
+  du point d'annonce pour que le lien visuel reste lisible.
+- Vérifié sur 30 positions du curseur : aucune collision.
 
 ### Le chiffre pivot est PORTÉ PAR LE TITRE
 

@@ -18,10 +18,11 @@ import type { ReactNode } from "react";
  * en-têtes de colonnes passent en `LABEL_BLOC` (IBM Plex `text-sm`), jamais en
  * Fraunces rapetissé.
  *
- * Deux exceptions assumées, documentées dans AGENTS.md : le verdict de
- * l'Analyse (`text-4xl sm:text-5xl`, c'est LE chiffre de l'écran) et l'en-tête
+ * Trois exceptions assumées, documentées dans AGENTS.md : le verdict de
+ * l'Analyse (`text-4xl sm:text-5xl`, c'est LE chiffre de l'écran), l'en-tête
  * compact de la fiche bien (`text-xl sm:text-2xl`, un titre logé entre une
- * vignette et une mini-carte).
+ * vignette et une mini-carte), et le titre d'une carte de recommandation
+ * (`TITRE_RECOMMANDATION`, seul titre en IBM Plex Sans — voir plus bas).
  *
  * Les micro-libellés en capitales des panneaux latéraux
  * (`text-xs uppercase tracking-wide`) ne font PAS partie de cette échelle :
@@ -39,6 +40,27 @@ export const TITRE_SECTION = "font-display text-lg font-semibold text-ink-900";
 
 /** Idem, pour un titre de groupe (`GroupTitle`) rendu hors heading. */
 export const TITRE_GROUPE = "font-display text-base font-semibold text-ink-900";
+
+/**
+ * EXCEPTION ASSUMÉE — titre d'une carte de recommandation (onglet Optimiser).
+ *
+ * Seul titre de l'app en **IBM Plex Sans** et non en Fraunces. La règle
+ * « tous les titres en `font-display` » vaut pour des titres qui NOMMENT une
+ * section ; ici la ligne est la recommandation elle-même, une phrase courte
+ * portant un montant (« Négocie à 240 000 € »). Fraunces y traitait les
+ * chiffres en caractères de titrage, ce qui donnait à une donnée un air de
+ * titre de magazine au milieu d'un écran de chiffres.
+ *
+ * `text-xl` et non `text-lg` : la carte n'a plus que deux lignes depuis qu'on
+ * l'a vidée de ses chiffres, le titre doit porter seul le poids de la carte.
+ * Il redescend d'un cran sous `sm` — à 375 px, le tag de droite et le chevron
+ * ne laissent qu'environ 180 px au titre, qui partait sur trois lignes.
+ *
+ * ⚠️ Ne PAS la basculer en Fraunces « pour rentrer dans le barème » : c'est un
+ * choix, pas un oubli. Ne pas l'employer non plus ailleurs — un titre qui nomme
+ * une section reste en `SectionHeader` / `GroupTitle`.
+ */
+export const TITRE_RECOMMANDATION = "font-sans text-lg font-semibold text-ink-900 sm:text-xl";
 
 /**
  * Étiquette d'un bloc SOUS le niveau groupe : titre de courbe, libellé de
