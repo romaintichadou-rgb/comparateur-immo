@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Banknote, Check, Landmark, RotateCcw, TrendingUp } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { computeDerived } from "@/lib/calculations";
 import { estimateFraisNotaire, lotsEffectifs } from "@/lib/estimates";
-import { resolveInputs, simulate } from "@/lib/simulation";
+import { resolveInputs, simulate, type InputsResolus, type SimulationResult } from "@/lib/simulation";
 import {
   referenceCCMeuble,
   typologieAnil,
@@ -24,8 +24,8 @@ import {
   type RendementSeuils,
   type RendementTone,
 } from "@/lib/analyse/scoring";
-import { formatEuros, formatPercent } from "@/lib/format";
-import { TabHeader } from "@/components/SectionHeader";
+import { formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,16 +79,34 @@ function toneForCashflow(v: number | null, seuils: CashflowSeuils): RendementTon
   return cashflowTone(v, seuils);
 }
 
+/**
+ * Préférence système « animations réduites », lue via `useSyncExternalStore`.
+ *
+ * ⚠️ Ne pas revenir à `useState` + `useEffect` qui recopie `mq.matches` : c'est
+ * exactement le motif que `react-hooks/set-state-in-effect` interdit (rendu
+ * initial à `false`, puis second rendu en cascade). `matchMedia` EST un store
+ * externe — il a un abonnement et un instantané synchrone, donc le hook prévu
+ * pour ça le lit sans frame intermédiaire.
+ */
+const REQUETE_MOUVEMENT_REDUIT = "(prefers-reduced-motion: reduce)";
+
+function sAbonnerMouvementReduit(auChangement: () => void): () => void {
+  const mq = window.matchMedia(REQUETE_MOUVEMENT_REDUIT);
+  mq.addEventListener("change", auChangement);
+  return () => mq.removeEventListener("change", auChangement);
+}
+
+const lireMouvementReduit = () => window.matchMedia(REQUETE_MOUVEMENT_REDUIT).matches;
+// Instantané SSR : `matchMedia` n'existe pas côté serveur, et « pas de
+// préférence connue » se joue sans réduction, comme le rendu initial d'avant.
+const lireMouvementReduitServeur = () => false;
+
 function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(
+    sAbonnerMouvementReduit,
+    lireMouvementReduit,
+    lireMouvementReduitServeur
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -259,9 +277,6 @@ function ThresholdChart({
   const scaleX = (v: number) => PAD.left + ((v - xMin) / (xMax - xMin || 1)) * PLOT_W;
   const scaleY = (v: number) => PAD.top + PLOT_H - ((v - yMin) / (yMax - yMin || 1)) * PLOT_H;
 
-  const seuilVertY = scaleY(thresholds.vert);
-  const seuilRougeY = scaleY(thresholds.rouge);
-
   const findCrossingX = (threshold: number): number | null => {
     for (let i = 0; i < data.length - 1; i++) {
       const y0 = getY(data[i]);
@@ -276,10 +291,6 @@ function ThresholdChart({
   };
   const crossVertX = findCrossingX(thresholds.vert);
   const crossRougeX = findCrossingX(thresholds.rouge);
-
-  const firstY = getY(data[0]);
-  const lastY = getY(data[data.length - 1]);
-  const isIncreasing = firstY != null && lastY != null && lastY > firstY;
 
   const validPoints = data
     .map((d, i) => ({ x: d.x, y: getY(d), i }))
@@ -334,23 +345,26 @@ function ThresholdChart({
 
   const uid = title.replace(/\s/g, "");
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      const svg = svgRef.current;
-      if (!svg) return;
-      const rect = svg.getBoundingClientRect();
-      const mouseX = ((e.clientX - rect.left) / rect.width) * CHART_W;
-      const dataX = xMin + ((mouseX - PAD.left) / PLOT_W) * (xMax - xMin);
-      let closest = 0;
-      let minDist = Infinity;
-      for (let i = 0; i < data.length; i++) {
-        const dist = Math.abs(data[i].x - dataX);
-        if (dist < minDist) { minDist = dist; closest = i; }
-      }
-      onHover(closest);
-    },
-    [data, xMin, xMax, onHover],
-  );
+  // ⚠️ Fonction simple, PAS un `useCallback` : ce composant retourne tôt
+  // (`yValues.length === 0`), donc tout hook placé ici serait appelé de façon
+  // conditionnelle — React planterait dès qu'une série passerait de vide à
+  // non vide. Et la mémoïsation n'achetait rien : le handler ne part que sur
+  // un élément DOM natif, dont l'identité ne déclenche aucun rendu (ses
+  // voisins `onMouseLeave`/`onTouchMove` sont d'ailleurs déjà inline).
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const mouseX = ((e.clientX - rect.left) / rect.width) * CHART_W;
+    const dataX = xMin + ((mouseX - PAD.left) / PLOT_W) * (xMax - xMin);
+    let closest = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < data.length; i++) {
+      const dist = Math.abs(data[i].x - dataX);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    }
+    onHover(closest);
+  };
 
   const ariaLabel = `${title} : ${validPoints.length > 0 ? formatY(validPoints[0].y) : "—"} à ${validPoints.length > 0 ? formatY(validPoints[validPoints.length - 1].y) : "—"} pour ${formatX(xMin)} à ${formatX(xMax)}. Valeur actuelle ${formatX(currentX)} : ${currentY != null ? formatY(currentY) : "—"}. Seuil vert : ${formatY(thresholds.vert)}, seuil rouge : ${formatY(thresholds.rouge)}.`;
 
@@ -796,15 +810,32 @@ export default function PlaygroundView({
 }) {
   const [facteur, setFacteur] = useState<Facteur>("prix");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [refCC, setRefCC] = useState<ReferenceCC | null>(null);
-  const [anilLoading, setAnilLoading] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
 
   const [comboPrix, setComboPrix] = useState(apartment.prix ?? 0);
   const [comboLoyer, setComboLoyer] = useState(apartment.loyer_retenu ?? 0);
 
-  useEffect(() => { setComboPrix(apartment.prix ?? 0); }, [apartment.prix]);
-  useEffect(() => { setComboLoyer(apartment.loyer_retenu ?? 0); }, [apartment.loyer_retenu]);
+  // Les curseurs repartent de la valeur du bien dès qu'elle change (sauvegarde,
+  // ré-estimation). Ajustement PENDANT LE RENDU plutôt que dans un effet —
+  // le motif que React recommande pour « réinitialiser un état sur changement
+  // de prop », et le même que celui d'`ApartmentDetail.tsx`. Un effet affichait
+  // l'ancienne valeur pendant une frame avant de basculer, ce que
+  // `react-hooks/set-state-in-effect` signale comme un rendu en cascade.
+  // La garde `!==` est ce qui empêche la boucle : le second rendu ne change
+  // plus rien.
+  const prixDuBien = apartment.prix ?? 0;
+  const [prixDuBienVu, setPrixDuBienVu] = useState(prixDuBien);
+  if (prixDuBien !== prixDuBienVu) {
+    setPrixDuBienVu(prixDuBien);
+    setComboPrix(prixDuBien);
+  }
+
+  const loyerDuBien = apartment.loyer_retenu ?? 0;
+  const [loyerDuBienVu, setLoyerDuBienVu] = useState(loyerDuBien);
+  if (loyerDuBien !== loyerDuBienVu) {
+    setLoyerDuBienVu(loyerDuBien);
+    setComboLoyer(loyerDuBien);
+  }
 
   const apt = apartment;
   const seuilsRendement = seuilsRendementFromSettings(settings);
@@ -815,31 +846,49 @@ export default function PlaygroundView({
   const hasLoyer = apt.loyer_retenu != null && apt.loyer_retenu > 0;
   const hasPrix = apt.prix != null && apt.prix > 0;
 
+  const typoAnil = typologieAnil(apt.type_bien, apt.nb_pieces, immeuble, apt.surface_m2);
+  /**
+   * Clé du résultat ANIL ATTENDU — `null` s'il n'y a rien à interroger.
+   *
+   * ⚠️ `apt.id` en fait partie : la route résout le périmètre depuis le bien
+   * stocké, la clé ne peut donc pas se réduire à la commune.
+   */
+  const cleAnil =
+    apt.code_insee && hasSurface
+      ? `${apt.id}|${typoAnil}|${surface}|${apt.nb_lots ?? ""}|${immeuble}`
+      : null;
+
+  // ⚠️ `refCC` et `anilLoading` sont DÉDUITS du couple (clé attendue, clé
+  // reçue), ils ne sont plus posés dans le corps de l'effet — ce que
+  // `react-hooks/set-state-in-effect` interdit, chaque `setState` synchrone
+  // provoquant un rendu en cascade. Deux bugs tombent avec :
+  //  - un résultat obtenu pour un bien/une typologie précédente ne peut plus
+  //    s'afficher comme s'il concernait la configuration courante ;
+  //  - le drapeau de chargement ne peut plus rester bloqué à `true` quand les
+  //    conditions tombent en plein vol (la requête était annulée par
+  //    `cancelled`, donc plus personne ne le remettait à `false`).
+  const [resultatAnil, setResultatAnil] = useState<{ cle: string; ref: ReferenceCC | null } | null>(null);
+  const resultatAJour = cleAnil != null && resultatAnil?.cle === cleAnil;
+  const refCC = resultatAJour ? (resultatAnil?.ref ?? null) : null;
+  const anilLoading = cleAnil != null && !resultatAJour;
+
   useEffect(() => {
-    if (!apt.code_insee || !hasSurface) { setRefCC(null); return; }
-    setAnilLoading(true);
-    const typo = typologieAnil(apt.type_bien, apt.nb_pieces, immeuble, apt.surface_m2);
+    if (!cleAnil) return;
     let cancelled = false;
-    fetch(`/api/loyer-reference?apartment_id=${encodeURIComponent(apt.id)}&typologie=${typo}`)
+    fetch(`/api/loyer-reference?apartment_id=${encodeURIComponent(apt.id)}&typologie=${typoAnil}`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
         const ref: LoyerReference | null = data.ref ?? null;
-        if (ref) {
-          const surfaceLogement = immeuble
-            ? surface / lotsEffectifs(apt.nb_lots, surface)
-            : surface;
-          setRefCC(referenceCCMeuble(ref, surfaceLogement, typo));
-        } else {
-          setRefCC(null);
-        }
-        setAnilLoading(false);
+        const surfaceLogement = immeuble ? surface / lotsEffectifs(apt.nb_lots, surface) : surface;
+        setResultatAnil({
+          cle: cleAnil,
+          ref: ref ? referenceCCMeuble(ref, surfaceLogement, typoAnil) : null,
+        });
       })
-      .catch(() => { if (!cancelled) { setRefCC(null); setAnilLoading(false); } });
+      .catch(() => { if (!cancelled) setResultatAnil({ cle: cleAnil, ref: null }); });
     return () => { cancelled = true; };
-    // `apt.id` en dépendance : la route résout le périmètre depuis le bien
-    // stocké, la clé de cache ne peut donc plus être la seule commune.
-  }, [apt.id, apt.code_insee, apt.type_bien, apt.nb_pieces, apt.surface_m2, apt.nb_lots, immeuble, surface, hasSurface]);
+  }, [cleAnil, apt.id, apt.nb_lots, typoAnil, immeuble, surface]);
 
   const loyerRange: [number, number] | null = useMemo(() => {
     if (!refCC || !hasSurface) return null;
@@ -911,23 +960,28 @@ export default function PlaygroundView({
     }, 150);
   }, [facteur]);
 
+  const comboSim = useMemo(() => {
+    if (!hasPrix || !hasLoyer) return null;
+    const modified = { ...apt } as ApartmentWithComputed;
+    modified.prix = comboPrix;
+    modified.frais_notaire_estimes = estimateFraisNotaire(comboPrix, apt.etat_bien ?? "ancien") ?? 0;
+    modified.loyer_retenu = comboLoyer;
+    const derived = computeDerived(modified);
+    return simulate(derived, resolveInputs(apt.simulation_inputs, settings));
+  }, [apt, comboPrix, comboLoyer, settings, hasPrix, hasLoyer]);
+
+  const resolus = useMemo(() => resolveInputs(apt.simulation_inputs, settings), [apt.simulation_inputs, settings]);
+
   if (!hasPrix) {
     return (
-      <div className="space-y-5">
-        <TabHeader title="Playground" subtitle="Visualisez à quel prix ou loyer votre investissement s'améliore" />
-        <div className="rounded-xl border border-ink-100 bg-white p-8 text-center text-sm text-ink-500">
-          Ajoutez un prix d&apos;achat pour utiliser le Playground.
-        </div>
+      <div className="rounded-xl border border-ink-100 bg-white p-8 text-center text-sm text-ink-500">
+        Ajoutez un prix d&apos;achat pour utiliser le Playground.
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <TabHeader
-        title="Playground"
-        subtitle="Visualisez à quel prix ou loyer votre investissement s'améliore"
-      />
 
       {/* Combo simulator — above charts */}
       {hasPrix && hasLoyer && (
@@ -944,6 +998,11 @@ export default function PlaygroundView({
           onComboLoyerChange={setComboLoyer}
           dvfMedianM2={dvfMedianM2}
         />
+      )}
+
+      {/* KPI summary — updates live with sliders */}
+      {comboSim && (
+        <PlaygroundKpiSummary sim={comboSim} resolus={resolus} />
       )}
 
       {/* Factor toggle */}
@@ -1024,5 +1083,65 @@ export default function PlaygroundView({
         </div>
       )}
     </div>
+  );
+}
+
+function PlaygroundKpiSummary({ sim, resolus }: { sim: SimulationResult; resolus: InputsResolus }) {
+  const enrichissementNet = sim.annees[sim.annees.length - 1]?.enrichissement ?? null;
+  const pointMort = sim.annees.findIndex((a) => a.enrichissement > 0);
+
+  const kpis: { label: string; value: string; detail: string; icon: React.ReactNode }[] = [
+    {
+      label: "TRI",
+      value: sim.tri != null ? formatPercent(sim.tri) : "—",
+      detail: "Taux de rendement interne",
+      icon: <TrendingUp className="h-4 w-4 text-accent-500" />,
+    },
+    {
+      label: "Cash-flow moyen",
+      value: formatEurosSigned(sim.cashflowMensuelMoyen),
+      detail: "Mensuel après impôt",
+      icon: <Banknote className="h-4 w-4 text-emerald-500" />,
+    },
+    {
+      label: "Enrichissement net",
+      value: enrichissementNet != null ? formatEuros(Math.round(enrichissementNet)) : "—",
+      detail: `Au terme (${sim.annees.length} ans)`,
+      icon: <Landmark className="h-4 w-4 text-violet-500" />,
+    },
+    {
+      label: "Point mort",
+      value: pointMort >= 0 ? `${pointMort + 1} ans` : "—",
+      detail: "Enrichissement > 0",
+      icon: <Check className="h-4 w-4 text-sky-500" />,
+    },
+  ];
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+          Simulation financière
+        </h3>
+        <p className="mt-0.5 text-[10px] text-ink-400">
+          Hypothèses : taux {resolus.tauxCreditPct} %, durée {resolus.dureeAnnees} ans, TMI{" "}
+          {resolus.tmiPct} %
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className="flex items-start gap-3 rounded-xl border border-ink-100 bg-white p-4">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-50">
+              {kpi.icon}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-ink-500">{kpi.label}</p>
+              <p className="font-mono text-lg font-semibold tabular-nums text-ink-900">{kpi.value}</p>
+              <p className="text-[10px] text-ink-400">{kpi.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

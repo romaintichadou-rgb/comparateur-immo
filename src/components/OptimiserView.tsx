@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   AlertTriangle,
   Banknote,
   Check,
+  ChevronDown,
   Hammer,
   KeyRound,
   Landmark,
@@ -26,21 +27,6 @@ import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
 import { formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
 
-/**
- * Onglet "Optimiser" — PRESCRIPTIF, orienté DÉCISION + RENTABILITÉ (pas le
- * score). Deux modes selon le verdict actuel :
- *  - verdict ≠ "Achète" → les actions pour EN FAIRE UN ACHAT (le levier prix
- *    dit le prix exact à négocier pour basculer à "Achète").
- *  - verdict = "Achète" → comment ACHETER MIEUX / augmenter la rentabilité.
- * Purement informatif : ne modifie RIEN sur le bien (voir recommandations.ts).
- *
- * Un levier À LA FOIS, sélectionné par onglet. L'écran sert à AGIR sur un
- * levier, pas à les comparer : le moteur les a déjà classés (prix en tête,
- * financement en dernier) et la vue d'ensemble vit dans l'onglet Synthèse.
- * Ordre de lecture imposé : le changement → les chiffres impactés → les
- * arguments.
- */
-
 const LEVIER_ICON: Record<RecommandationLevier, typeof Banknote> = {
   prix: Banknote,
   travaux: Hammer,
@@ -48,35 +34,18 @@ const LEVIER_ICON: Record<RecommandationLevier, typeof Banknote> = {
   financement: Landmark,
 };
 
-const LEVIER_TAB_LABEL: Record<RecommandationLevier, string> = {
-  prix: "Prix",
-  travaux: "Travaux",
-  loyer: "Loyer",
-  financement: "Financement",
+const LEVIER_COLORS: Record<RecommandationLevier, { bg: string; text: string; border: string; badge: string }> = {
+  prix: { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-l-emerald-400", badge: "bg-emerald-50 text-emerald-700" },
+  travaux: { bg: "bg-amber-50", text: "text-amber-600", border: "border-l-amber-400", badge: "bg-amber-50 text-amber-700" },
+  loyer: { bg: "bg-sky-50", text: "text-sky-600", border: "border-l-sky-400", badge: "bg-sky-50 text-sky-700" },
+  financement: { bg: "bg-violet-50", text: "text-violet-600", border: "border-l-violet-400", badge: "bg-violet-50 text-violet-700" },
 };
 
-/** Tous les montants passent par `formatEuros` : il pose une espace INSÉCABLE
- * avant le « € », là où `toLocaleString(…) + " €"` met une espace ordinaire —
- * le symbole pouvait alors partir seul à la ligne dans ces colonnes étroites. */
 const fmtCashflow = formatEurosSigned;
-
 const fmtRendement = (n: number | null): string => (n == null ? "—" : formatPercent(n));
 const fmtEuros = (n: number): string => formatEuros(Math.round(n));
 const fmtPrixM2 = (n: number): string => `${formatEuros(Math.round(n))}/m²`;
 
-/**
- * Contexte du chiffre PIVOT — celui que l'investisseur contrôle sur ce levier
- * (le prix qu'il annonce, le loyer qu'il affiche, le budget qu'il fait chiffrer,
- * l'apport qu'il vire). Jamais une conséquence : rendement et cash-flow se
- * constatent, ils ne s'exécutent pas.
- *
- * La VALEUR CIBLE n'est pas ici : elle est portée par `reco.action`, qui est le
- * titre du panneau. Ce helper ne fournit que ce qui l'entoure — la valeur
- * actuelle et l'écart — pour ne jamais répéter la cible à côté du titre.
- *
- * `avant` n'existe que pour les leviers en transition (prix, loyer) : il n'y a
- * pas de budget travaux ni d'apport « avant ».
- */
 type Pivot = {
   label: string;
   avant?: string;
@@ -95,10 +64,7 @@ function buildPivot(reco: Recommandation): Pivot | null {
     const pct = Math.round((reco.loyerApres / reco.loyerAvant - 1) * 100);
     return { label: "Loyer actuel", avant: fmtEuros(reco.loyerAvant), delta: `+${pct} %` };
   }
-  if (reco.montantEngage != null) {
-    // Grandeur sèche : le montant est dans le titre, il n'y a rien à encadrer.
-    return null;
-  }
+  if (reco.montantEngage != null) return null;
   return null;
 }
 
@@ -152,6 +118,19 @@ function buildPairs(
   return pairs;
 }
 
+function impactBadge(reco: Recommandation): { label: string; tone: "up" | "down" | "neutral" } {
+  const dR = (reco.rendementApres ?? 0) - (reco.rendementAvant ?? 0);
+  if (Math.abs(dR) >= 0.001) {
+    const sign = dR > 0 ? "+" : "";
+    return { label: `${sign}${formatPercent(dR)} rdt`, tone: dR > 0 ? "up" : "down" };
+  }
+  const dCF = (reco.cashflowApres ?? 0) - (reco.cashflowAvant ?? 0);
+  if (Math.abs(dCF) >= 1) {
+    return { label: `${formatEurosSigned(dCF)}/mois`, tone: dCF > 0 ? "up" : "down" };
+  }
+  return { label: "Info", tone: "neutral" };
+}
+
 export default function OptimiserView({
   apartment: apt,
   settings,
@@ -160,20 +139,18 @@ export default function OptimiserView({
   onRelancer,
 }: {
   apartment: ApartmentWithComputed;
-  /** Profil investisseur — le popup de cash-flow rejoue `simulate()` sur le bien
-   * MODIFIÉ par le levier, il lui faut de quoi résoudre le profil emprunteur. */
   settings: AppSettings;
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
   onRelancer: () => void;
 }) {
-  const [actif, setActif] = useState(0);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const { open: openRendementDetail } = useRendementDetail();
   const { open: openCashflowDetail } = useCashflowDetail();
   const analyse = apt.analyse_ia;
   const immeuble = isImmeuble(apt.type_bien);
 
-  // --- États dégradés -----------------------------------------------------
+  // --- Degraded states -------------------------------------------------------
   if (!analyse || analyse.score_global == null) {
     return (
       <DegradedCard
@@ -217,84 +194,122 @@ export default function OptimiserView({
     );
   }
 
-  const index = Math.min(actif, recos.length - 1);
-  const reco = recos[index];
-
   return (
-    <LevierPanel
-      key={reco.levier + index}
-      reco={reco}
-      apt={apt}
-      seuilsRendement={seuilsRendement}
-      cashflowSeuils={cashflowSeuils}
-      onOpenRendement={openRendementDetail}
-      onOpenCashflow={openCashflowDetail}
-      settings={settings}
-      selecteur={<SelecteurLevier recos={recos} index={index} onSelect={setActif} />}
-    />
-  );
-}
-
-/**
- * Sélecteur de levier — contrôle SEGMENTÉ, pas une barre d'onglets.
- *
- * La page porte déjà une navigation par onglets (Synthèse / Analyse IA /
- * Optimiser…). Reprendre ici la même forme — pleine largeur, soulignement actif
- * — créait deux barres identiques à deux niveaux de hiérarchie différents, sans
- * rien pour les départager. Pire, elles ne se comportent pas pareil : les
- * onglets de page sont des liens qui changent l'URL, celui-ci est un état local.
- *
- * D'où : compact, aligné à gauche (largeur du contenu, pas de la page), fond
- * plein plutôt que soulignement, et rendu DANS le bandeau du levier — il
- * appartient visiblement au bloc qu'il pilote. Ne pas le réétirer sur toute la
- * largeur ni le remonter au-dessus du panneau.
- */
-function SelecteurLevier({
-  recos,
-  index,
-  onSelect,
-}: {
-  recos: Recommandation[];
-  index: number;
-  onSelect: (i: number) => void;
-}) {
-  return (
-    <div className="no-scrollbar -mx-1 mb-4 overflow-x-auto px-1 py-0.5">
-      <div
-        role="tablist"
-        aria-label="Leviers d'optimisation"
-        className="inline-flex w-max gap-1 rounded-lg bg-ink-100 p-1"
-      >
-        {recos.map((r, i) => {
-          const Icon = LEVIER_ICON[r.levier];
-          const on = i === index;
-          return (
-            <button
-              key={r.levier + i}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => onSelect(i)}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-600 ${
-                on
-                  ? "bg-white font-medium text-ink-900 ring-1 ring-ink-200"
-                  : "text-ink-600 hover:text-accent-700"
-              }`}
-            >
-              <Icon
-                className={`h-4 w-4 shrink-0 ${on ? "text-accent-600" : "text-ink-400"}`}
-                aria-hidden
-              />
-              {LEVIER_TAB_LABEL[r.levier]}
-            </button>
-          );
-        })}
-      </div>
+    <div className="space-y-3">
+      {recos.map((reco, i) => (
+        <LevierCard
+          key={reco.levier + i}
+          reco={reco}
+          apt={apt}
+          settings={settings}
+          seuilsRendement={seuilsRendement}
+          cashflowSeuils={cashflowSeuils}
+          expanded={expandedIndex === i}
+          onToggle={() => setExpandedIndex(expandedIndex === i ? null : i)}
+          onOpenRendement={openRendementDetail}
+          onOpenCashflow={openCashflowDetail}
+        />
+      ))}
     </div>
   );
 }
 
-function LevierPanel({
+// ---------------------------------------------------------------------------
+// LevierCard — compact summary + expandable detail
+// ---------------------------------------------------------------------------
+
+function LevierCard({
+  reco,
+  apt,
+  settings,
+  seuilsRendement,
+  cashflowSeuils,
+  expanded,
+  onToggle,
+  onOpenRendement,
+  onOpenCashflow,
+}: {
+  reco: Recommandation;
+  apt: ApartmentWithComputed;
+  settings: AppSettings;
+  seuilsRendement: RendementSeuils;
+  cashflowSeuils: CashflowSeuils;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenRendement: (apt: ApartmentWithComputed, seuils: RendementSeuils) => void;
+  onOpenCashflow: (apt: ApartmentWithComputed, seuils: CashflowSeuils, settings: AppSettings) => void;
+}) {
+  const Icon = LEVIER_ICON[reco.levier];
+  const colors = LEVIER_COLORS[reco.levier];
+  const badge = impactBadge(reco);
+
+  const badgeStyle =
+    badge.tone === "up"
+      ? "bg-emerald-50 text-emerald-700"
+      : badge.tone === "down"
+        ? "bg-red-50 text-red-700"
+        : "bg-ink-50 text-ink-500";
+
+  return (
+    <div
+      className={`overflow-hidden rounded-xl border border-l-4 transition-shadow ${colors.border} ${
+        expanded ? "border-ink-200 shadow-sm" : "border-ink-100"
+      } bg-white`}
+    >
+      {/* Summary row — always visible */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-ink-50/50 sm:gap-4"
+      >
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}
+        >
+          <Icon className={`h-5 w-5 ${colors.text}`} aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink-900">{reco.titre ?? reco.action}</p>
+          <p className="mt-0.5 line-clamp-1 text-xs text-ink-500">{reco.pourquoi}</p>
+        </div>
+        {reco.flipVersAchat && (
+          <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+            Achète
+          </span>
+        )}
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums ${badgeStyle}`}
+        >
+          {badge.label}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-ink-300 transition-transform duration-200 ${
+            expanded ? "rotate-180" : ""
+          }`}
+          aria-hidden
+        />
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <LevierDetail
+          reco={reco}
+          apt={apt}
+          settings={settings}
+          seuilsRendement={seuilsRendement}
+          cashflowSeuils={cashflowSeuils}
+          onOpenRendement={onOpenRendement}
+          onOpenCashflow={onOpenCashflow}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LevierDetail — expanded content (pairs, arguments, caveat)
+// ---------------------------------------------------------------------------
+
+function LevierDetail({
   reco,
   apt,
   settings,
@@ -302,28 +317,21 @@ function LevierPanel({
   cashflowSeuils,
   onOpenRendement,
   onOpenCashflow,
-  selecteur,
 }: {
   reco: Recommandation;
   apt: ApartmentWithComputed;
+  settings: AppSettings;
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
   onOpenRendement: (apt: ApartmentWithComputed, seuils: RendementSeuils) => void;
   onOpenCashflow: (apt: ApartmentWithComputed, seuils: CashflowSeuils, settings: AppSettings) => void;
-  settings: AppSettings;
-  /** Sélecteur de levier, rendu DANS le bandeau (voir SelecteurLevier). */
-  selecteur: ReactNode;
 }) {
   const pivot = buildPivot(reco);
   const pairs = buildPairs(reco, seuilsRendement, cashflowSeuils);
   const args = reco.arguments ?? [];
-  // La PRÉSENCE d'une source distingue une preuve (opposable, adossée à une
-  // donnée réelle) d'un argument de méthode (playbook). Voir types.ts.
   const preuves = args.filter((a) => a.source);
   const methode = args.filter((a) => !a.source);
 
-  // Bien modifié (COPIE) reconstruit depuis le patch du scénario, pour ouvrir
-  // les popups de détail avec les nouvelles valeurs. Jamais persisté.
   const modApt = reco.patch ? computeDerived({ ...apt, ...reco.patch }) : apt;
   const onClickFor = (kind: PairKind): (() => void) | undefined => {
     if (kind === "rendement") return () => onOpenRendement(modApt, seuilsRendement);
@@ -332,19 +340,11 @@ function LevierPanel({
   };
 
   return (
-    <section role="tabpanel" className="overflow-hidden rounded-xl border border-ink-100 bg-white">
-      {/* UNE seule section pour l'action et son impact.
-          1. L'action à faire — elle PORTE le chiffre pivot (`reco.action`), il
-             n'y a donc pas de carte pivot à côté : titre et carte auraient dit
-             la même chose. L'écart et la valeur actuelle complètent en second
-             plan, jamais en répétant la cible.
-          2. Les chiffres impactés — uniquement les CONSÉQUENCES, dans la même
-             section pour qu'action et impact se lisent d'un bloc. */}
-      <div className="border-b border-ink-100 bg-accent-50 p-5">
-        {selecteur}
-
+    <div className="border-t border-ink-100">
+      {/* Action + pivot + impact cards */}
+      <div className="bg-accent-50/50 p-5">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h3 className="font-display text-2xl font-semibold text-ink-900">{reco.action}</h3>
+          <h3 className="font-display text-lg font-semibold text-ink-900">{reco.action}</h3>
           {pivot?.delta && (
             <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-700">
               {pivot.delta}
@@ -352,23 +352,6 @@ function LevierPanel({
           )}
         </div>
 
-        {/* DEUX lignes, pas une. L'ancrage chiffré (le prix actuel, référence
-            du titre) et la raison du levier sont deux informations de nature
-            différente ; elles tenaient sur une seule ligne séparées par un
-            « · » en `ink-300` posé sur `accent-50`, invisible, si bien que
-            l'ensemble se lisait comme une phrase unique et bancale.
-
-            Le « : » remplace la juxtaposition « Prix affiché 270 000 € », où
-            le changement de police faisait seul office de séparateur. C'est
-            aussi la forme déjà employée ailleurs (« Mensualité hors
-            assurance : … » dans SimulationFinanciere) — pas une invention
-            locale. Le mono reste sur le montant : la charte le réserve aux
-            chiffres clés, et un prix en est un. */}
-        {/* L'écart au titre est porté par le CONTENEUR, pas par chaque ligne :
-            le levier financement n'a pas de pivot (son montant est une grandeur
-            sèche, déjà dans le titre) et n'affiche donc que la raison. Une marge
-            posée sur chaque `<p>` collait cette ligne 2px plus haut que sur les
-            leviers prix/loyer, selon celle qui se trouvait rendue en premier. */}
         <div className="mt-1.5 space-y-1">
           {pivot?.avant && (
             <p className="whitespace-nowrap text-sm text-ink-500">
@@ -376,7 +359,6 @@ function LevierPanel({
               <span className="tabular-nums text-ink-700">{pivot.avant}</span>
             </p>
           )}
-          {reco.pourquoi && <p className="max-w-2xl text-sm text-ink-600">{reco.pourquoi}</p>}
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -393,6 +375,7 @@ function LevierPanel({
         </div>
       </div>
 
+      {/* Caveat */}
       {reco.caveat && (
         <div
           className={`flex gap-2.5 border-y px-5 py-3 ${
@@ -406,10 +389,7 @@ function LevierPanel({
         </div>
       )}
 
-      {/* 3. Les arguments — « Les faits » (sourcés) puis « La méthode ».
-          Pas « Preuves » / « Arguments » : les items de méthode SONT aussi des
-          arguments, et « preuve » sonne opposable alors que sur le financement
-          il s'agit d'un diagnostic. */}
+      {/* Arguments */}
       {(preuves.length > 0 || methode.length > 0) && (
         <div className="space-y-6 p-5">
           {preuves.length > 0 && (
@@ -440,9 +420,13 @@ function LevierPanel({
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Shared small components
+// ---------------------------------------------------------------------------
 
 function SectionLabel({ titre, nombre }: { titre: string; nombre: number }) {
   return (
@@ -453,16 +437,6 @@ function SectionLabel({ titre, nombre }: { titre: string; nombre: number }) {
   );
 }
 
-/**
- * Un fait : chiffre-clé extrait en colonne, puis l'énoncé.
- *
- * La colonne du chiffre est de largeur FIXE pour que les chiffres s'alignent
- * d'un fait à l'autre — c'est tout l'intérêt de les sortir de la phrase.
- * Dimensionnée pour le plus long montant plausible (un apport à six chiffres),
- * et en `nowrap` pour qu'un « € » isolé ne tombe jamais à la ligne. Le chiffre
- * est un BADGE à fond teinté (bg-ink-50), pas une colonne bornée par un trait
- * vertical — un diviseur ajoute une ligne à lire sans ajouter d'information.
- */
 function PreuveItem({ arg }: { arg: Argument }) {
   return (
     <li className="rounded-xl border border-ink-100 bg-white p-4">
@@ -487,11 +461,6 @@ function PreuveItem({ arg }: { arg: Argument }) {
     </li>
   );
 }
-
-/**
- * Reprend le gabarit exact de `MetricCard` (AnalyseIA.tsx) — rounded-xl,
- * p-4, label sans capitales, valeur `text-2xl font-bold` en mono, lien de
- */
 
 function DegradedCard({
   titre,

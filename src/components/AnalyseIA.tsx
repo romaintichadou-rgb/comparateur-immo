@@ -1,19 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Clock, Info, Loader2, Sparkles } from "lucide-react";
-import { StatCard } from "@/components/StatCard";
+import { AlertTriangle, Clock, Loader2, Sparkles } from "lucide-react";
+import { StatCard, type StatCardTone } from "@/components/StatCard";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
-import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict, VerdictNiveau } from "@/lib/analyse/types";
+import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict } from "@/lib/analyse/types";
 import {
   DECISION_RING_STYLES,
   NOTE_TEXT_CLASS,
   SEUILS_RENDEMENT_DEFAUT,
+  avisDpeEnTete,
   blocCategorie,
+  cashflowTone,
   noteTone,
+  rendementNetTone,
   DECISION_CHIP,
   type CashflowSeuils,
   type RendementSeuils,
@@ -23,11 +26,12 @@ import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/d
 import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
-import { formatDateTime, formatEuros, formatNombre, formatNote } from "@/lib/format";
+import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatNote, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderMarkdownBold } from "@/components/richText";
 import { TITRE_SECTION } from "@/components/SectionHeader";
 import { redirectionQuota } from "@/lib/quota";
+import { resolveInputs, simulate } from "@/lib/simulation";
 
 /** Repli si le profil investisseur n'a pas pu être chargé — les seuils réels
  * viennent toujours des réglages (prop `cashflowSeuils`). */
@@ -42,21 +46,6 @@ const HIGHLIGHTS_CASHFLOW_RE = /^Cash-flow mensuel/;
 /** Les highlights ont un habillage identique quelle que soit la tonalité —
  * seule la couleur de la valeur varie, et elle vient de `TONE_TEXT_CLASS`
  * (source unique). Ne pas réintroduire une table par tonalité ici. */
-
-const VERDICT_STYLES: Record<
-  VerdictNiveau,
-  { chip: string; text: string; icon: typeof AlertTriangle }
-> = {
-  alerte: { chip: "bg-red-100 text-red-700", text: "text-red-800", icon: AlertTriangle },
-  attention: { chip: "bg-amber-100 text-amber-700", text: "text-amber-800", icon: Info },
-  positif: { chip: "bg-emerald-100 text-emerald-700", text: "text-emerald-800", icon: CheckCircle2 },
-};
-
-const VERDICT_BG: Record<VerdictNiveau, string> = {
-  alerte: "bg-red-50/80",
-  attention: "bg-amber-50/80",
-  positif: "bg-emerald-50/80",
-};
 
 const CATEGORIE_TAG_STYLES: Record<ScoreTone, string> = {
   emerald: "bg-emerald-50 text-emerald-700 shadow-[inset_0_0_0_1px_rgba(4,120,87,.12)]",
@@ -77,6 +66,75 @@ const DECISION_STYLES: Record<
   negocie: { grad: "bg-gradient-to-r from-white to-amber-50", border: "border-amber-200", title: "text-amber-900", caption: "text-amber-700", trackStroke: "stroke-amber-100" },
   passe: { grad: "bg-gradient-to-r from-white to-red-50", border: "border-red-200", title: "text-red-900", caption: "text-red-700", trackStroke: "stroke-red-100" },
 };
+
+/**
+ * Échéance loi Climat résumée pour la carte KPI « DPE » — libellé court, là où
+ * `VERDICTS_DPE` (`scoring.ts`) porte la phrase longue de l'avis en tête et
+ * `LOI_CLIMAT` (`blocs/risque.ts`) celle du fait du bloc Risques. Trois
+ * formulations du MÊME calendrier : mettre les trois à jour ensemble.
+ */
+function dpeInfo(dpe: string): { sub: string; tone: StatCardTone } {
+  switch (dpe.trim().toUpperCase()) {
+    case "G": return { sub: "Interdit à la location", tone: "alerte" };
+    case "F": return { sub: "Interdit dès 2028", tone: "alerte" };
+    case "E": return { sub: "Interdit dès 2034", tone: "attention" };
+    case "D": return { sub: "OK, pas d'échéance proche", tone: "neutral" };
+    case "A": case "B": case "C": return { sub: "Aucune restriction", tone: "positif" };
+    default: return { sub: "Non renseigné", tone: "neutral" };
+  }
+}
+
+/** Titre-verdict de la card. Registre volontairement différent de
+ * `DECISION_CHIP` (« À écarter ») : la pastille CLASSE le bien pour les listes,
+ * ce titre ADRESSE le lecteur. Ne pas fusionner les deux tables. */
+const DECISION_TITRES: Record<Decision, string> = {
+  achete: "Achète",
+  negocie: "Achète — si tu négocies",
+  passe: "Passe ton chemin",
+};
+
+/** Repli de `onGoTab` — hors composant, sinon une nouvelle identité par rendu. */
+const NO_GO_TAB: GoTab = () => {};
+
+/**
+ * Phrase de justification sous le titre-verdict.
+ *
+ * ⚠️ C'est ELLE qui nomme le point décisif de l'écran, et c'est la raison pour
+ * laquelle l'en-tête ne réaffiche plus la liste des verdicts : le verdict
+ * rendement est empilé en tête par `buildVerdicts`, donc les deux `find`
+ * ci-dessous tombent toujours dessus en premier. Ajouter une branche qui cesse
+ * de citer un verdict rend cette information muette — la vérifier ici avant de
+ * réintroduire un affichage ailleurs.
+ */
+function raisonDecision(
+  score: number | null,
+  decision: Decision,
+  ecartPct: number | null,
+  verdicts: Verdict[]
+): string {
+  if (score == null) return "Données insuffisantes pour évaluer cette opportunité.";
+
+  if (decision === "passe") {
+    const alerte = verdicts.find((v) => v.niveau === "alerte");
+    return alerte
+      ? `${alerte.titre}. C'est rédhibitoire : une négociation ne le rattrape pas, mieux vaut chercher un autre bien.`
+      : "Trop de points faibles pour un investissement sain.";
+  }
+
+  if (decision === "achete") {
+    return ecartPct != null && ecartPct <= -5
+      ? `Aucun frein détecté, et un prix affiché ${Math.abs(ecartPct)} % sous les ventes comparables : un bon dossier, à sécuriser sans traîner.`
+      : "Aucun frein détecté : prix, rendement et risques sont alignés pour investir.";
+  }
+
+  if (ecartPct != null && ecartPct > 5) {
+    return `Le prix affiché est ${ecartPct} % au-dessus des ventes comparables du secteur. Négocie-le vers le marché : c'est là qu'est ta marge.`;
+  }
+  const attention = verdicts.find((v) => v.niveau === "attention");
+  return attention
+    ? `${attention.titre}. Le bien reste intéressant, mais négocie le prix d'achat pour compenser ce point.`
+    : "Bon dossier dans l'ensemble, mais la marge est mince. Une négociation du prix d'achat sécurise l'opération.";
+}
 
 const GAUGE_SIZE = 100;
 const GAUGE_STROKE = 8;
@@ -157,7 +215,7 @@ const GRAVITE_STYLES: Record<FaitGravite, { dot: string; value: string }> = {
 };
 
 
-type GoTab = (tab: "ia" | "optimiser" | "donnees" | "financiere" | "simulation", anchor?: string) => void;
+type GoTab = (tab: "ia" | "donnees" | "financiere" | "simulation" | "playground", anchor?: string) => void;
 
 export default function AnalyseIA({
   apartment,
@@ -185,6 +243,17 @@ export default function AnalyseIA({
   const router = useRouter();
   const analyse = apartment.analyse_ia;
   const immeuble = isImmeuble(apartment.type_bien);
+
+  /* ⚠️ Ces trois hooks doivent rester AU-DESSUS du `if (!analyse)` ci-dessous :
+     un composant qui retourne tôt ne peut plus déclarer de hook après
+     (`react-hooks/rules-of-hooks`). Ils alimentent la rangée de KPI, qui n'est
+     rendue que dans la branche « analyse présente ». */
+  const { open: openRendementDetail } = useRendementDetail();
+  const { open: openCashflowDetail } = useCashflowDetail();
+  const simuKpi = useMemo(
+    () => simulate(apartment, resolveInputs(apartment.simulation_inputs, settings)),
+    [apartment, settings],
+  );
 
   async function lancerPremiere() {
     setLoading(true);
@@ -260,53 +329,44 @@ export default function AnalyseIA({
 
   // --- Decision --------------------------------------------------------------
   const decision: Decision = score != null ? computeDecision(score, verdicts, ecartPct) : "passe";
-  const alerte = verdicts.find((v) => v.niveau === "alerte");
-  const attention = verdicts.find((v) => v.niveau === "attention");
-
-  let raison: string;
-  if (score == null) {
-    raison = "Données insuffisantes pour évaluer cette opportunité.";
-  } else if (decision === "passe") {
-    raison = alerte
-      ? `${alerte.titre}. C'est rédhibitoire : une négociation ne le rattrape pas, mieux vaut chercher un autre bien.`
-      : "Trop de points faibles pour un investissement sain.";
-  } else if (decision === "achete") {
-    raison = ecartPct != null && ecartPct <= -5
-      ? `Aucun frein détecté, et un prix affiché ${Math.abs(ecartPct)} % sous les ventes comparables : un bon dossier, à sécuriser sans traîner.`
-      : "Aucun frein détecté : prix, rendement et risques sont alignés pour investir.";
-  } else {
-    const surcote = ecartPct != null && ecartPct > 5;
-    raison = surcote
-      ? `Le prix affiché est ${ecartPct} % au-dessus des ventes comparables du secteur. Négocie-le vers le marché : c'est là qu'est ta marge.`
-      : attention
-        ? `${attention.titre}. Le bien reste intéressant, mais négocie le prix d'achat pour compenser ce point.`
-        : "Bon dossier dans l'ensemble, mais la marge est mince. Une négociation du prix d'achat sécurise l'opération.";
-  }
-
-  const titres: Record<Decision, string> = {
-    achete: "Achète",
-    negocie: "Achète — si tu négocies",
-    passe: "Passe ton chemin",
-  };
-
+  const raison = raisonDecision(score, decision, ecartPct, verdicts);
   const styles = DECISION_STYLES[decision];
 
-  const NIVEAU_PRIO: Record<string, number> = { alerte: 0, attention: 1, positif: 2 };
-  const ORIGINE_PRIO: Record<string, number> = { critere: 0, bloc: 1 };
-  const alertes = (analyse.verdicts ?? [])
-    .filter((v) => v.niveau !== "positif")
-    .sort((a, b) =>
-      (NIVEAU_PRIO[a.niveau] ?? 9) - (NIVEAU_PRIO[b.niveau] ?? 9)
-      || (ORIGINE_PRIO[a.origine ?? ""] ?? 9) - (ORIGINE_PRIO[b.origine ?? ""] ?? 9)
-    )
-    .slice(0, 3);
+  /* ⚠️ L'en-tête n'affiche PLUS la liste des verdicts, seulement l'interdiction
+     de louer (DPE F/G) — les autres se lisaient déjà à moins de 100 px : un
+     verdict `origine: "bloc"` répète une note de la rangée ci-dessous (rouge
+     ET cliquable, elle), et le verdict rendement est cité mot pour mot par
+     `raisonDecision`. Pire, `computeDecision` ignorant les alertes `bloc`, un
+     bien pouvait afficher « Aucun frein détecté » au-dessus d'une carte rouge.
+     Ne PAS remonter ce filtre dans `buildVerdicts` : la décision, la narration
+     et le frein d'Optimiser lisent TOUS les verdicts (cf. `types.ts`). */
+  const avisDpe = avisDpeEnTete(analyse.blocs?.risque?.dpeGes?.dpe);
 
-  // Blocs for flat sections
-  const blocsNotes = BLOC_ORDRE.map((k) => analyse.blocs?.[k]).filter((b): b is BlocAnalyse => b != null);
+  /* Deux listes, pas une : `blocsAffiches` porte TOUS les blocs présents (les
+     sections détaillées valent aussi pour un bloc non noté), `blocsAvecNote`
+     seulement ceux qui ont un chiffre à mettre dans la rangée de notes. La
+     rangée se filtrait elle-même à l'affichage tout en se gardant sur la
+     longueur de la liste non filtrée : un bien dont aucun bloc n'était noté
+     rendait une rangée vide avec sa marge. */
+  const blocsAffiches = BLOC_ORDRE.map((k) => analyse.blocs?.[k]).filter((b): b is BlocAnalyse => b != null);
+  const blocsAvecNote = blocsAffiches.filter((b): b is BlocAnalyse & { note: number } => b.note != null);
   const quartier = analyse.blocs?.quartier;
-  const blocs = quartier ? [...blocsNotes, quartier] : blocsNotes;
+  const blocs = quartier ? [...blocsAffiches, quartier] : blocsAffiches;
 
-  const goTab = onGoTab ?? (() => {});
+  const goTab = onGoTab ?? NO_GO_TAB;
+
+  /* Rangée de KPI — déplacée depuis l'en-tête de `ApartmentDetail`, où elle
+     restait visible sur les cinq onglets. Elle réutilise `ecartPct`, déjà
+     dérivé plus haut du bloc Prix : l'en-tête en gardait son propre calcul
+     (`kpiEcartPct`) sur la même source. */
+  const kpiCashflow = simuKpi?.cashflowMensuelMoyenLMNP ?? null;
+  const kpiAnneesExo = simuKpi?.anneesExonerees ?? 0;
+  const kpiDpe = dpeInfo(apartment.dpe);
+  const kpiFaitEcart = analyse.blocs?.prix?.faits?.find((f) => f.label === "Écart au prix de marché");
+  const kpiEcartTone: StatCardTone =
+    kpiFaitEcart?.gravite === "positif" ? "positif"
+      : kpiFaitEcart?.gravite === "attention" ? "attention"
+        : kpiFaitEcart?.gravite === "alerte" ? "alerte" : "neutral";
 
   return (
     <div className="space-y-0">
@@ -342,16 +402,16 @@ export default function AnalyseIA({
               </button>
             </div>
             <h2 className={`mt-2 font-display text-4xl font-semibold leading-snug sm:text-5xl ${styles.title}`}>
-              {titres[decision]}
+              {DECISION_TITRES[decision]}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-600">{raison}</p>
           </div>
           <VerdictGauge score={score} decision={decision} styles={styles} />
         </div>
 
-        {blocsNotes.length > 0 && (
+        {blocsAvecNote.length > 0 && (
           <div className="mt-6 flex flex-wrap items-baseline gap-x-8 gap-y-2 pt-1">
-            {blocsNotes.filter((b): b is BlocAnalyse & { note: number } => b.note != null).map((b) => {
+            {blocsAvecNote.map((b) => {
               const colorClass = NOTE_TEXT_CLASS[noteTone(b.note)];
               return (
                 <span key={b.cle} className="text-xs text-ink-400">
@@ -371,12 +431,14 @@ export default function AnalyseIA({
           </div>
         )}
 
-        {alertes.length > 0 && (
-          <ul className={`mt-6 gap-3 ${alertes.length === 1 ? "flex" : "grid grid-cols-1 sm:grid-cols-2"}`}>
-            {alertes.map((v, i) => (
-              <VerdictRow key={i} verdict={v} />
-            ))}
-          </ul>
+        {/* Rouge en dur : `enTete` n'est vrai que pour des entrées `alerte`
+            (invariant documenté sur `VERDICTS_DPE`), et un DPE F/G force de
+            toute façon la décision `passe`. */}
+        {avisDpe && (
+          <p className="mt-5 flex items-start gap-1.5 text-xs text-red-700">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            {avisDpe.detail}
+          </p>
         )}
 
         {quotaNotice && (
@@ -388,7 +450,39 @@ export default function AnalyseIA({
         )}
       </section>
 
-      {/* ── 2. Synthesis block ── */}
+      {/* ── 2. Rangée de KPI ── */}
+      <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatCard
+          label="Rendement net"
+          value={apartment.rendement_net == null ? "—" : formatPercent(apartment.rendement_net)}
+          sub="Net après charges et impôts"
+          tone={rendementNetTone(apartment.rendement_net, seuilsRendement)}
+          onClick={() => openRendementDetail(apartment, seuilsRendement)}
+        />
+        <StatCard
+          label="Cash-flow mensuel"
+          value={formatEurosSigned(kpiCashflow)}
+          sub={kpiCashflow == null ? "Données manquantes" : kpiAnneesExo > 1 ? `Moyen sur ${kpiAnneesExo} ans sans impôt` : "Net après impôt"}
+          tone={cashflowTone(kpiCashflow, cashflowSeuils)}
+          onClick={() => openCashflowDetail(apartment, cashflowSeuils, settings)}
+        />
+        <StatCard
+          label="Prix au m²"
+          value={apartment.prix_m2 == null ? "—" : `${formatEuros(apartment.prix_m2)}/m²`}
+          sub={ecartPct != null
+            ? `${ecartPct > 0 ? "+" : ""}${ecartPct} % vs marché local`
+            : "Pas de donnée de marché"}
+          tone={ecartPct != null ? kpiEcartTone : "neutral"}
+        />
+        <StatCard
+          label="DPE"
+          value={apartment.dpe.trim() === "" ? "—" : apartment.dpe.trim().toUpperCase()}
+          sub={kpiDpe.sub}
+          tone={kpiDpe.tone}
+        />
+      </div>
+
+      {/* ── 3. Synthesis block ── */}
       {analyse.synthese && (
         <div className="mt-6 rounded-xl bg-ink-100/40 px-5 py-4 text-sm leading-relaxed text-ink-700">
           {renderMarkdownBold(analyse.synthese)}
@@ -419,21 +513,6 @@ export default function AnalyseIA({
     </div>
   );
 }
-
-function VerdictRow({ verdict }: { verdict: Verdict }) {
-  const style = VERDICT_STYLES[verdict.niveau];
-  const Icon = style.icon;
-  return (
-    <li className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 ${VERDICT_BG[verdict.niveau]}`}>
-      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${style.chip.split(" ").pop()}`} aria-hidden />
-      <div className="min-w-0">
-        <p className={`text-[13px] font-semibold leading-snug ${style.text}`}>{verdict.titre}</p>
-        <p className="mt-0.5 text-xs leading-snug text-ink-600">{verdict.detail}</p>
-      </div>
-    </li>
-  );
-}
-
 
 // ── Flat Section (no card borders, divider-separated) ────────────────────────
 

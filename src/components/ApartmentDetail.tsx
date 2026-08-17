@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
+import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Loader2, Mail, MapPin, Pencil, Phone, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
 import {
   DPE_GES_VALEURS,
   ETATS_BIEN,
@@ -25,7 +25,7 @@ import {
   TF_JUSTIF_COMMUNE_PREFIX,
 } from "@/lib/estimates";
 import { formatAdressePostale, lienGoogleMaps } from "@/lib/adresse";
-import { formatApartmentTitle, formatDate, formatEuros, formatEurosSigned, formatNote, formatPercent, sanitizeJustification } from "@/lib/format";
+import { formatApartmentTitle, formatDate, formatEuros, formatNote, sanitizeJustification } from "@/lib/format";
 import { redirectionQuota } from "@/lib/quota";
 import { computeRecalcNeeds, etapesRecalc } from "@/lib/recalc";
 import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
@@ -45,12 +45,7 @@ const OptimiserView = dynamic(() => import("@/components/OptimiserView"), { ssr:
 const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"), { ssr: false });
 const FinancementSection = dynamic(() => import("@/components/FinancementSection"), { ssr: false });
 const PlaygroundView = dynamic(() => import("@/components/PlaygroundView"), { ssr: false });
-import { DECISION_CHIP, cashflowSeuilsFromSettings, cashflowTone, rendementNetTone, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
-import type { StatCardTone } from "@/components/StatCard";
-import { StatCard } from "@/components/StatCard";
-import { simulate, resolveInputs } from "@/lib/simulation";
-import { useRendementDetail } from "@/components/RendementDetailProvider";
-import { useCashflowDetail } from "@/components/CashflowDetailProvider";
+import { DECISION_CHIP, cashflowSeuilsFromSettings, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
 import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
 import { facteursBaremeEffectifs, phraseSyntheseLoyer } from "@/lib/loyerSynthese";
@@ -68,17 +63,6 @@ const ApartmentLocationMap = dynamic(() => import("./ApartmentLocationMap"), {
     </div>
   ),
 });
-
-function dpeInfo(dpe: string): { sub: string; tone: StatCardTone } {
-  switch (dpe.trim().toUpperCase()) {
-    case "G": return { sub: "Interdit à la location", tone: "alerte" };
-    case "F": return { sub: "Interdit dès 2028", tone: "alerte" };
-    case "E": return { sub: "Interdit dès 2034", tone: "attention" };
-    case "D": return { sub: "OK, pas d'échéance proche", tone: "neutral" };
-    case "A": case "B": case "C": return { sub: "Aucune restriction", tone: "positif" };
-    default: return { sub: "Non renseigné", tone: "neutral" };
-  }
-}
 
 function DisplayValue({
   label,
@@ -180,16 +164,17 @@ function EditableValue({
   );
 }
 
-type Tab = "ia" | "optimiser" | "donnees" | "financiere" | "simulation" | "playground";
+type Tab = "ia" | "donnees" | "financiere" | "simulation" | "playground";
 
 const TABS: { key: Tab; label: string; shortLabel: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { key: "ia", label: "Analyse", shortLabel: "Analyse", icon: Sparkles },
-  { key: "playground", label: "Playground", shortLabel: "Play.", icon: SlidersHorizontal },
-  { key: "optimiser", label: "Optimiser", shortLabel: "Optim.", icon: Lightbulb },
+  { key: "playground", label: "Optimiser", shortLabel: "Optim.", icon: SlidersHorizontal },
   { key: "donnees", label: "Description du bien", shortLabel: "Bien", icon: Home },
   { key: "financiere", label: "Détails de l'opération", shortLabel: "Opération", icon: HandCoins },
   { key: "simulation", label: "Simulation financière", shortLabel: "Simulation", icon: Calculator },
 ];
+
+type OptimiserSub = "playground" | "recommandations";
 
 // Enregistrer une modification de la description ou de la section Achat déclenche
 // un recalcul EN ARRIÈRE-PLAN (non bloquant) : loyer, charges et Analyse IA sont
@@ -260,8 +245,6 @@ export default function ApartmentDetail({
   const seuilsRendement = seuilsRendementFromSettings(settings);
   const cashflowSeuils = cashflowSeuilsFromSettings(settings);
   const { open: openLoyerDetail } = useLoyerDetail();
-  const { open: openRendementDetail } = useRendementDetail();
-  const { open: openCashflowDetail } = useCashflowDetail();
   // Après suppression depuis la fiche, on quitte vers l'accueil (la fiche
   // n'existe plus) — au lieu du router.refresh() utilisé dans la liste.
   const { requestDelete, dialog: deleteDialog } = useDeleteApartment(() => router.push("/"));
@@ -292,11 +275,12 @@ export default function ApartmentDetail({
   const searchParams = useSearchParams();
   const spTab = searchParams.get("tab");
   const spEdit = searchParams.get("edit") === "1";
-  const resolvedSpTab = spTab === "synthese" ? ("ia" as Tab) : TABS.some((t) => t.key === spTab) ? (spTab as Tab) : null;
+  const resolvedSpTab = spTab === "synthese" ? ("ia" as Tab) : spTab === "optimiser" ? ("playground" as Tab) : TABS.some((t) => t.key === spTab) ? (spTab as Tab) : null;
 
   const resolvedInitialTab = TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : "ia";
   const [activeTab, setActiveTab] = useState<Tab>(resolvedSpTab ?? resolvedInitialTab);
   const [editingDesc, setEditingDesc] = useState((resolvedSpTab ?? resolvedInitialTab) === "donnees" && (spEdit || !!initialEdit));
+  const [optimiserSub, setOptimiserSub] = useState<OptimiserSub>("playground");
 
   // Depuis la Synthèse, un CTA de carte renvoie vers l'onglet ET la section
   // concernée (ancre) : on change d'onglet, puis on scrolle vers l'id une fois
@@ -308,7 +292,12 @@ export default function ApartmentDetail({
       router.push(`/appartements/${apt.id}?tab=${tab}`, { scroll: false });
       setPendingScroll(anchor ?? null);
     },
-    [router, apt.id]
+    // `setActiveTab`/`setPendingScroll` sont des setters `useState`, donc
+    // stables — ils ne figurent ici que pour que les dépendances déclarées
+    // couvrent celles inférées par le React Compiler (règle
+    // `preserve-manual-memoization`), qui refusait sinon d'optimiser tout le
+    // composant. Aucun effet à l'exécution.
+    [router, apt.id, setActiveTab, setPendingScroll]
   );
 
   // L'URL (`?tab=…&edit=1`) pilote l'onglet : un lien externe ou un retour
@@ -726,25 +715,6 @@ export default function ApartmentDetail({
           ecartPrixMarche(apt.analyse_ia?.blocs?.prix)
         );
 
-  // KPI banner (entre en-tête et onglets, visible sur tous les onglets)
-  const analyse = apt.analyse_ia;
-  const simuKpi = useMemo(
-    () => simulate(apt, resolveInputs(apt.simulation_inputs, settings)),
-    [apt, settings],
-  );
-  const kpiCashflow = simuKpi?.cashflowMensuelMoyenLMNP ?? null;
-  const kpiAnneesExo = simuKpi?.anneesExonerees ?? 0;
-  const kpiCfTone: StatCardTone = cashflowTone(kpiCashflow, cashflowSeuils);
-  const kpiNetTone = rendementNetTone(apt.rendement_net, seuilsRendement);
-  const kpiDpe = dpeInfo(apt.dpe);
-  const kpiEcartPct = ecartPrixMarche(analyse?.blocs?.prix);
-  const kpiFaitEcart = analyse?.blocs?.prix?.faits?.find((f) => f.label === "Écart au prix de marché");
-  const kpiEcartTone: StatCardTone =
-    kpiFaitEcart?.gravite === "positif" ? "positif"
-      : kpiFaitEcart?.gravite === "attention" ? "attention"
-        : kpiFaitEcart?.gravite === "alerte" ? "alerte" : "neutral";
-  const kpiEcartDisponible = kpiEcartPct != null;
-
   // Sous-titres des onglets. Les trois onglets de données décrivent ce qu'ils
   // montrent (texte fixe) ; Analyse et Optimiser décrivent leur ÉTAT, seule
   // information que l'utilisateur ne peut pas déduire de l'onglet lui-même.
@@ -934,38 +904,6 @@ export default function ApartmentDetail({
 
       </div>
 
-      {/* KPI banner — toujours visible quel que soit l'onglet */}
-      <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard
-          label="Rendement net"
-          value={apt.rendement_net == null ? "—" : formatPercent(apt.rendement_net)}
-          sub="Net après charges et impôts"
-          tone={kpiNetTone === "neutral" ? "neutral" : kpiNetTone}
-          onClick={() => openRendementDetail(apt, seuilsRendement)}
-        />
-        <StatCard
-          label="Cash-flow mensuel"
-          value={formatEurosSigned(kpiCashflow)}
-          sub={kpiCashflow == null ? "Données manquantes" : kpiAnneesExo > 1 ? `Moyen sur ${kpiAnneesExo} ans sans impôt` : "Net après impôt"}
-          tone={kpiCfTone}
-          onClick={() => openCashflowDetail(apt, cashflowSeuils, settings)}
-        />
-        <StatCard
-          label="Prix au m²"
-          value={apt.prix_m2 == null ? "—" : `${formatEuros(apt.prix_m2)}/m²`}
-          sub={kpiEcartDisponible
-            ? `${kpiEcartPct! > 0 ? "+" : ""}${kpiEcartPct} % vs marché local`
-            : "Pas de donnée de marché"}
-          tone={kpiEcartDisponible ? kpiEcartTone : "neutral"}
-        />
-        <StatCard
-          label="DPE"
-          value={apt.dpe.trim() === "" ? "—" : apt.dpe.trim().toUpperCase()}
-          sub={kpiDpe.sub}
-          tone={kpiDpe.tone}
-        />
-      </div>
-
       {/* Onglets */}
       <div className="pb-6 sm:pb-8">
         <nav className="no-scrollbar -mx-4 flex gap-6 overflow-x-auto border-b border-ink-100 px-4 sm:mx-0 sm:px-0">
@@ -999,23 +937,6 @@ export default function ApartmentDetail({
             <AnalyseIASkeleton />
           ) : (
             <AnalyseIA apartment={apt} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
-          )}
-        </>
-      )}
-
-      {activeTab === "optimiser" && (
-        <>
-          <TabHeader title="Optimiser" subtitle={sousTitreOptimiser} />
-          {analysisPending ? (
-            <OptimiserSkeleton />
-          ) : (
-            <OptimiserView
-              apartment={apt}
-              settings={settings}
-              seuilsRendement={seuilsRendement}
-              cashflowSeuils={cashflowSeuils}
-              onRelancer={handleRelancerAnalyse}
-            />
           )}
         </>
       )}
@@ -1625,7 +1546,48 @@ export default function ApartmentDetail({
       )}
 
       {activeTab === "playground" && (
-        <PlaygroundView apartment={live} settings={settings} />
+        <div className="space-y-5">
+          <TabHeader
+            title="Optimiser"
+            subtitle={optimiserSub === "playground"
+              ? "Visualisez à quel prix ou loyer votre investissement s'améliore"
+              : sousTitreOptimiser}
+          />
+          <div className="flex gap-2">
+            {([
+              { key: "playground" as const, label: "Playground" },
+              { key: "recommandations" as const, label: "Recommandations" },
+            ]).map((sub) => (
+              <button
+                key={sub.key}
+                onClick={() => setOptimiserSub(sub.key)}
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
+                  optimiserSub === sub.key
+                    ? "bg-accent-600 text-white"
+                    : "border border-ink-200 bg-white text-ink-500 hover:text-ink-700 hover:border-ink-300"
+                }`}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>
+          {optimiserSub === "playground" && (
+            <PlaygroundView apartment={live} settings={settings} />
+          )}
+          {optimiserSub === "recommandations" && (
+            analysisPending ? (
+              <OptimiserSkeleton />
+            ) : (
+              <OptimiserView
+                apartment={apt}
+                settings={settings}
+                seuilsRendement={seuilsRendement}
+                cashflowSeuils={cashflowSeuils}
+                onRelancer={handleRelancerAnalyse}
+              />
+            )
+          )}
+        </div>
       )}
     </div>
     {deleteDialog}

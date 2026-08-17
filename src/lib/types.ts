@@ -28,6 +28,10 @@ const simulationInputsSchema = z.object({
   // tout le PATCH. `null` = régime par défaut, résolu par `resolveInputs`.
   regimeFiscal: z.enum(["lmnp_reel"]).nullable().optional().transform((v) => v ?? null),
   gestionPct: z.number().nullable().optional().transform((v) => v ?? null),
+  // `.optional()` pour la même raison que les trois ci-dessus : les biens
+  // enregistrés avant ce champ n'ont pas la clé, et un `simulation_inputs`
+  // incomplet ne doit pas faire échouer tout le PATCH.
+  fraisReventePct: z.number().nullable().optional().transform((v) => v ?? null),
 });
 
 export const PLATEFORMES = [

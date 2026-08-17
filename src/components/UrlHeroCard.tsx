@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback } from "react";
+import { type ReactNode } from "react";
 import { Link2, Loader2 } from "lucide-react";
 import { AppMark } from "@/components/Navbar";
 

@@ -22,12 +22,58 @@ sources de dérive).
    score global à droite dans une jauge circulaire (`VerdictGauge`, anneau
    épais 100px, stroke 8), titre verdict en Fraunces (`text-4xl` /
    `sm:text-5xl`), raison actionnable (jamais de score brut), puis ligne de
-   sous-scores par bloc (couleurs `noteTone()`), puis cartes alertes/attention
-   (critère ET bloc, triées alerte > attention, critere > bloc, max 3).
+   sous-scores par bloc (couleurs `noteTone()`), puis — au plus — l'avis
+   d'interdiction de louer (voir « Un seul avis en tête »).
 2. **Bloc synthèse** — narration IA sur fond `bg-ink-100/40`.
 4. **Sections plates** (`FlatSection`) — séparées par des `<hr>`, chaque bloc
    d'analyse (Prix, Rendement, Risques, Potentiel, Simulation) avec note,
    verdicts, highlights, faits, et narration.
+
+## Un seul avis en tête de la carte verdict : l'interdiction de louer
+
+L'en-tête n'affiche **PLUS la liste des verdicts** (elle montait jusqu'à trois
+cartes `alerte`/`attention`). Seul survit le verdict DPE **F ou G** —
+`avisDpeEnTete()` (`scoring.ts`), lu depuis `blocs.risque.dpeGes.dpe`, rendu en
+une ligne rouge sur le patron du `quotaNotice`.
+
+**Pourquoi** — chaque autre carte était déjà lisible à moins de 100 px :
+
+| Verdict | Où il était déjà |
+|---|---|
+| `origine: "bloc"` | relecture de la note affichée dans la rangée juste dessous — colorée par seuil ET cliquable vers le bloc, ce que la carte n'était pas |
+| rendement (`critere`) | cité mot pour mot par `raisonDecision` : `buildVerdicts` l'empile en tête, donc c'est toujours lui que trouvent ses `find` |
+| DPE E (`critere`) | échéance 2034 — ne pèse sur aucun arbitrage du moment ; reste dans le fait « Réglementaire — loi Climat » du bloc Risques et comme levier dans Optimiser |
+
+S'y ajoutaient deux défauts propres à l'affichage :
+
+- **Contradiction visible** — `computeDecision` ignore les alertes `origine:
+  "bloc"` (voir `decision.ts`), donc un bien « Achète » pouvait afficher
+  « Aucun frein détecté » directement au-dessus d'une carte rouge « Peu de
+  potentiel ».
+- **Verdicts fantômes** — la liste rendait le JSON stocké tel quel, y compris
+  des verdicts qu'un `buildVerdicts` plus récent n'émet plus (un
+  « Mauvais cash-flow mensuel » d'avant l'exclusion de `simulation` par
+  `BLOCS_INFORMATIFS` s'affichait encore sur les analyses anciennes).
+
+Mesuré sur un bien réel à 3 verdicts stockés : carte 691 → 391 px sur un
+viewport de 375 px, 403 → 237 px en 1280 px.
+
+⚠️ **Le filtre est un choix d'AFFICHAGE, à garder dans `AnalyseIA.tsx`.** Ne
+jamais le remonter dans `buildVerdicts` : `computeDecision`, la narration
+(`narration.ts`) et le frein bloquant d'Optimiser (`recommandations.ts`) lisent
+TOUS les verdicts. Corollaire : `raisonDecision` est désormais le seul endroit
+qui nomme le point décisif — une nouvelle branche qui cesserait de citer un
+verdict rendrait cette information muette.
+
+⚠️ **Conséquence assumée** — un bien classé `passe` par `score < 5` *sans*
+aucun verdict rédhibitoire n'affiche plus que « Trop de points faibles pour un
+investissement sain », sans nommer lesquels. La rangée de sous-scores juste
+au-dessus EST cette énumération, colorée et cliquable.
+
+`VERDICTS_DPE` (`scoring.ts`) est la table unique du calendrier loi Climat :
+`buildVerdicts` émet les trois classes via `verdictDpe()`, l'en-tête ne retient
+que les entrées `enTete`. Invariant tenu par l'UI : `enTete: true` implique
+`niveau: "alerte"` — l'en-tête peint en rouge sans consulter le niveau.
 
 ## Verdict (décision à 3 niveaux)
 
@@ -58,13 +104,40 @@ Le trait et le chiffre de la jauge viennent de `DECISION_RING_STYLES`
 (`scoring.ts`, voir `docs/reference/couleurs-scoring.md`), partagé avec
 l'anneau de l'accueil.
 
-## KPI banner (entre en-tête et onglets)
+## Rangée de KPI (dans l'onglet Analyse, sous la card verdict)
 
 Les 4 KPIs investisseur (Rendement net, Cash-flow mensuel, Prix au m², DPE)
-sont affichés dans `ApartmentDetail.tsx`, **entre l'en-tête et la barre
-d'onglets**, visibles quel que soit l'onglet actif. Ils ne font plus partie
-de l'onglet Analyse (pas de duplication). Cash-flow et Rendement net ouvrent
+sont rendus par **`AnalyseIA.tsx`**, entre la card verdict et le bloc
+synthèse, en `grid-cols-2 xl:grid-cols-4`. Cash-flow et Rendement net ouvrent
 leur panneau de détail au clic (`CashflowDetailPanel`, `RendementDetailPanel`).
+
+⚠️ **Ce placement a déjà changé deux fois — ne pas le rebasculer sans lire
+ceci.** La rangée a d'abord vécu dans l'onglet Analyse, puis a été remontée
+dans l'en-tête de `ApartmentDetail` (« entre en-tête et onglets », visible sur
+les cinq onglets) au motif d'éviter une duplication avec les blocs détaillés,
+puis redescendue ici. Les deux positions ont un coût réel, à trancher
+sciemment :
+
+| Dans l'en-tête | Dans l'onglet Analyse (actuel) |
+|---|---|
+| lisible depuis Description / Opération / Simulation | visible seulement sur Analyse |
+| pousse les onglets vers le bas sur tous les écrans | l'en-tête reste compact |
+| pas de voisinage avec les mêmes chiffres | **les 4 valeurs réapparaissent plus bas** : rendement net dans le bloc Location, cash-flow dans Simulation, prix/m² et écart marché dans Prix, DPE dans l'échelle colorée de Risques |
+
+La duplication de la colonne de droite est le vrai prix de la position
+actuelle : la rangée est un résumé en tête d'écran, les blocs portent les
+mêmes chiffres avec leurs sources et leur contexte.
+
+⚠️ **Trois hooks de `AnalyseIA` alimentent cette rangée** (`useRendementDetail`,
+`useCashflowDetail`, le `useMemo` de `simulate`) et doivent rester **au-dessus
+du `if (!analyse)`** : un composant qui retourne tôt ne peut plus déclarer de
+hook après (`react-hooks/rules-of-hooks`).
+
+La rangée réutilise `ecartPct`, déjà dérivé du bloc Prix pour la décision —
+l'en-tête en gardait un second calcul (`kpiEcartPct`) sur la même source.
+
+`src/app/appartements/[id]/loading.tsx` place ses 4 cartes squelettes **après**
+le bloc verdict : il correspond à ce placement, pas à celui de l'en-tête.
 
 ## VerdictGauge (jauge circulaire)
 
@@ -92,10 +165,15 @@ deux highlights du bloc Simulation ouvrent le panneau latéral
 
 ---
 
-# Onglet "Optimiser" — recommandations prescriptives (lecture seule)
+# Sous-pill "Recommandations" — recommandations prescriptives (lecture seule)
 
-L'onglet **"Optimiser"** (`src/components/OptimiserView.tsx`, 2e onglet, après
-Analyse) est orienté **DÉCISION + RENTABILITÉ, pas le score**. Deux modes
+`OptimiserView.tsx` est rendu dans la sous-pill **"Recommandations"** de
+l'onglet **"Optimiser"** (tab key `playground`, icône `SlidersHorizontal`).
+L'autre sous-pill ("Playground") affiche `PlaygroundView` (simulateur
+interactif). Navigation par pills capsules, état local — voir
+`docs/reference/page-appartement-ui.md`.
+
+L'écran est orienté **DÉCISION + RENTABILITÉ, pas le score**. Deux modes
 selon le verdict actuel :
 
 - verdict ≠ **Achète** → « En faire un achat ».
@@ -104,31 +182,45 @@ selon le verdict actuel :
 **Purement informatif : ne modifie JAMAIS le bien réel** (prix, loyer, dpe,
 score, verdicts intacts).
 
-## Un levier à la fois (`SelecteurLevier`)
+## Tous les leviers en liste (`LevierCard` accordion)
 
-L'écran affiche **UN SEUL levier**. Ce n'est PAS un écran de comparaison : le
-moteur a déjà classé les leviers (prix en tête, financement en dernier) et la
-vue d'ensemble vit dans l'onglet Analyse.
+L'écran affiche **TOUS les leviers** en cartes compactes empilées
+verticalement, avec un accordéon pour le détail. État local
+(`expandedIndex`), jamais dans l'URL.
 
-Sélection via un **contrôle segmenté** (`SelecteurLevier`) : compact, aligné
-à gauche, fond `ink-100` avec pastille blanche active, rendu DANS le bandeau
-`accent-50` du levier. État local (`actif`), jamais dans l'URL.
+Chaque carte résumé montre :
 
-**Ne pas en refaire une barre d'onglets soulignée pleine largeur** — les
-onglets de page changent l'URL, celui-ci est un état local ; leur ressemblance
-mentirait sur le comportement. Garde `role="tablist"` / `aria-selected`.
+- **Icône colorée** dans un carré arrondi (`LEVIER_COLORS` : emerald/prix,
+  amber/travaux, sky/loyer, violet/financement).
+- **Titre** (`reco.titre`) + **description** (`reco.pourquoi`, 1 ligne max).
+- **Badge « Achète »** si `flipVersAchat` — pastille emerald.
+- **Badge impact** : Δ rendement (`+X,X % rdt`) ou Δ cash-flow
+  (`+XX €/mois`), ou « Info » si l'impact est négligeable.
+- **Chevron** animé (rotation 180° à l'ouverture).
+- **Bordure gauche colorée** (4px, couleur du levier).
 
-Les segments ne portent **que** l'icône et le libellé du levier — pas de
-badge « Achète ». `flipVersAchat` reste utilisé, mais par le moteur seul
-(porte de matérialité et tri), pas par l'UI.
+Au clic, la carte s'ouvre (accordéon, une seule ouverte à la fois) et montre
+le détail (`LevierDetail`) :
 
-Ordre de lecture imposé, à ne pas réarranger :
-
-1. **L'action à faire** — `reco.action`, en titre.
+1. **L'action à faire** — `reco.action`, en titre, dans un bandeau
+   `accent-50/50`.
 2. **Les chiffres impactés** — cartes `avant → après` (`buildPairs`).
-3. **Les arguments** — preuves puis méthode.
+3. **Le caveat** (bandeau ambre ou rouge).
+4. **Les arguments** — preuves puis méthode.
 
-Les points 1 et 2 vivent dans **une seule section** (le bandeau `accent-50`).
+## Section « Simulation financière »
+
+Sous les cartes de leviers, un bloc affiche 4 KPIs en grille 2×2
+(`SimKpiCard`) :
+
+| KPI | Source | Icône |
+|---|---|---|
+| **TRI** | `sim.tri` | `TrendingUp` accent |
+| **Cash-flow moyen** | `sim.cashflowMensuelMoyen` | `Banknote` emerald |
+| **Enrichissement net** | dernière année `.enrichissement` | `Landmark` violet |
+| **Point mort** | 1re année où `enrichissement > 0` | `Check` sky |
+
+Hypothèses affichées en footnote (taux, durée, TMI).
 
 ### Le chiffre pivot est PORTÉ PAR LE TITRE
 

@@ -26,6 +26,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Artefact MINIFIÉ du bookmarklet (une seule ligne), conservé à la racine
+    // pour les essais manuels. La source est `src/lib/bookmarklet.ts` — c'est
+    // elle qui est lintée. Linter la sortie minifiée ne produisait que du
+    // bruit (16 avertissements sur des `catch(e)` compressés) qui masquait les
+    // vrais avertissements du dossier `src/`.
+    "test-bookmarklet.js",
   ]),
 ]);
 

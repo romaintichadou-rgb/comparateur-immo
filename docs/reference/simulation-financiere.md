@@ -309,8 +309,86 @@ border) qui active l'hypothèse avec une valeur par défaut.
 | Revalorisation du loyer | `revalorisationLoyerPct` | 1 % | %/an | Loyer revalorisé chaque année (compound) |
 | Indexation charges | `indexationChargesPct` | 2 % | %/an | Copro + TF indexées (compound) |
 | Vacance locative | `vacanceLocativePct` | 5 % | % du loyer | Réduit les loyers effectifs (cascade sur gestion, impôt, cash-flow) |
+| Frais de revente | `fraisReventePct` | 8 % | % du prix | **TRI uniquement** — ni le cash-flow, ni l'impôt, ni le graphe patrimoine |
 
 `OptionalRateField` gère l'UI. La vacance locative s'applique comme facteur
 multiplicatif `(1 - vacanceLocativePct / 100)` sur les loyers annuels — cascade
 automatiquement sur les frais de gestion, le résultat imposable, et le
 cash-flow.
+
+### Ajouter une hypothèse optionnelle = 6 points à câbler
+
+Tous dans `SimulationFinanciere.tsx`, sauf le premier. L'oubli de l'un d'eux
+est **silencieux** — le champ marche, mais disparaît d'un écran sur deux.
+
+1. `SimulationInputs` + `defaultInputs()` + constante `*_DEFAUT_PCT`
+   (`simulation.ts`), et `simulationInputsSchema` (`types.ts`, en `.optional()`)
+2. `surchargesHyp` — le compteur qui conditionne « Réinitialiser »
+3. `resetHypotheses()` — remettre la clé à `null`
+4. la **pill** du mode lecture (en-tête replié)
+5. le `OptionalRateField` du groupe **Projection** (mode édition)
+6. le `FinRow` du récapitulatif **Projection** (mode lecture)
+
+⚠️ La **légende sous le tableau année par année** n'est PAS un septième point :
+elle décrit les hypothèses qui déforment les colonnes du tableau. Une hypothèse
+sans effet sur le cash-flow annuel (les frais de revente) n'y a rien à faire —
+l'y ajouter ferait croire que le tableau en tient compte.
+
+Aucune migration : `simulation_inputs` est une colonne JSONB. La clé entre
+automatiquement dans `empreinteBien` (qui itère sur `Object.keys`), donc la
+modifier signale l'analyse comme obsolète — comportement voulu.
+
+# TRI — le seul chiffre où le levier apparaît
+
+Le rendement net (`calculations.ts`) divise par le coût TOTAL de l'opération :
+il ne bouge pas d'un iota selon le financement. Le TRI part du seul apport,
+suit les cash-flows et intègre la revente. Les deux ne sont pas interchangeables
+et n'ont pas vocation à converger.
+
+`tauxRendementInterne(flux)` (`simulation.ts`) — dichotomie sur la VAN, bornée à
+[−99,99 %, +1000 %]. **Ne pas la remplacer par Newton-Raphson** : Newton peut
+diverger selon l'amorce et rendre alors un nombre plausible qui n'annule rien,
+alors que la dichotomie conserve un encadrement de la racine. Sur ≤ 25 termes sa
+lenteur ne se mesure pas.
+
+Flux construits dans `simulate()`, horizon = **terme du prêt** :
+
+```
+flux[0]  = −apport
+flux[a]  = annees[a-1].cashflowAnnuel                     (a = 1..N)
+flux[N] += valeurBien(N) × (1 − fraisReventePct/100) − capitalRestantDu(N)
+```
+
+## Deux pièges déjà rencontrés
+
+⚠️ **« Apport nul » n'est PAS « pas de TRI ».** Un montage sans apport (profil en
+financement `cout_total`, le prêt à 110 %) dont les premières années sont
+déficitaires engage bien du capital, simplement étalé dans le temps : son TRI
+existe et vaut quelque chose. Le critère d'absence est **`flux.every(f => f >= 0)`**
+— aucune sortie d'argent, jamais — et c'est ce que nomme
+`triIndisponible: "aucun_capital_engage"`. Un test sur `apport === 0` masquerait
+un chiffre parfaitement calculable.
+
+⚠️ Corollaire à l'écran : quand l'apport est nul mais le TRI défini, le texte
+« placer ton apport de 0 € à X % » n'a aucun sens. La carte bascule alors sur une
+seconde formulation (le capital engagé est l'effort d'épargne annuel).
+
+## Ce que le TRI ne fait PAS
+
+- **Il n'est pas noté.** Le bloc `simulation` de l'Analyse IA reste
+  `note: null, poids: 0` : le TRI dépend du montage financier personnel, pas de
+  la qualité du bien. Il y entre comme simple `Fait` (`gravite: "info"`), jamais
+  comme `highlight` ni comme verdict. Le brancher sur une note ferait dépendre le
+  score du plan de financement de l'utilisateur.
+- **Il n'est pas coloré sémantiquement.** Aucun seuil de TRI n'existe dans
+  `AppSettings`, et `couleurs-scoring.md` impose qu'un chiffre en
+  émeraude/ambre/rouge soit adossé à un seuil documenté. La carte utilise donc
+  l'**accent de marque**. Ne pas inventer de seuil au passage.
+- **Il ignore l'impôt sur la plus-value.** Depuis la loi de finances 2025 les
+  amortissements LMNP se réintègrent dans la plus-value imposable : le TRI
+  affiché est donc optimiste, et la carte le dit (« hors fiscalité de la
+  plus-value »). Le brancher est un chantier fiscal à part entière (abattements
+  pour durée de détention, IR 19 % + PS 17,2 %), pas un ajout en marge.
+- **Quand il n'existe pas, le fait est ABSENT** du bloc d'analyse, pas mis à 0 :
+  un « 0 % » se lirait comme une opération médiocre alors que c'est le calcul
+  qui ne s'applique pas.

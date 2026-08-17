@@ -49,6 +49,16 @@ export interface SimulationInputs {
   /** Frais de gestion locative, en % du loyer annuel. null = désactivés (occupation gratuite). */
   gestionPct: number | null;
   /**
+   * Frais de revente (agence, diagnostics), en % de la valeur du bien au
+   * terme. `null` = désactivés — on revend alors sans frottement.
+   *
+   * ⚠️ N'entre QUE dans le TRI : ni le cash-flow, ni l'impôt, ni le graphe
+   * « Évolution du patrimoine » ne le lisent. Ce dernier annonce d'ailleurs
+   * explicitement qu'il ignore la fiscalité de la revente — ne pas l'y brancher
+   * en croyant harmoniser, les deux blocs ne racontent pas la même chose.
+   */
+  fraisReventePct: number | null;
+  /**
    * Régime fiscal d'imposition des revenus locatifs.
    *
    * `null` (ou clé absente sur un bien antérieur) = `REGIME_FISCAL_DEFAUT`.
@@ -167,6 +177,83 @@ export interface SimulationResult {
   apport: number;
   /** Financement de l'opération sur toute la durée simulée (pour le camembert). */
   financementProjet: FinancementProjet;
+  /**
+   * Taux de rendement interne annualisé de l'opération, au terme du prêt
+   * (ex. 0.087 = 8,7 %/an). `null` quand il n'existe pas — voir
+   * `triIndisponible`, et ne JAMAIS le rendre par un tiret muet.
+   */
+  tri: number | null;
+  /**
+   * Cause de l'absence de TRI, pour que l'écran l'explique au lieu de la subir.
+   *
+   * `aucun_capital_engage` : l'opération ne demande JAMAIS d'argent — pas
+   * d'apport ET aucun cash-flow négatif. Un taux de retour sur un capital nul
+   * n'a pas de valeur définie.
+   *
+   * ⚠️ Ce n'est PAS la même chose qu'« apport nul » : un montage sans apport
+   * dont les premières années sont déficitaires engage bien du capital, étalé
+   * dans le temps, et son TRI existe. Ne pas rétablir un test sur le seul
+   * `apport === 0`, il masquerait un chiffre parfaitement calculable.
+   *
+   * `pas_de_racine` : la série ne change pas de signe dans l'autre sens (aucun
+   * flux positif), ou la racine sort de l'intervalle exploré.
+   */
+  triIndisponible: "aucun_capital_engage" | "pas_de_racine" | null;
+  /** Produit de la revente au terme : valeur revalorisée − frais − capital restant dû. */
+  produitNetRevente: number;
+}
+
+/**
+ * Taux de rendement interne d'une série de flux annuels — `flux[0]` à la date
+ * 0, `flux[t]` à la fin de l'année `t`. Renvoie un taux annuel (0.05 = 5 %/an),
+ * ou `null` s'il n'en existe pas.
+ *
+ * ## Pourquoi une dichotomie, et pas Newton-Raphson
+ *
+ * Newton converge plus vite mais peut DIVERGER selon l'amorce, et rendre alors
+ * un nombre plausible qui n'annule rien. La dichotomie ne peut pas : elle
+ * conserve un encadrement de la racine à chaque étape. Sur une série d'au plus
+ * ~25 termes, recalculer la VAN 200 fois ne coûte rien de mesurable — la
+ * robustesse est gratuite ici, il n'y a aucune raison de l'échanger.
+ *
+ * ## Ce que `null` protège
+ *
+ * Un TRI n'existe que si la série change de signe : il faut avoir SORTI de
+ * l'argent pour qu'un taux de retour ait un sens. Les cas dégénérés (apport
+ * nul avec des cash-flows tous positifs) doivent donc remonter à l'appelant,
+ * jamais être comblés par une valeur de repli — un « 0 % » inventé se lirait
+ * comme une opération médiocre, alors que c'est le calcul qui ne s'applique pas.
+ */
+export function tauxRendementInterne(flux: number[]): number | null {
+  if (flux.length < 2) return null;
+  if (!flux.some((f) => f > 0) || !flux.some((f) => f < 0)) return null;
+
+  // −99,99 % : un taux de −100 % annulerait le dénominateur. Borne haute à
+  // +1000 %/an, très au-delà de tout montage immobilier réaliste.
+  const van = (r: number) => flux.reduce((somme, f, t) => somme + f / Math.pow(1 + r, t), 0);
+
+  let bas = -0.9999;
+  let haut = 10;
+  let vBas = van(bas);
+  const vHaut = van(haut);
+  if (!Number.isFinite(vBas) || !Number.isFinite(vHaut)) return null;
+  // Racine hors de l'intervalle : ne rien inventer.
+  if (vBas === 0) return bas;
+  if (vHaut === 0) return haut;
+  if (vBas > 0 === vHaut > 0) return null;
+
+  for (let i = 0; i < 200; i++) {
+    const milieu = (bas + haut) / 2;
+    const vMilieu = van(milieu);
+    if (vMilieu === 0) return milieu;
+    if (vBas > 0 !== vMilieu > 0) {
+      haut = milieu;
+    } else {
+      bas = milieu;
+      vBas = vMilieu;
+    }
+  }
+  return (bas + haut) / 2;
 }
 
 // Valeurs par défaut proposées quand l'utilisateur active une hypothèse
@@ -175,6 +262,8 @@ export const REVALORISATION_BIEN_DEFAUT_PCT = 1;
 export const REVALORISATION_LOYER_DEFAUT_PCT = 1;
 export const INDEXATION_CHARGES_DEFAUT_PCT = 2;
 export const VACANCE_LOCATIVE_DEFAUT_PCT = 5;
+/** Agence (~5-6 %) + diagnostics obligatoires, ordre de grandeur courant. */
+export const FRAIS_REVENTE_DEFAUT_PCT = 8;
 
 /**
  * Forme STOCKÉE par défaut d'un bien : tout est hérité ou désactivé, rien n'est
@@ -197,6 +286,7 @@ export function defaultInputs(): SimulationInputs {
     indexationChargesPct: null,
     vacanceLocativePct: null,
     gestionPct: null,
+    fraisReventePct: null,
     // null = REGIME_FISCAL_DEFAUT. Non figé ici pour la même raison que les
     // champs hérités : un défaut recopié dans la donnée ne suit plus le code.
     regimeFiscal: null,
@@ -436,6 +526,30 @@ export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): Sim
     : [an1];
   const cfMoyenLMNP = anneesLMNP.reduce((s, a) => s + a.cashflowMensuel, 0) / anneesLMNP.length;
 
+  // ── TRI : ce que rapporte l'ARGENT ENGAGÉ, pas le bien ────────────────────
+  //
+  // Le rendement net (`calculations.ts`) divise par le coût total de
+  // l'opération, donc il ne bouge pas d'un iota selon le financement. Le TRI
+  // part au contraire du seul apport et intègre la revente : c'est le seul
+  // chiffre de l'app où l'effet de levier apparaît.
+  //
+  // ⚠️ La soustraction du `capitalRestantDu` est conservée alors qu'il vaut 0
+  // au terme du prêt : elle est ce qui rendra le calcul juste le jour où
+  // l'horizon deviendra réglable (le TRI se prendrait alors sur une année où le
+  // crédit court encore).
+  const produitNetRevente =
+    anFinale.valeurBien * (1 - (inputs.fraisReventePct ?? 0) / 100) - anFinale.capitalRestantDu;
+
+  const flux = [-apport, ...annees.map((a) => a.cashflowAnnuel)];
+  flux[flux.length - 1] += produitNetRevente;
+  const tri = tauxRendementInterne(flux);
+  // Distinguer les deux causes permet à l'écran de DIRE pourquoi le chiffre
+  // manque, au lieu d'afficher un tiret muet. Le critère est « aucune sortie
+  // d'argent », pas « apport nul » — voir l'avertissement sur
+  // `triIndisponible`.
+  const triIndisponible: SimulationResult["triIndisponible"] =
+    tri != null ? null : flux.every((f) => f >= 0) ? "aucun_capital_engage" : "pas_de_racine";
+
   return {
     montantEmprunte: capital,
     montantAutomatique: inputs.montantEmprunte == null,
@@ -457,5 +571,8 @@ export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): Sim
     chargesMensuelles: chargesExploitationAn1 / 12,
     impotMensuelAn1: an1.impot / 12,
     quotePartTerrainPct: terrainPct,
+    tri,
+    triIndisponible,
+    produitNetRevente,
   };
 }

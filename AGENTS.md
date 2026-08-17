@@ -68,7 +68,7 @@ réellement leur domaine, pas systématiquement.
 | Taxe foncière + quote-part terrain | `docs/reference/taxe-fonciere.md` | `taxeFonciereCommune.ts`, `taxeFonciereData.ts`, `quote_part_terrain_pct` |
 | Couleurs sémantiques & scoring (tables tonalité complètes) | `docs/reference/couleurs-scoring.md` | tout chiffre coloré par un seuil, `scoring.ts`, bloc Risques/DPE |
 | Profil investisseur, simulation financière, héritage | `docs/reference/simulation-financiere.md` | `SimulationFinanciere.tsx`, `SettingsForm.tsx`, `simulation.ts`, `resolveInputs` |
-| Onglets Analyse + Optimiser, moteur de recommandations, collecte des sources | `docs/reference/analyse-optimiser.md` | `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts`, `analyse/recommandations.ts`, `analyse/run.ts`, `analyse/sources/*`, `narration.ts`, `geocoding.ts` |
+| Onglet Analyse, sous-pill Recommandations (OptimiserView), moteur de recommandations, collecte des sources | `docs/reference/analyse-optimiser.md` | `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts`, `analyse/recommandations.ts`, `analyse/run.ts`, `analyse/sources/*`, `narration.ts`, `geocoding.ts` |
 | Page appartement (en-tête, onglets, ajout de bien) | `docs/reference/page-appartement-ui.md` | `ApartmentDetail.tsx` (en-tête/onglets/Description), `AddApartmentFlow.tsx` |
 | Bookmarklet (pipeline d'extraction par plateforme) | `docs/reference/bookmarklet.md` | `src/lib/bookmarklet.ts`, `src/lib/parsers/common.ts` |
 
@@ -553,6 +553,37 @@ champ estimé).
 → PATCH, passe dans `champs_manuels`) + ✕ (gris, `cancelField(key)`, annule
 sans PATCH).
 
+# Règles de lint React : le Compiler LINTE, mais ne COMPILE pas
+
+`eslint-config-next` (Next 16) active les règles du React Compiler, alors que
+`next.config.ts` **n'active pas le compilateur**. Conséquence directe : on ne
+peut pas supprimer un `useCallback`/`useMemo` en se disant « le compilateur
+mémoïsera » — rien ne le fera. La mémoïsation manuelle doit rester JUSTE.
+
+- **`react-hooks/set-state-in-effect`** — jamais de `setState` synchrone dans
+  le corps d'un effet. Trois remplacements, tous employés dans le code :
+  - *réinitialiser un état quand une prop change* → **ajustement pendant le
+    rendu** avec garde `!==` (`ApartmentDetail.tsx`, `PlaygroundView.tsx`) ;
+  - *lire une API navigateur qui s'abonne* (`matchMedia`) →
+    **`useSyncExternalStore`** avec un instantané serveur ;
+  - *drapeau « chargement en cours »* → le **déduire** d'une clé de requête
+    (« la clé attendue diffère de la clé reçue »), plutôt que le poser avant
+    un `fetch`. Bonus : un résultat périmé ne peut plus s'afficher comme s'il
+    concernait la configuration courante, et le drapeau ne reste plus bloqué
+    à `true` quand la requête est annulée en vol.
+- **`react-hooks/rules-of-hooks`** — un composant qui **retourne tôt** ne peut
+  plus déclarer de hook après ce retour. Avant d'en ajouter un, vérifier qu'il
+  n'y a pas de `return` au-dessus. Un handler posé sur un élément DOM natif
+  n'a de toute façon rien à gagner à un `useCallback` : son identité ne
+  déclenche aucun rendu.
+- **`react-hooks/preserve-manual-memoization`** — les dépendances déclarées
+  doivent COUVRIR celles que le compilateur infère, sinon il renonce à
+  optimiser tout le composant. Ajouter les setters `useState` manquants (ils
+  sont stables, donc sans effet à l'exécution) suffit.
+
+⚠️ **`test-bookmarklet.js` est ignoré par ESLint** (`eslint.config.mjs`) : c'est
+l'artefact MINIFIÉ du bookmarklet, sa source lintée est `src/lib/bookmarklet.ts`.
+
 # Pages d'erreur (not-found / error)
 
 Boundaries Next.js à deux niveaux (`appartements/[id]/` et racine), toutes
@@ -571,7 +602,11 @@ inédite) :
    `.verdicts` promettent des champs toujours présents, mais une analyse
    stockée dans un schéma antérieur peut ne pas les avoir. **Tout accès à un
    champ de `AnalyseIA` doit être gardé** (`analyse.blocs?.prix?.faits ?? []`),
-   même si le type le dit obligatoire.
+   même si le type le dit obligatoire. Symétrie moins évidente, rencontrée
+   depuis : le JSON stocké peut aussi contenir des entrées que le code
+   n'émettrait PLUS (un verdict de bloc désormais exclu de `buildVerdicts`).
+   Une analyse en base n'est donc pas une sortie du code courant — la relire
+   telle quelle affiche des résultats périmés sans lever d'erreur.
 2. **ID malformé dans l'URL** — Postgrest rejette avant de chercher la ligne
    (`invalid input syntax for type uuid`) ; distinguer cette erreur d'une
    vraie erreur de config Supabase (`requiredEnv()`), traiter comme

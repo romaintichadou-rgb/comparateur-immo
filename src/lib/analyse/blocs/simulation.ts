@@ -77,6 +77,25 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
     anneesSansImpotFait(result.annees),
   ];
 
+  // TRI : informatif comme le reste du bloc (note null, poids 0). Il dépend du
+  // montage financier personnel — apport, taux, durée — pas de la qualité
+  // intrinsèque du bien : le brancher sur une note ferait dépendre le score du
+  // plan de financement de l'utilisateur, exactement ce que ce bloc refuse.
+  //
+  // Absent plutôt que nul quand il n'existe pas (apport nul = aucun capital
+  // engagé) : un « 0 % » se lirait comme une opération médiocre alors que c'est
+  // le calcul qui ne s'applique pas.
+  if (result.tri != null) {
+    faits.push({
+      label: "TRI au terme du prêt",
+      value: Math.round(result.tri * 1000) / 10,
+      unit: "%",
+      detail: "rentabilité annualisée de l'apport, revente incluse",
+      source: SRC_CALC,
+      gravite: "info",
+    });
+  }
+
   return {
     cle: "simulation",
     titre: BLOC_LABELS.simulation,

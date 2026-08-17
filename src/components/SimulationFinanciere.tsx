@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Calculator, ChevronDown, Plus, X } from "lucide-react";
+import { Banknote, Calculator, Check, ChevronDown, Landmark, Plus, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { DEFAULT_HYPOTHESE_GESTION_PCT } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
@@ -18,14 +18,17 @@ import {
   REVALORISATION_BIEN_DEFAUT_PCT,
   REVALORISATION_LOYER_DEFAUT_PCT,
   VACANCE_LOCATIVE_DEFAUT_PCT,
+  FRAIS_REVENTE_DEFAUT_PCT,
   type AnneeSimulation,
+  type InputsResolus,
   type SimulationInputs,
+  type SimulationResult,
 } from "@/lib/simulation";
 import { AiEstimatedBadge, NumberField, SelectField } from "@/components/form/Fields";
 import { GroupTitle, SectionHeader, TITRE_SECTION } from "@/components/SectionHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { isAiEstimated } from "@/lib/estimates";
-import { formatEurosSigned, formatNombre } from "@/lib/format";
+import { formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
 
 /**
  * Onglet "Simulation financière" : cash-flow mensuel réel en LMNP réel,
@@ -223,7 +226,8 @@ export default function SimulationFinanciere({
     + (savedInputs?.revalorisationLoyerPct != null ? 1 : 0)
     + (savedInputs?.indexationChargesPct != null ? 1 : 0)
     + (savedInputs?.vacanceLocativePct != null ? 1 : 0)
-    + (savedInputs?.gestionPct != null ? 1 : 0);
+    + (savedInputs?.gestionPct != null ? 1 : 0)
+    + (savedInputs?.fraisReventePct != null ? 1 : 0);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
     setInputs((i) => ({ ...i, [key]: value }));
@@ -299,6 +303,7 @@ export default function SimulationFinanciere({
       indexationChargesPct: null,
       vacanceLocativePct: null,
       gestionPct: null,
+      fraisReventePct: null,
     };
     setInputs(patched);
     setQuotePartDraft(null);
@@ -335,6 +340,11 @@ export default function SimulationFinanciere({
   const chargesMoyennesM = avgM((a) => a.chargesExploitation);
   const impotMoyenM = avgM((a) => a.impot);
   const cfTone = TONE_PANEL_STYLES[cashflowTone(cfLMNP, cashflowSeuils)];
+  // Somme des cash-flows RÉELS de chaque année (carte TRI). Volontairement pas
+  // `cashflowMensuelMoyen × 12 × durée` : la moyenne affichée plus haut porte
+  // sur les seules années exonérées d'impôt, elle ne reconstitue donc pas le
+  // cumul sur toute la durée.
+  const cumulCashflows = resultAffiche.annees.reduce((s, a) => s + a.cashflowAnnuel, 0);
 
   return (
     <div className="space-y-6">
@@ -402,6 +412,11 @@ export default function SimulationFinanciere({
           {savedInputs?.indexationChargesPct != null && (
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
               Indexation des charges {formatNombre(savedInputs.indexationChargesPct)} %/an
+            </span>
+          )}
+          {savedInputs?.fraisReventePct != null && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
+              Frais de revente {formatNombre(savedInputs.fraisReventePct)} % du prix
             </span>
           )}
           </div>
@@ -519,6 +534,13 @@ export default function SimulationFinanciere({
                           defaut={INDEXATION_CHARGES_DEFAUT_PCT}
                           onChange={(v) => set("indexationChargesPct", v)}
                         />
+                        <OptionalRateField
+                          label="Frais de revente"
+                          value={inputs.fraisReventePct}
+                          defaut={FRAIS_REVENTE_DEFAUT_PCT}
+                          onChange={(v) => set("fraisReventePct", v)}
+                          suffix="% du prix"
+                        />
                       </div>
                     </div>
                   </div>
@@ -563,6 +585,7 @@ export default function SimulationFinanciere({
                       <FinRow label="Revalorisation du bien" value={hypPct(savedInputs?.revalorisationBienPct ?? null)} />
                       <FinRow label="Revalorisation du loyer" value={hypPct(savedInputs?.revalorisationLoyerPct ?? null)} />
                       <FinRow label="Indexation charges" value={hypPct(savedInputs?.indexationChargesPct ?? null)} />
+                      <FinRow label="Frais de revente" value={hypPct(savedInputs?.fraisReventePct ?? null)} />
                     </div>
                   </div>
 
@@ -612,6 +635,9 @@ export default function SimulationFinanciere({
           </button>
         </div>
       )}
+
+      {/* KPI summary */}
+      <SimKpiSummary result={resultAffiche} resolus={resolusAffiches} />
 
       {/* Cash-flow mensuel détaillé */}
       <section id="sim-cashflow" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
@@ -688,6 +714,101 @@ export default function SimulationFinanciere({
           <PatrimoineChart annees={resultAffiche.annees} />
         </section>
       </div>
+
+      {/* Rentabilité de l'opération (TRI) */}
+      <section id="sim-tri" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
+        <SectionHeader title="Rentabilité de l'opération" as="h3" />
+        <p className="text-xs text-ink-400">
+          Le rendement net juge <strong className="font-medium text-ink-500">le bien</strong> : il
+          divise le loyer par le coût total, quel que soit ton financement. Le TRI juge{" "}
+          <strong className="font-medium text-ink-500">ton argent</strong> : il part du seul apport,
+          suit les cash-flows année après année et intègre la revente. C&apos;est le seul chiffre où
+          l&apos;effet de levier du crédit apparaît.
+        </p>
+        <ul className="divide-y divide-ink-100/50 text-sm">
+          <WaterfallRow label="Apport initial" value={-resultAffiche.apport} />
+          <WaterfallRow
+            label={`Cash-flows cumulés sur ${resolusAffiches.dureeAnnees} ans`}
+            value={cumulCashflows}
+            plus={cumulCashflows >= 0}
+          />
+          <WaterfallRow
+            label="Produit net de la revente"
+            value={resultAffiche.produitNetRevente}
+            plus={resultAffiche.produitNetRevente >= 0}
+          />
+        </ul>
+        {/* ⚠️ Accent de marque, PAS une couleur sémantique : aucun seuil de TRI
+            n'existe dans le Profil investisseur, et la charte veut qu'un chiffre
+            en émeraude/ambre/rouge soit adossé à un seuil documenté. Ne pas en
+            inventer un ici — voir docs/reference/couleurs-scoring.md. */}
+        <div className="rounded-xl bg-accent-50 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <div>
+              <span className="text-sm font-semibold text-accent-700">TRI</span>
+              <p className="mt-0.5 text-xs text-accent-700/70">
+                {resultAffiche.tri != null
+                  ? `Annualisé sur ${resolusAffiches.dureeAnnees} ans, revente incluse`
+                  : "Non calculable"}
+              </p>
+            </div>
+            <span className="whitespace-nowrap font-mono text-2xl font-bold tabular-nums text-accent-700">
+              {resultAffiche.tri != null ? formatPercent(resultAffiche.tri) : "—"}
+            </span>
+          </div>
+          <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-xs leading-relaxed text-ink-500">
+            {resultAffiche.triIndisponible === "aucun_capital_engage" ? (
+              <>
+                <strong className="font-semibold text-ink-700">Aucun capital engagé.</strong>{" "}
+                L&apos;emprunt couvre toute l&apos;opération et chaque année dégage un cash-flow
+                positif : cet investissement ne te demande jamais d&apos;argent, un taux de
+                rendement n&apos;a donc pas de valeur définie. Regarde le cash-flow mensuel plus
+                haut, c&apos;est lui qui décrit l&apos;opération.
+              </>
+            ) : resultAffiche.triIndisponible === "pas_de_racine" ? (
+              <>
+                <strong className="font-semibold text-ink-700">TRI non calculable</strong> sur cette
+                combinaison de flux — l&apos;opération ne présente aucun retour sur le capital
+                engagé.
+              </>
+            ) : (
+              <>
+                <strong className="font-semibold text-ink-700">Comment le lire :</strong>{" "}
+                {resultAffiche.apport > 0 ? (
+                  <>
+                    placer ton apport de {euros(resultAffiche.apport)} € à{" "}
+                    <strong className="font-medium text-ink-700">
+                      {formatPercent(resultAffiche.tri)}
+                    </strong>{" "}
+                    par an pendant {resolusAffiches.dureeAnnees} ans donnerait le même résultat final
+                    que cette opération.
+                  </>
+                ) : (
+                  <>
+                    {/* Apport nul ET TRI défini : le capital engagé n'est pas versé au
+                        départ, il est étalé (cash-flows négatifs). Parler d'« apport de
+                        0 € » n'aurait aucun sens ici. */}
+                    l&apos;opération est financée à 100 % par le crédit : le capital que tu engages
+                    n&apos;est pas un apport initial mais l&apos;effort d&apos;épargne que tu
+                    injectes chaque année. Il te rapporte{" "}
+                    <strong className="font-medium text-ink-700">
+                      {formatPercent(resultAffiche.tri)}
+                    </strong>{" "}
+                    par an.
+                  </>
+                )}{" "}
+                {savedInputs?.fraisReventePct != null
+                  ? `Revente supposée minorée de ${formatNombre(savedInputs.fraisReventePct)} % de frais`
+                  : "Revente supposée sans frais (agence, diagnostics)"}
+                {savedInputs?.revalorisationBienPct != null
+                  ? `, bien revalorisé à ${formatNombre(savedInputs.revalorisationBienPct)} %/an`
+                  : ", sans revalorisation du bien"}{" "}
+                — hors fiscalité de la plus-value.
+              </>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Tableau année par année — collapsible */}
       <section className="overflow-hidden rounded-xl border border-ink-100 bg-white">
@@ -1063,4 +1184,62 @@ function euros(n: number): string {
 function signe(n: number): string {
   const r = Math.round(n) || 0; // normalise -0 → 0
   return `${r > 0 ? "+" : r < 0 ? "−" : ""}${Math.abs(r).toLocaleString("fr-FR")}`;
+}
+
+function SimKpiSummary({ result, resolus }: { result: SimulationResult; resolus: InputsResolus }) {
+  const enrichissementNet = result.annees[result.annees.length - 1]?.enrichissement ?? null;
+  const pointMort = result.annees.findIndex((a) => a.enrichissement > 0);
+
+  const kpis: { label: string; value: string; detail: string; icon: ReactNode }[] = [
+    {
+      label: "TRI",
+      value: result.tri != null ? formatPercent(result.tri) : "—",
+      detail: "Taux de rendement interne",
+      icon: <TrendingUp className="h-4 w-4 text-accent-500" />,
+    },
+    {
+      label: "Cash-flow moyen",
+      value: formatEurosSigned(result.cashflowMensuelMoyen),
+      detail: "Mensuel après impôt",
+      icon: <Banknote className="h-4 w-4 text-emerald-500" />,
+    },
+    {
+      label: "Enrichissement net",
+      value: enrichissementNet != null ? formatEuros(Math.round(enrichissementNet)) : "—",
+      detail: `Au terme (${result.annees.length} ans)`,
+      icon: <Landmark className="h-4 w-4 text-violet-500" />,
+    },
+    {
+      label: "Point mort",
+      value: pointMort >= 0 ? `${pointMort + 1} ans` : "—",
+      detail: "Enrichissement > 0",
+      icon: <Check className="h-4 w-4 text-sky-500" />,
+    },
+  ];
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <SectionHeader title="Vue d'ensemble" as="h3" />
+        <p className="mt-0.5 text-[10px] text-ink-400">
+          Hypothèses : taux {resolus.tauxCreditPct} %, durée {resolus.dureeAnnees} ans, TMI{" "}
+          {resolus.tmiPct} %
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className="flex items-start gap-3 rounded-xl border border-ink-100 bg-white p-4">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-50">
+              {kpi.icon}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-ink-500">{kpi.label}</p>
+              <p className="font-mono text-lg font-semibold tabular-nums text-ink-900">{kpi.value}</p>
+              <p className="text-[10px] text-ink-400">{kpi.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }

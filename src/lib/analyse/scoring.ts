@@ -243,6 +243,69 @@ export function withScoreGlobal(
 }
 
 /**
+ * Verdicts DPE (calendrier loi Climat) — TABLE UNIQUE, lue à deux endroits :
+ * `buildVerdicts` les émet tous, et l'en-tête de l'onglet Analyse n'affiche
+ * que ceux marqués `enTete`.
+ *
+ * ⚠️ `enTete` n'est PAS un synonyme de « niveau alerte » : E est écarté de
+ * l'en-tête parce que son échéance (2034) ne pèse sur aucun arbitrage d'achat
+ * du moment, alors que G est déjà interdit et F l'est à court terme. Le cas E
+ * reste documenté dans le bloc Risques (fait « Réglementaire — loi Climat »)
+ * et repris comme levier dans Optimiser — il n'est pas perdu, il est rangé
+ * au bon niveau de lecture.
+ *
+ * ⚠️ Invariant tenu par l'UI : `enTete: true` implique `niveau: "alerte"` —
+ * l'en-tête d'Analyse peint cet avis en rouge sans consulter le niveau. Passer
+ * une entrée `attention` à `enTete: true` afficherait une échéance lointaine
+ * dans la couleur du rédhibitoire.
+ */
+export const VERDICTS_DPE: Record<string, Verdict & { enTete: boolean }> = {
+  G: {
+    niveau: "alerte",
+    titre: "DPE G — interdit à la location",
+    detail: "Passoire thermique interdite à la location depuis le 1er janvier 2025 (loi Climat). Des travaux de rénovation énergétique sont obligatoires avant toute mise en location.",
+    origine: "critere",
+    enTete: true,
+  },
+  F: {
+    niveau: "alerte",
+    titre: "DPE F — interdiction de louer en 2028",
+    detail: "Passoire thermique interdite à la location à partir de 2028 (loi Climat). Des travaux de rénovation énergétique coûteux seront nécessaires, impactant fortement la rentabilité.",
+    origine: "critere",
+    enTete: true,
+  },
+  E: {
+    niveau: "attention",
+    titre: "DPE E — interdiction de louer en 2034",
+    detail: "Logement classé E, interdit à la location à partir de 2034 (loi Climat). Des travaux de rénovation énergétique seront nécessaires à moyen terme.",
+    origine: "critere",
+    enTete: false,
+  },
+};
+
+/** Entrée de `VERDICTS_DPE` pour une lettre nullable, casse et espaces libres. */
+function entreeDpe(dpe: string | null | undefined) {
+  return VERDICTS_DPE[(dpe ?? "").trim().toUpperCase()];
+}
+
+/** Verdict DPE d'une lettre, ou `null` si la classe n'est pas concernée. */
+export function verdictDpe(dpe: string | null | undefined): Verdict | null {
+  const entree = entreeDpe(dpe);
+  if (!entree) return null;
+  const { enTete: _enTete, ...verdict } = entree;
+  return verdict;
+}
+
+/**
+ * Verdict DPE à afficher en tête de l'onglet Analyse, ou `null`. SEUL avis
+ * conservé dans cet en-tête (voir `docs/reference/analyse-optimiser.md`) :
+ * tous les autres verdicts y étaient déjà lisibles ailleurs à l'écran.
+ */
+export function avisDpeEnTete(dpe: string | null | undefined): Verdict | null {
+  return entreeDpe(dpe)?.enTete ? verdictDpe(dpe) : null;
+}
+
+/**
  * Verdicts textuels indépendants du score : ils nomment explicitement les
  * points rédhibitoires ou de vigilance, en tête d'analyse, pour qu'ils ne
  * soient jamais noyés dans un score composite « visuellement rassurant ».
@@ -275,29 +338,8 @@ export function buildVerdicts(
   }
 
   // 2) DPE passoire thermique — verdict dédié, indépendant du score du bloc.
-  const dpeLabel = blocs.risque.dpeGes?.dpe?.toUpperCase();
-  if (dpeLabel === "G") {
-    verdicts.push({
-      niveau: "alerte",
-      titre: "DPE G — interdit à la location",
-      detail: "Passoire thermique interdite à la location depuis le 1er janvier 2025 (loi Climat). Des travaux de rénovation énergétique sont obligatoires avant toute mise en location.",
-      origine: "critere",
-    });
-  } else if (dpeLabel === "F") {
-    verdicts.push({
-      niveau: "alerte",
-      titre: "DPE F — interdiction de louer en 2028",
-      detail: "Passoire thermique interdite à la location à partir de 2028 (loi Climat). Des travaux de rénovation énergétique coûteux seront nécessaires, impactant fortement la rentabilité.",
-      origine: "critere",
-    });
-  } else if (dpeLabel === "E") {
-    verdicts.push({
-      niveau: "attention",
-      titre: "DPE E — interdiction de louer en 2034",
-      detail: "Logement classé E, interdit à la location à partir de 2034 (loi Climat). Des travaux de rénovation énergétique seront nécessaires à moyen terme.",
-      origine: "critere",
-    });
-  }
+  const dpeVerdict = verdictDpe(blocs.risque.dpeGes?.dpe);
+  if (dpeVerdict) verdicts.push(dpeVerdict);
 
   // 3) Tout bloc noté ≤ 5/10 remonte comme point d'attention critique.
   //    "simulation" est exclu : le cash-flow dépend du montage financier

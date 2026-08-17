@@ -118,13 +118,19 @@ export interface Verdict {
   detail: string;
   /**
    * D'où vient le verdict :
-   *  - `critere` : jugement qui n'existe NULLE PART ailleurs dans l'écran —
-   *    seuil de rendement du profil investisseur, échéance loi Climat du DPE.
+   *  - `critere` : jugement propre, non dérivable d'une note — seuil de
+   *    rendement du profil investisseur, échéance loi Climat du DPE.
    *  - `bloc` : dérivé mécaniquement de la note d'un bloc (`X faible (3/10)`),
-   *    donc pure redite de la carte affichée juste en dessous.
-   * Sert à l'AFFICHAGE seul (l'en-tête d'Analyse IA ne montre que `critere`) :
-   * `computeDecision` continue de lire TOUS les verdicts, ne jamais filtrer en
-   * amont sous peine de changer le verdict d'achat.
+   *    donc pure redite du sous-score affiché à l'écran.
+   *
+   * ⚠️ Sert à la DÉCISION, plus à l'affichage : `computeDecision` n'accorde de
+   * veto qu'aux verdicts `critere` (voir `decision.ts`). Ce champ a d'abord été
+   * introduit pour filtrer l'en-tête d'Analyse — cet en-tête n'affiche plus
+   * aucune liste de verdicts, seulement l'interdiction de louer, qu'il lit
+   * directement du DPE (`avisDpeEnTete`). Ne jamais filtrer les verdicts en
+   * amont de `buildVerdicts` : la décision, la narration et le frein
+   * d'Optimiser lisent la liste ENTIÈRE.
+   *
    * Optionnel : absent des analyses générées avant son introduction.
    */
   origine?: "critere" | "bloc";

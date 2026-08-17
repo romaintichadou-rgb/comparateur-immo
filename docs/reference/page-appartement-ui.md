@@ -74,28 +74,47 @@ déjà complète, en ne retirant que des segments de QUEUE (jamais le premier).
   voie est connue ; sinon repli sur les coordonnées ; `null` si rien à
   situer.
 
-## KPI banner (entre en-tête et onglets)
+## Pas de rangée de KPI dans l'en-tête
 
-4 StatCards en grille (`grid-cols-2 xl:grid-cols-4`), visibles quel que soit
-l'onglet actif : **Rendement net** (cliquable → `RendementDetailPanel`),
-**Cash-flow mensuel** (cliquable → `CashflowDetailPanel`), **Prix au m²**,
-**DPE**. Calculés indépendamment du score d'analyse via `simulate()` et les
-fonctions de scoring (`cashflowTone`, `rendementNetTone`, `dpeInfo`,
-`ecartPrixMarche`).
+Les 4 StatCards investisseur (Rendement net, Cash-flow mensuel, Prix au m²,
+DPE) ne sont **plus** entre l'en-tête et la barre d'onglets : elles vivent
+dans l'onglet Analyse, sous la card verdict. `ApartmentDetail` ne porte donc
+plus ni `dpeInfo`, ni les `kpi*`, ni l'appel à `simulate()` — tout est passé
+dans `AnalyseIA.tsx`. Historique du placement et arbitrage :
+`docs/reference/analyse-optimiser.md`.
+
+Conséquence : la barre d'onglets suit directement l'en-tête compact, et les
+onglets Description / Opération / Simulation n'affichent plus ces chiffres.
 
 ## Onglets avec icônes
 
 | Tab (key) | Icône | Label desktop | Label mobile |
 |-----|-------|---------------|--------------|
 | Analyse (`ia`) | `Sparkles` | Analyse | Analyse |
-| Playground (`playground`) | `SlidersHorizontal` | Playground | Play. |
-| Optimiser (`optimiser`) | `Lightbulb` | Optimiser | Optim. |
+| Optimiser (`playground`) | `SlidersHorizontal` | Optimiser | Optim. |
 | Description (`donnees`) | `Home` | Description du bien | Bien |
 | Opération (`financiere`) | `HandCoins` | Détails de l'opération | Opération |
 | Simulation (`simulation`) | `Calculator` | Simulation financière | Simulation |
 
 Le label court est dans `shortLabel` (TABS). Tab bar scrolle horizontalement
 sur mobile (`overflow-x-auto`).
+
+### Sous-pills de l'onglet Optimiser
+
+L'onglet Optimiser contient deux sous-vues sélectionnées par des **pills
+capsules** (état local `optimiserSub`, jamais dans l'URL) :
+
+| Pill | Composant | Rôle |
+|------|-----------|------|
+| **Playground** | `PlaygroundView` | Simulateur interactif (sliders prix/loyer) |
+| **Recommandations** | `OptimiserView` | Leviers prescriptifs (prix, loyer, financement) |
+
+Les pills sont rendues dans `ApartmentDetail.tsx`, au-dessus du contenu
+conditionnel. Style : `rounded-full`, pill active en `bg-accent-600 text-white`,
+pill inactive bordée `ink-200` fond blanc.
+
+`?tab=optimiser` (ancienne URL) redirige vers `?tab=playground` pour
+rétrocompatibilité.
 
 ## En-têtes d'onglets (`TabHeader`)
 
@@ -107,7 +126,8 @@ des états dégradés d'`OptimiserView`, qui sortent par `return` anticipé.
 | Onglet | Titre | Sous-titre |
 |---|---|---|
 | `ia` | Analyse | *dynamique* — « Verdict d'achat, sous-scores et faits chiffrés · analysée le {date} », ou « Pas encore analysée… » |
-| `optimiser` | Optimiser | *dynamique* — voir « Sous-titre honnête » ci-dessous |
+| `playground` (pill Playground) | Optimiser | Visualisez à quel prix ou loyer votre investissement s'améliore |
+| `playground` (pill Recommandations) | Optimiser | *dynamique* — voir « Sous-titre honnête » ci-dessous |
 | `donnees` | Description du bien | Les données extraites de l'annonce, corrigeables à la main. |
 | `financiere` | Détails de l'opération | Ce que coûte l'achat, ce que rapporte la location. |
 | `simulation` | Simulation financière | Crédit, fiscalité LMNP au réel et cash-flow année par année. |
