@@ -26,6 +26,7 @@ import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/d
 import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
+import { useLoyerDetail } from "@/components/LoyerDetailProvider";
 import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatNote, formatPercent } from "@/lib/format";
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { renderMarkdownBold } from "@/components/richText";
@@ -67,22 +68,6 @@ const DECISION_STYLES: Record<
   passe: { grad: "bg-gradient-to-r from-white to-red-50", border: "border-red-200", title: "text-red-900", caption: "text-red-700", trackStroke: "stroke-red-100" },
 };
 
-/**
- * Échéance loi Climat résumée pour la carte KPI « DPE » — libellé court, là où
- * `VERDICTS_DPE` (`scoring.ts`) porte la phrase longue de l'avis en tête et
- * `LOI_CLIMAT` (`blocs/risque.ts`) celle du fait du bloc Risques. Trois
- * formulations du MÊME calendrier : mettre les trois à jour ensemble.
- */
-function dpeInfo(dpe: string): { sub: string; tone: StatCardTone } {
-  switch (dpe.trim().toUpperCase()) {
-    case "G": return { sub: "Interdit à la location", tone: "alerte" };
-    case "F": return { sub: "Interdit dès 2028", tone: "alerte" };
-    case "E": return { sub: "Interdit dès 2034", tone: "attention" };
-    case "D": return { sub: "OK, pas d'échéance proche", tone: "neutral" };
-    case "A": case "B": case "C": return { sub: "Aucune restriction", tone: "positif" };
-    default: return { sub: "Non renseigné", tone: "neutral" };
-  }
-}
 
 /** Titre-verdict de la card. Registre volontairement différent de
  * `DECISION_CHIP` (« À écarter ») : la pastille CLASSE le bien pour les listes,
@@ -250,6 +235,7 @@ export default function AnalyseIA({
      rendue que dans la branche « analyse présente ». */
   const { open: openRendementDetail } = useRendementDetail();
   const { open: openCashflowDetail } = useCashflowDetail();
+  const { open: openLoyerDetail } = useLoyerDetail();
   const simuKpi = useMemo(
     () => simulate(apartment, resolveInputs(apartment.simulation_inputs, settings)),
     [apartment, settings],
@@ -361,7 +347,9 @@ export default function AnalyseIA({
      (`kpiEcartPct`) sur la même source. */
   const kpiCashflow = simuKpi?.cashflowMensuelMoyenLMNP ?? null;
   const kpiAnneesExo = simuKpi?.anneesExonerees ?? 0;
-  const kpiDpe = dpeInfo(apartment.dpe);
+  const loyerRetenu = apartment.loyer_retenu;
+  const loyerManuel = apartment.champs_manuels.includes("loyer_retenu");
+  const loyerEstimeIA = apartment.champs_estimes_ia.includes("loyer_retenu");
   const kpiFaitEcart = analyse.blocs?.prix?.faits?.find((f) => f.label === "Écart au prix de marché");
   const kpiEcartTone: StatCardTone =
     kpiFaitEcart?.gravite === "positif" ? "positif"
@@ -475,10 +463,11 @@ export default function AnalyseIA({
           tone={ecartPct != null ? kpiEcartTone : "neutral"}
         />
         <StatCard
-          label="DPE"
-          value={apartment.dpe.trim() === "" ? "—" : apartment.dpe.trim().toUpperCase()}
-          sub={kpiDpe.sub}
-          tone={kpiDpe.tone}
+          label="Loyer mensuel"
+          value={loyerRetenu != null ? `${formatEuros(loyerRetenu)}/mois` : "—"}
+          sub={loyerRetenu == null ? "À estimer" : loyerManuel ? "Renseigné manuellement" : loyerEstimeIA ? "Estimation IA" : "Estimé"}
+          tone="neutral"
+          onClick={() => openLoyerDetail(apartment)}
         />
       </div>
 

@@ -195,7 +195,6 @@ interface BannerState {
   phase: BannerPhase;
   label: string;
   action?: { label: string; onClick: () => void };
-  stickyTop?: number;
 }
 
 function useBanner() {
@@ -284,28 +283,6 @@ export default function ApartmentDetail({
   const [optimiserSub, setOptimiserSub] = useState<OptimiserSub>("playground");
 
   const heroRef = useRef<HTMLDivElement>(null);
-  const stickyBarRef = useRef<HTMLDivElement>(null);
-  const [heroVisible, setHeroVisible] = useState(true);
-  const [stickyBarH, setStickyBarH] = useState(41);
-
-  useEffect(() => {
-    const el = heroRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setHeroVisible(entry.isIntersecting),
-      { threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const el = stickyBarRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setStickyBarH(entry.contentRect.height));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // Depuis la Synthèse, un CTA de carte renvoie vers l'onglet ET la section
   // concernée (ancre) : on change d'onglet, puis on scrolle vers l'id une fois
@@ -904,45 +881,7 @@ export default function ApartmentDetail({
     </div>
 
     {/* ── Sticky bar : identité (quand hero scrollé) + onglets ── */}
-    <div ref={stickyBarRef} className="sticky top-0 z-40 border-b border-ink-100/70 bg-white">
-      <div
-        className={`overflow-hidden transition-all duration-200 ease-out ${
-          heroVisible ? "max-h-0 opacity-0" : "max-h-16 opacity-100"
-        }`}
-      >
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2 sm:gap-4 sm:px-6">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="truncate text-sm font-semibold text-ink-900">
-                {formatApartmentTitle(apt)}
-              </span>
-              {apt.prix != null && (
-                <>
-                  <span className="text-sm font-semibold text-ink-900">·</span>
-                  <span className="shrink-0 text-sm font-semibold text-ink-900">
-                    {formatEuros(apt.prix)}
-                  </span>
-                </>
-              )}
-            </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-400">
-              {localisation && <span className="truncate">{localisation}</span>}
-              <span>·</span>
-              <span>{apt.plateforme}</span>
-            </div>
-          </div>
-
-          {scoreGlobal != null && decisionEntete && (
-            <span
-              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${DECISION_CHIP[decisionEntete].className}`}
-            >
-              {DECISION_CHIP[decisionEntete].label}
-              <b className="font-mono font-semibold">{formatNote(scoreGlobal)}</b>
-            </span>
-          )}
-        </div>
-      </div>
-
+    <div className="sticky top-0 z-40 border-b border-ink-100/70 bg-white">
       <nav className="no-scrollbar mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 sm:px-6">
         {TABS.map((tab) => (
           <Link
@@ -952,8 +891,15 @@ export default function ApartmentDetail({
               e.preventDefault();
               setActiveTab(tab.key);
               router.push(`/appartements/${apt.id}?tab=${tab.key}`, { scroll: false });
+              const hero = heroRef.current;
+              if (hero) {
+                const heroBottom = hero.getBoundingClientRect().bottom;
+                if (heroBottom < 0) {
+                  window.scrollTo({ top: hero.offsetTop + hero.offsetHeight, behavior: "instant" });
+                }
+              }
             }}
-            className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition ${
+            className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-4 text-sm font-medium transition ${
               activeTab === tab.key
                 ? "border-accent-600 text-accent-600"
                 : "border-transparent text-ink-500 hover:text-ink-700"
@@ -967,13 +913,12 @@ export default function ApartmentDetail({
     </div>
 
     {banner ? (
-      <StickyBanner phase={banner.phase} label={banner.label} stickyTop={stickyBarH} />
+      <StickyBanner phase={banner.phase} label={banner.label} />
     ) : motifObsolete ? (
       <StickyBanner
         phase="outdated"
         label={motifObsolete}
         action={{ label: "Mettre à jour", onClick: handleRelancerAnalyse }}
-        stickyTop={stickyBarH}
       />
     ) : null}
 
@@ -1662,11 +1607,11 @@ const BANNER_ICON: Record<BannerPhase, typeof Loader2> = {
   outdated: RotateCcw,
 };
 
-function StickyBanner({ phase, label, action, stickyTop = 97 }: BannerState) {
+function StickyBanner({ phase, label, action }: BannerState) {
   const s = BANNER_STYLES[phase];
   const Icon = BANNER_ICON[phase];
   return (
-    <div className={`sticky z-30 animate-banner-in border-b backdrop-blur ${s.bg} ${s.border}`} style={{ top: stickyTop }}>
+    <div className={`sticky top-[55px] z-30 animate-banner-in border-b backdrop-blur ${s.bg} ${s.border}`}>
       <div className={`mx-auto flex max-w-6xl items-center gap-2.5 px-4 py-3 text-xs font-medium sm:px-6 ${s.text}`}>
         <Icon className={`h-3.5 w-3.5 shrink-0 ${phase === "saving" ? "animate-spin" : ""}`} />
         <span className="flex-1">{label}</span>
