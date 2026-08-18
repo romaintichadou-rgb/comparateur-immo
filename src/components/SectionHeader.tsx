@@ -42,7 +42,7 @@ export const TITRE_SECTION = "font-display text-lg font-semibold text-ink-900";
 export const TITRE_GROUPE = "font-display text-base font-semibold text-ink-900";
 
 /**
- * EXCEPTION ASSUMÉE — titre d'une carte de recommandation (onglet Optimiser).
+ * EXCEPTION ASSUMÉE — titre d'une carte de recommandation (onglet Recommandations).
  *
  * Seul titre de l'app en **IBM Plex Sans** et non en Fraunces. La règle
  * « tous les titres en `font-display` » vaut pour des titres qui NOMMENT une

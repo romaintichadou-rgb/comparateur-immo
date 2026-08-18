@@ -1465,7 +1465,7 @@ function PlaygroundKpiSummary({ sim, resolus }: { sim: SimulationResult; resolus
             </div>
             {/* Mêmes tokens que `StatCard` (label `text-xs font-medium ink-500`,
                 sous-texte `text-xs ink-500`) : les deux familles de cartes
-                cohabitent dans l'onglet Optimiser. Le `text-[10px] ink-400`
+                cohabitent dans le Simulateur. Le `text-[10px] ink-400`
                 d'avant tombait aussi sous le contraste AA (3,64:1 sur blanc). */}
             <div className="min-w-0">
               <p className="text-xs font-medium text-ink-500">{kpi.label}</p>

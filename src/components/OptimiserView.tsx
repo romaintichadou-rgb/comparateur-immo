@@ -560,7 +560,7 @@ function PreuveItem({ arg }: { arg: Argument }) {
 }
 
 /**
- * Carte d'état dégradé ou terminal de la sous-pill : pas d'analyse, pas de
+ * Carte d'état dégradé ou terminal de l'onglet : pas d'analyse, pas de
  * recos, ou rien de plus à optimiser.
  *
  * ⚠️ Titre en `SectionTitle` (`text-lg`, `h3`) et non en `text-2xl` : la carte

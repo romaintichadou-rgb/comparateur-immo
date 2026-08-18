@@ -45,7 +45,7 @@ export function buildBlocSimulation(apt: ApartmentWithComputed, settings: AppSet
   const cfLMNP = result.cashflowMensuelMoyenLMNP;
 
   // Source unique (scoring.ts) : mêmes seuils, même tonalité que les
-  // MetricCards, l'onglet Optimiser et le tableau de simulation.
+  // MetricCards, l'onglet Recommandations et le tableau de simulation.
   const tone = (v: number) => cashflowTone(v, seuils) as "positif" | "attention" | "alerte";
 
   const highlights: BlocHighlight[] = [

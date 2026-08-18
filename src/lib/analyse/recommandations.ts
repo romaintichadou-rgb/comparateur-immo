@@ -388,7 +388,7 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
         : null;
 
     // Arguments pour négocier. Les PREUVES (avec `source` + `chiffre`) d'abord,
-    // la MÉTHODE (sans source) ensuite : l'onglet Optimiser groupe sur ce critère.
+    // la MÉTHODE (sans source) ensuite : l'onglet Recommandations groupe sur ce critère.
     // Textes volontairement courts — une phrase, le chiffre porte le reste.
     const argsPrix = (cible: number): Argument[] => {
       const out: Argument[] = [];

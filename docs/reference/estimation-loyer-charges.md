@@ -978,7 +978,7 @@ Ajouté suite à l'audit qui a aussi motivé P2 (biens réels sous-estimés) :
 l'app SAVAIT déjà que Paris/Lille/Lyon/Montpellier plafonnent les loyers
 (`recommandations.ts`, argument « Vérifie l'encadrement ») mais ne l'utilisait
 jamais comme donnée de calcul, seulement comme phrase de conseil dans
-l'onglet Optimiser.
+l'onglet Recommandations.
 
 **Portée de ce premier lot : Paris uniquement.** Source : opendata.paris.fr,
 dataset `logement-encadrement-des-loyers` (Direction du Logement et de

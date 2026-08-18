@@ -109,7 +109,7 @@ constante locale (0/−200 codés en dur).
 
 Un « cash-flow mensuel » non qualifié désigne TOUJOURS
 `simulate().cashflowMensuelAn1` — MetricCards de l'onglet Analyse, colonnes
-avant/après de l'onglet Optimiser, et le moteur de recommandations
+avant/après de l'onglet Recommandations, et le moteur de recommandations
 (`cashflowOf`, dichotomie du levier financement). Le cash-flow **moyen** existe
 toujours mais n'est affiché QUE sous un libellé explicite (« Cash-flow mensuel
 moyen », highlights du bloc Simulation).
@@ -265,7 +265,7 @@ Il n'y a **pas** d'affordance unique :
 | **Highlights de l'Analyse** (carte bordée) | **bordure NEUTRE recolorée**, 1px : `hover:border-ink-300` |
 | Ligne du tableau d'accueil (dense) | soulignement pointillé |
 | Tuile `ResultCard` (Opération, Simulation) | fond + bordure intensifiés (`hoverEmphase` / `hoverContext`) |
-| Carte de l'onglet Optimiser | le lien « détail → » change de couleur |
+| Carte de l'onglet Recommandations | le lien « détail → » change de couleur |
 
 **Les highlights de l'Analyse survolent en GRIS, pas en tonalité** — décision
 produit assumée : la couleur sémantique est déjà portée par la VALEUR affichée,

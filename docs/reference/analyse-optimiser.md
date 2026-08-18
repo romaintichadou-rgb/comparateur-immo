@@ -165,13 +165,16 @@ deux highlights du bloc Simulation ouvrent le panneau latéral
 
 ---
 
-# Sous-pill "Recommandations" — recommandations prescriptives (lecture seule)
+# Onglet "Recommandations" — recommandations prescriptives (lecture seule)
 
-`OptimiserView.tsx` est rendu dans la sous-pill **"Recommandations"** de
-l'onglet **"Optimiser"** (tab key `playground`, icône `SlidersHorizontal`).
-L'autre sous-pill ("Playground") affiche `PlaygroundView` (simulateur
-interactif). Navigation par pills capsules, état local — voir
-`docs/reference/page-appartement-ui.md`.
+`OptimiserView.tsx` est l'onglet **"Recommandations"** (tab key `recos`, icône
+`Lightbulb`), placé juste après "Analyse" dont il est la suite logique.
+
+⚠️ Il partageait autrefois un onglet "Optimiser" avec `PlaygroundView`, via deux
+sous-pills. Les deux sont séparés depuis : le Playground est devenu le bouton
+"Simulateur", à droite de la barre d'onglets, parce qu'il ne persiste RIEN — alors
+que ces recommandations sont une sortie persistée dans `analyse_ia`. Ne pas les
+réunir à nouveau ; détail dans `docs/reference/page-appartement-ui.md`.
 
 L'écran est orienté **DÉCISION + RENTABILITÉ, pas le score**. Deux modes
 selon le verdict actuel :
@@ -380,7 +383,7 @@ signifiant de cliquabilité, sans ajouter ni texte ni icône.
 ⚠️ **Le vide à droite de la carte est normal**, ne pas le « corriger » en
 réduisant la largeur de la liste : une rangée pleine largeur avec chevron à
 l'extrême droite est la convention de l'accordéon (réglages iOS, FAQ). Resserrer
-la liste la désalignerait de la sous-pill Playground, qui a besoin de la largeur
+la liste la désalignerait du Simulateur, qui a besoin de la largeur
 pour ses courbes.
 
 ## Dépliant (`LevierDetail`) : DEUX zones, une seule teinte
@@ -418,7 +421,7 @@ vit SOUS le `TabHeader` « Optimiser » (`text-xl`, `h2`). Un `text-2xl` y
 faisait un enfant visuellement plus gros que son parent, et un second `h2` là
 où la hiérarchie WCAG attend un `h3`.
 
-## Section « Projection financière » (sous-pill Playground)
+## Section « Projection financière » (dans le Simulateur)
 
 ⚠️ Ce bloc vit dans **`PlaygroundView`** (`PlaygroundKpiSummary`), pas sous les
 cartes de leviers d'`OptimiserView` — la doc le plaçait au mauvais endroit,

@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Loader2, Mail, MapPin, Pencil, Phone, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
+import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
 import {
+  DEFAULT_HYPOTHESE_GESTION_PCT,
   DPE_GES_VALEURS,
   ETATS_BIEN,
   isImmeuble,
@@ -163,17 +164,54 @@ function EditableValue({
   );
 }
 
-type Tab = "ia" | "donnees" | "financiere" | "simulation" | "playground";
+type Tab = "ia" | "recos" | "donnees" | "financiere" | "simulation" | "playground";
 
+/**
+ * Onglets de la barre — ce qui décrit LE BIEN.
+ *
+ * Tous portent sur le bien tel qu'il est (ou tel qu'on le corrige), et tout ce
+ * qu'on y modifie est ENREGISTRÉ. Y compris « Projection financière », dont les
+ * hypothèses (revalorisation, vacance, indexation) sont persistées.
+ *
+ * ⚠️ `playground` n'y figure PAS : c'est un MODE, pas une section — voir
+ * `ONGLET_SIMULER`. Il reste une valeur de `Tab` valide (donc une route
+ * `?tab=playground`), simplement absente de cette table.
+ */
 const TABS: { key: Tab; label: string; shortLabel: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { key: "ia", label: "Analyse", shortLabel: "Analyse", icon: Sparkles },
-  { key: "playground", label: "Optimiser", shortLabel: "Optim.", icon: SlidersHorizontal },
+  { key: "recos", label: "Recommandations", shortLabel: "Recos", icon: Lightbulb },
   { key: "donnees", label: "Description du bien", shortLabel: "Bien", icon: Home },
   { key: "financiere", label: "Coûts et revenus", shortLabel: "Coûts", icon: HandCoins },
   { key: "simulation", label: "Projection financière", shortLabel: "Projection", icon: Calculator },
 ];
 
-type OptimiserSub = "playground" | "recommandations";
+/**
+ * Le bac à sable, SORTI de la barre d'onglets et posé à sa droite.
+ *
+ * ── Pourquoi il n'est pas un onglet ───────────────────────────────────────
+ * C'est le seul écran de la fiche où RIEN n'est enregistré : on déplace des
+ * curseurs, on lit, on repart sans trace. Les cinq autres décrivent le bien et
+ * persistent ce qu'on y change. Le mettre en ligne avec eux le faisait passer
+ * pour une section de plus.
+ *
+ * ⚠️ Les Recommandations, elles, ne l'ont PAS suivi : ce n'est pas une
+ * simulation mais une sortie prescriptive, dérivée de l'analyse et persistée
+ * dans `analyse_ia`. Sa parenté est avec « Analyse », d'où sa place juste après
+ * dans `TABS`. Ne pas les regrouper à nouveau sous un même onglet « Optimiser »
+ * — c'est précisément ce mélange qui rendait la frontière illisible.
+ *
+ * ⚠️ Il vit HORS du `<nav>` défilant : la barre déborde en `overflow-x-auto`
+ * sur mobile, un bouton placé dedans partirait hors champ avec le reste, et la
+ * scrollbar étant masquée (`no-scrollbar`) rien ne signalerait sa présence.
+ */
+const ONGLET_SIMULER = {
+  key: "playground" as Tab,
+  label: "Simulateur",
+  icon: SlidersHorizontal,
+};
+
+/** Clés acceptées dans `?tab=` — la table des onglets PLUS le mode simuler. */
+const CLES_TAB: Tab[] = [...TABS.map((t) => t.key), ONGLET_SIMULER.key];
 
 // Enregistrer une modification de la description ou de la section Achat déclenche
 // un recalcul EN ARRIÈRE-PLAN (non bloquant) : loyer, charges et Analyse IA sont
@@ -276,12 +314,20 @@ export default function ApartmentDetail({
   const searchParams = useSearchParams();
   const spTab = searchParams.get("tab");
   const spEdit = searchParams.get("edit") === "1";
-  const resolvedSpTab = spTab === "synthese" ? ("ia" as Tab) : spTab === "optimiser" ? ("playground" as Tab) : TABS.some((t) => t.key === spTab) ? (spTab as Tab) : null;
+  // `?tab=optimiser` (ancienne URL) mène au bac à sable, qui était la vue par
+  // défaut de l'onglet Optimiser avant son découpage.
+  const resolvedSpTab =
+    spTab === "synthese"
+      ? ("ia" as Tab)
+      : spTab === "optimiser"
+        ? ONGLET_SIMULER.key
+        : CLES_TAB.includes(spTab as Tab)
+          ? (spTab as Tab)
+          : null;
 
-  const resolvedInitialTab = TABS.some((t) => t.key === initialTab) ? (initialTab as Tab) : "ia";
+  const resolvedInitialTab = CLES_TAB.includes(initialTab as Tab) ? (initialTab as Tab) : "ia";
   const [activeTab, setActiveTab] = useState<Tab>(resolvedSpTab ?? resolvedInitialTab);
   const [editingDesc, setEditingDesc] = useState((resolvedSpTab ?? resolvedInitialTab) === "donnees" && (spEdit || !!initialEdit));
-  const [optimiserSub, setOptimiserSub] = useState<OptimiserSub>("playground");
 
   const heroRef = useRef<HTMLDivElement>(null);
 
@@ -312,6 +358,27 @@ export default function ApartmentDetail({
   // effet aurait affiché l'ancien onglet pendant une frame avant de basculer.
   // La garde `!==` est ce qui empêche la boucle : le second rendu ne change
   // plus rien.
+  /**
+   * Changement d'onglet — partagé par la rangée défilante et le bouton
+   * « Simulateur », pour que les deux se comportent exactement pareil (route,
+   * scroll, remontée sous le hero). Le geste était recopié dans le `onClick`
+   * de chaque `Link` ; à deux emplacements, il aurait divergé.
+   */
+  const allerOnglet = useCallback(
+    (cle: Tab) => {
+      setActiveTab(cle);
+      router.push(`/appartements/${apt.id}?tab=${cle}`, { scroll: false });
+      const hero = heroRef.current;
+      if (hero) {
+        const heroBottom = hero.getBoundingClientRect().bottom;
+        if (heroBottom < 0) {
+          window.scrollTo({ top: hero.offsetTop + hero.offsetHeight, behavior: "instant" });
+        }
+      }
+    },
+    [router, apt.id, setActiveTab]
+  );
+
   const [tabDepuisUrl, setTabDepuisUrl] = useState(resolvedSpTab);
   if (resolvedSpTab && resolvedSpTab !== tabDepuisUrl) {
     setTabDepuisUrl(resolvedSpTab);
@@ -910,34 +977,58 @@ export default function ApartmentDetail({
 
     {/* ── Sticky bar : identité (quand hero scrollé) + onglets ── */}
     <div className="sticky top-0 z-40 border-b border-ink-100/70 bg-white">
-      <nav className="no-scrollbar mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 sm:px-6">
-        {TABS.map((tab) => (
+      {/* La rangée d'onglets DÉFILE, le bouton « Simulateur » non : il est le frère
+          du `<nav>`, pas son enfant. Dans le conteneur `overflow-x-auto`, il
+          partirait hors champ sur mobile, sans scrollbar pour le signaler. */}
+      <div className="mx-auto flex max-w-6xl items-stretch px-4 sm:px-6">
+        <nav className="no-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {TABS.map((tab) => (
+            <Link
+              key={tab.key}
+              href={`/appartements/${apt.id}?tab=${tab.key}`}
+              onClick={(e) => {
+                e.preventDefault();
+                allerOnglet(tab.key);
+              }}
+              className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-4 text-sm font-medium transition ${
+                activeTab === tab.key
+                  ? "border-accent-600 text-accent-600"
+                  : "border-transparent text-ink-500 hover:text-ink-700"
+              }`}
+            >
+              <span className="sm:hidden">{tab.shortLabel}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        {/* Traitement distinct des onglets : ni onglet (ce n'est pas une
+            section du bien), ni CTA plein (ce n'est pas l'action principale de
+            la page). Un MODE, entre les deux. Sa propre bordure et la marge
+            suffisent à le détacher — un filet vertical faisait un trait de plus
+            dans une barre qui en porte déjà un en bas. */}
+        <div className="ml-4 flex shrink-0 items-center">
           <Link
-            key={tab.key}
-            href={`/appartements/${apt.id}?tab=${tab.key}`}
+            href={`/appartements/${apt.id}?tab=${ONGLET_SIMULER.key}`}
             onClick={(e) => {
               e.preventDefault();
-              setActiveTab(tab.key);
-              router.push(`/appartements/${apt.id}?tab=${tab.key}`, { scroll: false });
-              const hero = heroRef.current;
-              if (hero) {
-                const heroBottom = hero.getBoundingClientRect().bottom;
-                if (heroBottom < 0) {
-                  window.scrollTo({ top: hero.offsetTop + hero.offsetHeight, behavior: "instant" });
-                }
-              }
+              allerOnglet(ONGLET_SIMULER.key);
             }}
-            className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-4 text-sm font-medium transition ${
-              activeTab === tab.key
-                ? "border-accent-600 text-accent-600"
-                : "border-transparent text-ink-500 hover:text-ink-700"
+            aria-current={activeTab === ONGLET_SIMULER.key ? "page" : undefined}
+            // `min-h-11` = 44 px : la zone de tap minimale. Le `py-1.5` seul
+            // donnait 34 px, sous le seuil, alors que les onglets voisins
+            // (`py-4`) le respectaient largement.
+            className={`flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+              activeTab === ONGLET_SIMULER.key
+                ? "border-accent-300 bg-accent-50 text-accent-700"
+                : "border-ink-200 text-ink-600 hover:border-ink-300 hover:bg-ink-50"
             }`}
           >
-            <span className="sm:hidden">{tab.shortLabel}</span>
-            <span className="hidden sm:inline">{tab.label}</span>
+            <ONGLET_SIMULER.icon className="size-4" aria-hidden />
+            {ONGLET_SIMULER.label}
           </Link>
-        ))}
-      </nav>
+        </div>
+      </div>
     </div>
 
     {banner ? (
@@ -1222,23 +1313,44 @@ export default function ApartmentDetail({
                       onEstimate={() => estimateFieldAI("assurance_annuelle", { injectIntoPatch: (u) => { if (u.assurance_annuelle != null) setChargesPatch((p) => ({ ...p, assurance_annuelle: u.assurance_annuelle })); } })}
                       estimating={estimatingFields.has("assurance_annuelle")}
                     />
-                    <li className="flex items-center justify-between gap-3 py-2">
-                      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ink-600">
-                        <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
-                        <span>Gestion locative</span>
-                      </span>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <div className="relative w-36">
-                          <input
-                            type="number"
-                            className="w-full rounded-md border border-ink-300 bg-white px-3 py-1.5 text-left text-sm text-ink-900 pr-20 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
-                            value={chargesPatch.hypothese_gestion_pct ?? 0}
-                            onChange={(e) => { const v = Number(e.target.value); if (!Number.isNaN(v) && v >= 0) setChargesPatch((p) => ({ ...p, hypothese_gestion_pct: v })); }}
-                          />
-                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">% du loyer</span>
+                    {(chargesPatch.hypothese_gestion_pct ?? 0) > 0 ? (
+                      <li className="flex items-center justify-between gap-3 py-2">
+                        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>Gestion locative</span>
+                        </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setChargesPatch((p) => ({ ...p, hypothese_gestion_pct: 0 }))}
+                            title="Retirer les frais de gestion"
+                            className="rounded-md p-1.5 text-ink-400 transition-colors hover:text-ink-700"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                          <div className="relative w-36">
+                            <input
+                              type="number"
+                              className="w-full rounded-md border border-ink-300 bg-white px-3 py-1.5 text-left text-sm text-ink-900 pr-20 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+                              value={chargesPatch.hypothese_gestion_pct ?? 0}
+                              onChange={(e) => { const v = Number(e.target.value); if (!Number.isNaN(v) && v >= 0) setChargesPatch((p) => ({ ...p, hypothese_gestion_pct: v })); }}
+                            />
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">% du loyer</span>
+                          </div>
                         </div>
-                      </div>
-                    </li>
+                      </li>
+                    ) : (
+                      <li className="py-2">
+                        <button
+                          type="button"
+                          onClick={() => setChargesPatch((p) => ({ ...p, hypothese_gestion_pct: DEFAULT_HYPOTHESE_GESTION_PCT }))}
+                          className="inline-flex items-center gap-1 rounded-md border border-dashed border-ink-300 px-2.5 py-2 text-xs font-medium text-ink-400 transition-colors hover:border-ink-400 hover:text-ink-600"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Gestion locative
+                        </button>
+                      </li>
+                    )}
                     <li className="flex items-baseline justify-between gap-3 py-2">
                       <span className="font-semibold text-ink-900">Total annuel</span>
                       <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">{formatEuros((value(chargesPatch, "charges_copro_annuelles") ?? 0) + (value(chargesPatch, "taxe_fonciere") ?? 0) + (value(chargesPatch, "assurance_annuelle") ?? 0) + (live.loyer_retenu ?? 0) * 12 * ((chargesPatch.hypothese_gestion_pct ?? 0) / 100))}</span>
@@ -1606,50 +1718,32 @@ export default function ApartmentDetail({
       </>
       )}
 
+      {/* Bac à sable — le seul écran de la fiche qui n'enregistre rien. */}
       {activeTab === "playground" && (
-        // `space-y-8` : la bascule de sous-pill doit se détacher du contenu
-        // qu'elle commande, sinon elle se lit comme une rangée de badges du
-        // premier bloc.
         <div className="space-y-8">
           <TabHeader
-            title="Optimiser"
-            subtitle={optimiserSub === "playground"
-              ? "Visualisez à quel prix ou loyer votre investissement s'améliore."
-              : sousTitreOptimiser}
+            title="Simulateur"
+            subtitle="Testez d'autres prix, loyers et apports pour voir où l'opération bascule. Rien n'est enregistré."
           />
-          <div className="flex gap-2">
-            {([
-              { key: "playground" as const, label: "Playground" },
-              { key: "recommandations" as const, label: "Recommandations" },
-            ]).map((sub) => (
-              <button
-                key={sub.key}
-                onClick={() => setOptimiserSub(sub.key)}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-                  optimiserSub === sub.key
-                    ? "bg-accent-600 text-white"
-                    : "border border-ink-200 bg-white text-ink-500 hover:text-ink-700 hover:border-ink-300"
-                }`}
-              >
-                {sub.label}
-              </button>
-            ))}
-          </div>
-          {optimiserSub === "playground" && (
-            <PlaygroundView apartment={live} settings={settings} />
-          )}
-          {optimiserSub === "recommandations" && (
-            analysisPending ? (
-              <OptimiserSkeleton />
-            ) : (
-              <OptimiserView
-                apartment={apt}
-                settings={settings}
-                seuilsRendement={seuilsRendement}
-                cashflowSeuils={cashflowSeuils}
-                onRelancer={handleRelancerAnalyse}
-              />
-            )
+          <PlaygroundView apartment={live} settings={settings} />
+        </div>
+      )}
+
+      {/* Recommandations — sortie prescriptive, pas une simulation : elle suit
+          l'Analyse dans la barre d'onglets, pas le bac à sable. */}
+      {activeTab === "recos" && (
+        <div className="space-y-8">
+          <TabHeader title="Recommandations" subtitle={sousTitreOptimiser} />
+          {analysisPending ? (
+            <OptimiserSkeleton />
+          ) : (
+            <OptimiserView
+              apartment={apt}
+              settings={settings}
+              seuilsRendement={seuilsRendement}
+              cashflowSeuils={cashflowSeuils}
+              onRelancer={handleRelancerAnalyse}
+            />
           )}
         </div>
       )}

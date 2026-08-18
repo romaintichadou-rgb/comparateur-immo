@@ -166,7 +166,7 @@ export interface Argument {
   detail: string;
   /** Source du fait qui fonde l'argument (crédibilité). Sa PRÉSENCE distingue
    * une "preuve" (adossée à une donnée réelle, opposable à l'interlocuteur)
-   * d'un argument de "méthode" (playbook) — l'onglet Optimiser groupe sur ce
+   * d'un argument de "méthode" (playbook) — l'onglet Recommandations groupe sur ce
    * critère. Ne pas renseigner `source` sur un argument de méthode. */
   source?: "DVF" | "ADEME" | "ANIL" | "Géorisques" | "Calcul";
   /** Chiffre-clé de la preuve, déjà formaté (ex. "24 000 €", "+11 %"), extrait

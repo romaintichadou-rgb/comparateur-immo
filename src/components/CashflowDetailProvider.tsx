@@ -28,7 +28,7 @@ const SEUILS_DEFAUT: CashflowSeuils = { vert: 0, rouge: -200 };
 
 /**
  * Monté une fois à la racine (layout.tsx) : n'importe quel composant affichant
- * un cash-flow (onglet Optimiser…) peut ouvrir le détail du calcul via
+ * un cash-flow (onglet Recommandations…) peut ouvrir le détail du calcul via
  * useCashflowDetail(). Les seuils ET le profil investisseur sont passés par
  * l'appelant — le panneau rejoue `simulate()`, il lui faut donc de quoi
  * résoudre le profil emprunteur hérité, pas seulement de quoi colorer.

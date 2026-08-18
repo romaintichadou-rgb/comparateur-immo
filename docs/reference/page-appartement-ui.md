@@ -93,31 +93,56 @@ Conséquence : seul l'onglet Analyse affiche ces chiffres.
 | Tab (key) | Icône | Label desktop | Label mobile |
 |-----|-------|---------------|--------------|
 | Analyse (`ia`) | `Sparkles` | Analyse | Analyse |
-| Optimiser (`playground`) | `SlidersHorizontal` | Optimiser | Optim. |
+| Recommandations (`recos`) | `Lightbulb` | Recommandations | Recos |
 | Description (`donnees`) | `Home` | Description du bien | Bien |
 | Coûts (`financiere`) | `HandCoins` | Coûts et revenus | Coûts |
-| Simulation (`simulation`) | `Calculator` | Simulation financière | Simulation |
+| Projection (`simulation`) | `Calculator` | Projection financière | Projection |
 
 Le label court est dans `shortLabel` (TABS). Tab bar scrolle horizontalement
 sur mobile (`overflow-x-auto`).
 
-### Sous-pills de l'onglet Optimiser
+### « Simulateur » — un MODE, hors de la barre d'onglets
 
-L'onglet Optimiser contient deux sous-vues sélectionnées par des **pills
-capsules** (état local `optimiserSub`, jamais dans l'URL) :
+Le bac à sable (`?tab=playground`) n'est **pas** un onglet : c'est un bouton posé
+à droite de la barre (`ONGLET_SIMULER`), séparé des onglets par une simple marge.
+Sa bordure propre le détache déjà — un filet vertical ajoutait un trait de plus
+dans une barre qui en porte un en bas.
 
-| Pill | Composant | Rôle |
-|------|-----------|------|
-| **Playground** | `PlaygroundView` | Simulateur interactif (sliders prix/loyer) |
-| **Recommandations** | `OptimiserView` | Leviers prescriptifs (prix, loyer, financement) |
+**Le critère du partage est la PERSISTANCE, pas « données vs scénarios ».** Les
+cinq onglets décrivent le bien et enregistrent ce qu'on y change — y compris
+« Projection financière », dont les hypothèses (revalorisation, vacance,
+indexation) sont persistées par son `persist()`. Le Playground est le seul écran
+de la fiche où **rien** n'est enregistré.
 
-Les pills sont rendues dans `ApartmentDetail.tsx`, au-dessus du contenu
-conditionnel. Style : `rounded-full`, pill active en `bg-accent-600 text-white`,
-pill inactive bordée `ink-200` fond blanc.
+⚠️ **Les Recommandations n'ont PAS suivi le Playground.** Ce n'est pas une
+simulation mais une sortie prescriptive, dérivée de l'analyse et persistée dans
+`analyse_ia` — sa parenté est avec « Analyse », d'où sa place juste après elle
+dans `TABS`. Ne pas les regrouper à nouveau sous un onglet « Optimiser » : c'est
+ce mélange qui rendait la frontière illisible, la moitié du contenu ne respectant
+pas ce que le libellé promettait.
 
-L'onglet entier est en **`space-y-8`** : la bascule de sous-pill doit se
-détacher du contenu qu'elle commande, sinon elle se lit comme une rangée de
-badges appartenant au premier bloc.
+⚠️ **Le bouton vit HORS du `<nav>` défilant**, comme son frère et non son enfant.
+Dans le conteneur `overflow-x-auto`, il partirait hors champ sur mobile — et la
+scrollbar étant masquée (`no-scrollbar`), rien ne signalerait sa présence.
+
+⚠️ **`min-h-11`** (44 px) : le `py-1.5` seul donnait 34 px, sous la zone de tap
+minimale, alors que les onglets voisins (`py-4`) la respectent largement.
+
+Style : ni onglet (ce n'est pas une section du bien), ni CTA plein (ce n'est pas
+l'action principale de la page) — bordé, avec état actif `accent-50`. Le bouton
+et le titre de l'écran portent le MÊME libellé, « Simulateur ».
+
+`?tab=optimiser` (ancienne URL) et `?tab=playground` mènent au Simulateur.
+`CLES_TAB` = les clés de `TABS` **plus** celle du mode : `playground` reste une
+route valide bien qu'absente de la table.
+
+### L'onglet « Optimiser » et ses sous-pills n'existent plus
+
+Il réunissait le Playground et les Recommandations derrière deux pills capsules
+(état local `optimiserSub`). Les deux sont désormais des destinations
+indépendantes — le bouton « Simulateur » et l'onglet `recos` — parce qu'elles
+n'étaient pas de même nature : l'une ne persiste rien, l'autre est une sortie
+persistée dérivée de l'analyse. Ne pas les réunir à nouveau.
 
 ### Titres à l'intérieur d'un onglet : `GroupHeader`, jamais un bloc à la main
 
@@ -148,13 +173,13 @@ des états dégradés d'`OptimiserView`, qui sortent par `return` anticipé.
 | Onglet | Titre | Sous-titre |
 |---|---|---|
 | `ia` | Analyse | *dynamique* — « Verdict d'achat, sous-scores et faits chiffrés · analysée le {date} », ou « Pas encore analysée… » |
-| `playground` (pill Playground) | Optimiser | Visualisez à quel prix ou loyer votre investissement s'améliore. |
-| `playground` (pill Recommandations) | Optimiser | *dynamique* — voir « Sous-titre honnête » ci-dessous |
+| `recos` | Recommandations | *dynamique* — voir « Sous-titre honnête » ci-dessous |
+| `playground` (bouton Simulateur) | Simulateur | Testez d'autres prix, loyers et apports pour voir où l'opération bascule. Rien n'est enregistré. |
 | `donnees` | Description du bien | Les données extraites de l'annonce, corrigeables à la main. |
 | `financiere` | Coûts et revenus | Les montants réels de l'opération — ils alimentent le rendement, le cash-flow et l'analyse. |
-| `simulation` | Simulation financière | Crédit, fiscalité LMNP au réel et cash-flow année par année. |
+| `simulation` | Projection financière | Crédit, fiscalité LMNP au réel et cash-flow année par année. |
 
-Les trois derniers sont **fixes** ; les deux premiers décrivent un **état**.
+Les fixes disent ce que l'onglet MONTRE ; `ia` et `recos` décrivent un **état**.
 
 ### Sous-titre honnête d'Optimiser
 

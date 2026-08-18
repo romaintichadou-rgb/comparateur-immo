@@ -3,7 +3,7 @@ import type { BlocAnalyse, Decision, Verdict } from "./types";
 
 /**
  * Décision d'achat à 3 niveaux — SOURCE UNIQUE, partagée par l'onglet Analyse
- * (`AnalyseIA`), l'onglet Optimiser (`OptimiserView`) et le moteur de
+ * (`AnalyseIA`), l'onglet Recommandations (`OptimiserView`) et le moteur de
  * recommandations. Dérivée des signaux existants (score, verdicts, écart au
  * prix de marché), jamais recalculée à la main ailleurs pour ne pas diverger.
  *

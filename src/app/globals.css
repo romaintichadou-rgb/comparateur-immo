@@ -132,7 +132,7 @@ body {
 
 /* ---------- Curseurs du Playground : animation d'arrivée ---------- */
 
-/* Trois temps enchaînés à l'arrivée sur la sous-pill Playground : la rangée
+/* Trois temps enchaînés à l'arrivée sur le Simulateur : la rangée
    monte, la piste se remplit jusqu'à la valeur, puis la poignée apparaît. Le
    remplissage se joue en `scaleX` et non en `width` : la largeur porte déjà
    une transition (le suivi du curseur pendant le drag), une animation sur la
