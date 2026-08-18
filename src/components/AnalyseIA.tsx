@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Clock, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, ChevronDown, Clock, Loader2, Sparkles } from "lucide-react";
 import { StatCard, type StatCardTone } from "@/components/StatCard";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
@@ -32,7 +32,8 @@ import { formatDateTime, formatEuros, formatEurosSigned, formatNombre, formatNot
 import { AiEstimatedBadge } from "@/components/form/Fields";
 import { isAiEstimated } from "@/lib/estimates";
 import { renderMarkdownBold } from "@/components/richText";
-import { TITRE_SECTION } from "@/components/SectionHeader";
+import { GroupHeader, TITRE_RECOMMANDATION, TITRE_SECTION } from "@/components/SectionHeader";
+import { BLOC_COLORS, BLOC_ICON, BLOC_SUBTITLES } from "@/lib/analyse/bloc-ui";
 import { redirectionQuota } from "@/lib/quota";
 import { resolveInputs, simulate, type SimulationResult } from "@/lib/simulation";
 
@@ -481,21 +482,26 @@ export default function AnalyseIA({
         </div>
       )}
 
-      {/* ── 4. Flat section blocs ── */}
-      <div className="mt-16 flex flex-col">
-        {blocs.map((bloc, i) => (
-          <FlatSection
-            key={bloc.cle}
-            bloc={bloc}
-            apartment={apartment}
-            settings={settings}
-            seuilsRendement={seuilsRendement}
-            cashflowSeuils={cashflowSeuils}
-            simuKpi={bloc.cle === "simulation" ? simuKpi : undefined}
-            isFirst={i === 0}
-            isLast={i === blocs.length - 1}
-          />
-        ))}
+      {/* ── 4. Accordion blocs par dimension ── */}
+      <div className="mt-16">
+        <GroupHeader
+          title="Analyse par dimension"
+          subtitle="Ce qui fait monter ou baisser le score"
+        />
+        <div className="space-y-2">
+          {blocs.map((bloc, i) => (
+            <AccordionBloc
+              key={bloc.cle}
+              bloc={bloc}
+              apartment={apartment}
+              settings={settings}
+              seuilsRendement={seuilsRendement}
+              cashflowSeuils={cashflowSeuils}
+              simuKpi={bloc.cle === "simulation" ? simuKpi : undefined}
+              defaultOpen={i === 0}
+            />
+          ))}
+        </div>
       </div>
 
       {!quartier && (
@@ -508,7 +514,7 @@ export default function AnalyseIA({
   );
 }
 
-// ── Flat Section (no card borders, divider-separated) ────────────────────────
+// ── Accordion Bloc (card per dimension, first open by default) ───────────────
 
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
 const DPE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -552,15 +558,14 @@ function EnergyScale({ label, value, palette }: { label: string; value: string; 
   );
 }
 
-function FlatSection({
+function AccordionBloc({
   bloc,
   apartment,
   settings,
   seuilsRendement,
   cashflowSeuils,
   simuKpi,
-  isFirst,
-  isLast,
+  defaultOpen = false,
 }: {
   bloc: BlocAnalyse;
   apartment: ApartmentWithComputed;
@@ -568,141 +573,146 @@ function FlatSection({
   seuilsRendement: RendementSeuils;
   cashflowSeuils: CashflowSeuils;
   simuKpi?: SimulationResult | null;
-  isFirst: boolean;
-  isLast: boolean;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   const isQuartier = bloc.cle === "quartier";
   const categ = bloc.note != null ? blocCategorie(bloc.note) : null;
   const tone = bloc.note != null ? noteTone(bloc.note) : "neutral";
+  const Icon = BLOC_ICON[bloc.cle];
+  const colors = BLOC_COLORS[bloc.cle];
 
   return (
     <section
       id={`bloc-${bloc.cle}`}
-      className={`scroll-mt-24 ${isFirst ? "pt-0" : "border-t border-ink-100/50 pt-14"} ${isLast ? "pb-0" : "pb-14"}`}
+      className="scroll-mt-24 overflow-hidden rounded-xl border border-ink-100 bg-white"
     >
-      {/* Header: title + tag | score */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <h3 className={TITRE_SECTION}>{bloc.titre}</h3>
+      {/* Accordion header */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full cursor-pointer items-center gap-4 p-5 text-left transition-colors hover:bg-ink-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
+      >
+        <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${colors.bg}`}>
+          <Icon className={`size-5 ${colors.text}`} aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block ${TITRE_RECOMMANDATION}`}>{bloc.titre}</span>
+          <span className="mt-0.5 block text-xs text-ink-400">{BLOC_SUBTITLES[bloc.cle]}</span>
+        </span>
+        {bloc.note != null && (
+          <span className="flex shrink-0 items-baseline gap-0.5">
+            <span className={`font-mono text-xl font-bold tabular-nums leading-none ${NOTE_TEXT_CLASS[tone]}`}>
+              {formatNote(bloc.note)}
+            </span>
+            <span className="font-mono text-[11px] font-medium text-ink-400">/10</span>
+          </span>
+        )}
+        {bloc.note == null && (isQuartier || bloc.cle === "simulation") && (
+          <span className="shrink-0 text-xs font-medium italic text-ink-400">Informatif</span>
+        )}
+        <ChevronDown
+          className={`size-5 shrink-0 text-ink-400 transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
+          aria-hidden
+        />
+      </button>
+
+      {/* Accordion body */}
+      {open && (
+        <div className="border-t border-ink-100/50 px-5 pb-5 pt-4 space-y-4">
           {categ && (
             <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${CATEGORIE_TAG_STYLES[categ.tone]}`}>
               {categ.label}
             </span>
           )}
-          {!categ && (isQuartier || bloc.cle === "simulation") && (
-            <span className="text-sm font-medium italic text-ink-400">Informatif</span>
-          )}
-        </div>
-        {bloc.note != null && (
-          <div className="flex items-baseline gap-0.5">
-            <span className={`font-mono text-[28px] font-bold tabular-nums leading-none ${NOTE_TEXT_CLASS[tone]}`}>
-              {formatNote(bloc.note)}
-            </span>
-            <span className="font-mono text-[13px] font-medium text-ink-400">/10</span>
-          </div>
-        )}
-      </div>
 
-      {/* Invite — juste SOUS le titre, pas en pied de section : elle explique le
-          périmètre sur lequel tout le reste du bloc est calculé, donc elle doit
-          être lue AVANT les chiffres qu'elle qualifie. Volontairement hors du
-          test `disponible` : un bloc sans données est précisément le cas où
-          l'invite a le plus à dire. */}
-      {bloc.invite && (
-        <div className="mt-3 rounded-lg border border-dashed border-ink-300 bg-ink-50/50 px-4 py-3 text-sm text-ink-500">
-          {bloc.invite.text}{" "}
-          <Link
-            href={bloc.invite.href}
-            className="font-medium text-accent-600 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
-          >
-            {bloc.invite.linkLabel}
-          </Link>
-        </div>
-      )}
-
-      {!bloc.disponible ? (
-        <p className="mt-3 text-sm text-ink-400">{bloc.messageIndisponible}</p>
-      ) : (
-        <div className="mt-3 space-y-4">
-          {/* Narration */}
-          {bloc.narration && (
-            <p className={
-              isQuartier
-                ? "text-[15px] leading-relaxed text-ink-700"
-                : "rounded-lg bg-ink-100/40 px-4 py-3 text-sm leading-relaxed text-ink-700"
-            }>
-              {renderMarkdownBold(bloc.narration)}
-            </p>
-          )}
-          {/* « Relancer » ne se propose QUE si relancer peut aider. Quand le
-              bloc est muet faute de position exploitable, l'invite rendue sous
-              le titre porte déjà la cause et le remède — inviter à relancer
-              enverrait le lecteur répéter une opération sans effet. */}
-          {isQuartier && !bloc.narration && !bloc.invite && (
-            <p className="text-sm text-ink-400">
-              Description indisponible — clique sur « Relancer ».
-            </p>
-          )}
-
-          {/* DPE/GES scales */}
-          {bloc.dpeGes && (
-            <div className="grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2">
-              <EnergyScale label="DPE (énergie)" value={bloc.dpeGes.dpe} palette={DPE_COLORS} />
-              <EnergyScale label="GES (climat)" value={bloc.dpeGes.ges} palette={GES_COLORS} />
+          {bloc.invite && (
+            <div className="rounded-lg border border-dashed border-ink-300 bg-ink-50/50 px-4 py-3 text-sm text-ink-500">
+              {bloc.invite.text}{" "}
+              <Link
+                href={bloc.invite.href}
+                className="font-medium text-accent-600 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
+              >
+                {bloc.invite.linkLabel}
+              </Link>
             </div>
           )}
 
-          {/* Simulation bloc: 2-col layout — cashflow waterfall left, details right */}
-          {bloc.cle === "simulation" && simuKpi ? (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-10">
-              <CashflowWaterfall apartment={apartment} simuKpi={simuKpi} cashflowSeuils={cashflowSeuils} />
-              <SimulationDetails bloc={bloc} simuKpi={simuKpi} />
-            </div>
+          {!bloc.disponible ? (
+            <p className="text-sm text-ink-400">{bloc.messageIndisponible}</p>
           ) : (
             <>
-              {/* Highlights as neutral metric-style cards */}
-              {bloc.highlights && bloc.highlights.length > 0 && (() => {
-                const filtered = bloc.highlights;
-                return filtered.length > 0 && (
-                  <div className={`grid gap-3 ${filtered.length === 1 ? "max-w-[50%]" : "grid-cols-2"}`}>
-                    {filtered.map((h, i) => (
-                      <HighlightStatCard key={i} highlight={h} apartment={apartment} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
-                    ))}
-                  </div>
-                );
-              })()}
+              {bloc.narration && (
+                <p className={
+                  isQuartier
+                    ? "text-[15px] leading-relaxed text-ink-700"
+                    : "rounded-lg bg-ink-100/40 px-4 py-3 text-sm leading-relaxed text-ink-700"
+                }>
+                  {renderMarkdownBold(bloc.narration)}
+                </p>
+              )}
+              {isQuartier && !bloc.narration && !bloc.invite && (
+                <p className="text-sm text-ink-400">
+                  Description indisponible — clique sur « Relancer ».
+                </p>
+              )}
 
-              {/* Facts */}
-              {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
-                <ul className="divide-y divide-ink-100/50">
-                  {bloc.faits.map((f, i) => (
-                    <FaitRow key={i} fait={f} />
+              {bloc.dpeGes && (
+                <div className="grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2">
+                  <EnergyScale label="DPE (énergie)" value={bloc.dpeGes.dpe} palette={DPE_COLORS} />
+                  <EnergyScale label="GES (climat)" value={bloc.dpeGes.ges} palette={GES_COLORS} />
+                </div>
+              )}
+
+              {bloc.cle === "simulation" && simuKpi ? (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-10">
+                  <CashflowWaterfall apartment={apartment} simuKpi={simuKpi} cashflowSeuils={cashflowSeuils} />
+                  <SimulationDetails bloc={bloc} simuKpi={simuKpi} />
+                </div>
+              ) : (
+                <>
+                  {bloc.highlights && bloc.highlights.length > 0 && (() => {
+                    const filtered = bloc.highlights;
+                    return filtered.length > 0 && (
+                      <div className={`grid gap-3 ${filtered.length === 1 ? "max-w-[50%]" : "grid-cols-2"}`}>
+                        {filtered.map((h, i) => (
+                          <HighlightStatCard key={i} highlight={h} apartment={apartment} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} />
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {!isQuartier && (bloc.faits?.length ?? 0) > 0 && (
+                    <ul className="divide-y divide-ink-100/50">
+                      {bloc.faits.map((f, i) => (
+                        <FaitRow key={i} fait={f} />
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+
+              {!isQuartier && bloc.donneesManquantes && bloc.donneesManquantes.length > 0 && (
+                <p className="text-xs text-ink-400">
+                  Donnée(s) non disponible(s) : {bloc.donneesManquantes.join(" · ")}.
+                </p>
+              )}
+
+              {bloc.sources.length > 0 && (
+                <p className="text-xs text-ink-400">
+                  Sources :{" "}
+                  {bloc.sources.map((s, i) => (
+                    <span key={s.label}>
+                      {i > 0 && " · "}
+                      {s.url ? (
+                        <a href={s.url} target="_blank" rel="noreferrer" className="underline hover:text-ink-600">{s.label}</a>
+                      ) : s.label}
+                    </span>
                   ))}
-                </ul>
+                </p>
               )}
             </>
-          )}
-
-          {/* Missing data */}
-          {!isQuartier && bloc.donneesManquantes && bloc.donneesManquantes.length > 0 && (
-            <p className="text-xs text-ink-400">
-              Donnée(s) non disponible(s) : {bloc.donneesManquantes.join(" · ")}.
-            </p>
-          )}
-
-          {/* Sources */}
-          {bloc.sources.length > 0 && (
-            <p className="text-xs text-ink-400">
-              Sources :{" "}
-              {bloc.sources.map((s, i) => (
-                <span key={s.label}>
-                  {i > 0 && " · "}
-                  {s.url ? (
-                    <a href={s.url} target="_blank" rel="noreferrer" className="underline hover:text-ink-600">{s.label}</a>
-                  ) : s.label}
-                </span>
-              ))}
-            </p>
           )}
         </div>
       )}

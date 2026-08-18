@@ -12,7 +12,7 @@ import "./globals.css";
 const fraunces = Fraunces({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["600", "900"],
+  weight: ["400", "600", "900"],
   style: ["normal", "italic"],
 });
 

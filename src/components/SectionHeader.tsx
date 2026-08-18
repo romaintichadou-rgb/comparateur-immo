@@ -10,9 +10,9 @@ import type { ReactNode } from "react";
  * |---------|----------------------------------------|-----------------------|
  * | Hero    | Écran plein : vide, erreur, upgrade    | `text-3xl sm:text-4xl`|
  * | H1      | Titre de page                          | `text-2xl sm:text-3xl`|
- * | Onglet  | Titre d'un onglet de la fiche bien     | `text-xl`  (`TabHeader`) |
+ * | Onglet  | Titre d'un onglet de la fiche bien     | `text-[22px]` 400 (`TabHeader`) |
  * | H2      | Titre d'une carte de section           | `text-lg`  ← ici      |
- * | H3      | Groupe à l'intérieur d'une carte       | `text-base` (`GroupTitle` / `GroupHeader`) |
+ * | H3      | Groupe / sous-section                  | `text-lg` 400 (`GroupTitle` / `GroupHeader`) |
  *
  * Sous le H3, on QUITTE l'échelle : titres de courbes, libellés de curseurs et
  * en-têtes de colonnes passent en `LABEL_BLOC` (IBM Plex `text-sm`), jamais en
@@ -39,7 +39,7 @@ import type { ReactNode } from "react";
 export const TITRE_SECTION = "font-display text-lg font-semibold text-ink-900";
 
 /** Idem, pour un titre de groupe (`GroupTitle`) rendu hors heading. */
-export const TITRE_GROUPE = "font-display text-base font-semibold text-ink-900";
+export const TITRE_GROUPE = "font-display text-lg font-normal text-ink-900";
 
 /**
  * EXCEPTION ASSUMÉE — titre d'une carte de recommandation (onglet Recommandations).
@@ -163,7 +163,7 @@ export function TabHeader({
     // pièges du mobile », cas n°1 — constaté sur la carte verdict).
     <div className={`mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
       <div className="min-w-0">
-        <h2 className="font-display text-xl font-semibold text-ink-900">{title}</h2>
+        <h2 className="font-display text-[22px] font-normal text-ink-900">{title}</h2>
         <p className="mt-1 text-sm text-ink-500">{subtitle}</p>
       </div>
       {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}

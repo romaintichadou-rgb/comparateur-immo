@@ -3,11 +3,9 @@
 import { useId, useState } from "react";
 import {
   AlertTriangle,
-  Banknote,
   Check,
   ChevronDown,
   Hammer,
-  KeyRound,
   Landmark,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
@@ -28,14 +26,15 @@ import {
   type RendementSeuils,
 } from "@/lib/analyse/scoring";
 import { decisionFromAnalyse } from "@/lib/analyse/decision";
+import { BLOC_ICON, BLOC_COLORS } from "@/lib/analyse/bloc-ui";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
 import { formatEuros, formatEurosSigned, formatPercent } from "@/lib/format";
 
-const LEVIER_ICON: Record<RecommandationLevier, typeof Banknote> = {
-  prix: Banknote,
+const LEVIER_ICON: Record<RecommandationLevier, typeof Hammer> = {
+  prix: BLOC_ICON.prix,
   travaux: Hammer,
-  loyer: KeyRound,
+  loyer: BLOC_ICON.location,
   financement: Landmark,
 };
 
@@ -60,9 +59,9 @@ const LEVIER_ICON: Record<RecommandationLevier, typeof Banknote> = {
  *    reconsidérer ces couleurs d'abord.
  */
 const LEVIER_COLORS: Record<RecommandationLevier, { bg: string; text: string }> = {
-  prix: { bg: "bg-emerald-50", text: "text-emerald-600" },
+  prix: BLOC_COLORS.prix,
   travaux: { bg: "bg-amber-50", text: "text-amber-600" },
-  loyer: { bg: "bg-sky-50", text: "text-sky-600" },
+  loyer: BLOC_COLORS.location,
   financement: { bg: "bg-violet-50", text: "text-violet-600" },
 };
 
@@ -345,7 +344,7 @@ function LevierCard({
               encore une phrase générique — c'est du texte PERSISTÉ, il ne
               change qu'à la relance de l'analyse. */}
           {reco.pourquoi && (
-            <span className="mt-1 block text-sm leading-relaxed text-ink-500">
+            <span className="mt-0.5 block text-xs text-ink-400">
               {reco.pourquoi}
             </span>
           )}
