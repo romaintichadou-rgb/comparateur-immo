@@ -41,10 +41,10 @@ import {
 } from "@/components/form/Fields";
 
 const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"));
-const OptimiserView = dynamic(() => import("@/components/OptimiserView"), { ssr: false });
-const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"), { ssr: false });
-const FinancementSection = dynamic(() => import("@/components/FinancementSection"), { ssr: false });
-const PlaygroundView = dynamic(() => import("@/components/PlaygroundView"), { ssr: false });
+const OptimiserView = dynamic(() => import("@/components/OptimiserView"));
+const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"));
+const FinancementSection = dynamic(() => import("@/components/FinancementSection"));
+const PlaygroundView = dynamic(() => import("@/components/PlaygroundView"));
 import { DECISION_CHIP, cashflowSeuilsFromSettings, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
 import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
@@ -56,7 +56,6 @@ import { useDeleteApartment } from "@/components/useDeleteApartment";
 import Skeleton from "@/components/Skeleton";
 
 const ApartmentLocationMap = dynamic(() => import("./ApartmentLocationMap"), {
-  ssr: false,
   loading: () => (
     <div className="flex h-full items-center justify-center bg-ink-100 text-xs text-ink-400">
       Chargement de la carte...
