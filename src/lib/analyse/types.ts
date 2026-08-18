@@ -19,7 +19,7 @@ export const BLOC_LABELS: Record<BlocKey, string> = {
   risque: "Risques",
   potentiel: "Potentiel",
   quartier: "Quartier",
-  simulation: "Simulation financière",
+  simulation: "Projection financière",
 };
 
 // Poids de chaque bloc dans la note globale. Seuls les critères INTRINSÈQUES

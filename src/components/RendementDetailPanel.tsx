@@ -192,18 +192,16 @@ export default function RendementDetailPanel({
                       value={-assurance}
                       badge={isAiEstimated(apt, "assurance_annuelle") && <AiEstimatedBadge />}
                     />
-                    <Row
-                      label={`Frais de gestion (${apt.hypothese_gestion_pct} % du loyer)`}
-                      value={-fraisGestion}
-                    />
+                    {fraisGestion > 0 && (
+                      <Row
+                        label={`Frais de gestion (${apt.hypothese_gestion_pct} % du loyer)`}
+                        value={-fraisGestion}
+                      />
+                    )}
                     <TotalRow label="Revenu net annuel" value={revenuNetAnnuel} />
                   </ul>
                 </section>
               </div>
-
-              <p className="text-xs text-ink-400">
-                Frais de gestion calculés sur le loyer annuel, hors vacance locative.
-              </p>
             </div>
           )}
         </div>

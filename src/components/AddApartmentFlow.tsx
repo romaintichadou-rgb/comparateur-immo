@@ -14,7 +14,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  DEFAULT_HYPOTHESE_GESTION_PCT,
   DPE_GES_VALEURS,
   ETATS_BIEN,
   isImmeuble,
@@ -73,7 +72,7 @@ function emptyInput(): ApartmentInput {
     loyer_retenu: null,
     loyer_hc: null,
     loyer_justification: "",
-    hypothese_gestion_pct: DEFAULT_HYPOTHESE_GESTION_PCT,
+    hypothese_gestion_pct: 0,
     quote_part_terrain_pct: null,
     notes: "",
     score_coup_de_coeur: null,

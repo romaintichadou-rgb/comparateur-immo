@@ -450,13 +450,47 @@ function ThresholdChart({
     const sx = scaleX(currentX);
     const label = formatY(currentY);
     const w = Math.max(48, label.length * 5.5 + 16);
+    // Posée À CÔTÉ du point (et non au-dessus) : c'est l'ancre, elle ne bouge
+    // jamais. Elle bascule seulement à gauche quand elle sortirait du cadre.
     const flipLeft = sx + w + 8 > CHART_W;
     const x = flipLeft ? sx - w - 8 : sx + 8;
-    return { label, x, y: scaleY(currentY) - 10, w, h: 18 };
+    return { label, x, y: scaleY(currentY) - 10, w, h: ETIQ_H };
   })();
 
   const hoverY = hoveredIndex != null && hoveredIndex < data.length ? getY(data[hoveredIndex]) : null;
   const hoverX = hoveredIndex != null && hoveredIndex < data.length ? data[hoveredIndex].x : null;
+
+  // Niveau 2 de la cascade : le survol n'évite QUE la valeur courante.
+  const boiteSurvol = (() => {
+    if (hoverX == null || hoverY == null) return null;
+    const label = formatY(hoverY);
+    const { cx, x, w } = gabaritEtiquette(scaleX(hoverX), label);
+    const obstacles = boiteCourante ? [boiteCourante] : [];
+    return {
+      label,
+      cx,
+      x,
+      w,
+      h: ETIQ_H,
+      y: placerEtiquette(x, w, scaleY(hoverY) - 22, obstacles),
+    };
+  })();
+
+  // Niveau 3 : l'annonce cède aux deux autres.
+  const boiteAnnonce = (() => {
+    if (!ghostPoint || ghostPoint.y == null) return null;
+    const label = formatY(ghostPoint.y);
+    const { cx, x, w } = gabaritEtiquette(scaleX(ghostPoint.x), label);
+    const obstacles = [boiteCourante, boiteSurvol].filter((b): b is Boite & { label: string } => b != null);
+    return {
+      label,
+      cx,
+      x,
+      w,
+      h: ETIQ_H,
+      y: placerEtiquette(x, w, scaleY(ghostPoint.y) - 22, obstacles),
+    };
+  })();
 
   const yRange = yMax - yMin;
   const yTicks: number[] = [];
@@ -586,54 +620,14 @@ function ThresholdChart({
             <line x1={scaleX(ghostPoint.x)} y1={PAD.top} x2={scaleX(ghostPoint.x)} y2={PAD.top + PLOT_H} stroke="#8b8393" strokeWidth=".75" strokeDasharray="3 4" opacity=".6" />
             <text x={scaleX(ghostPoint.x)} y={PAD.top - 5} textAnchor="middle" fontSize="7.5" fill="#8b8393" fontFamily="sans-serif">Annonce</text>
             <circle cx={scaleX(ghostPoint.x)} cy={scaleY(ghostPoint.y)} r="4" fill="white" stroke="#8b8393" strokeWidth="1.2" />
-            {(() => {
-              const gx = Math.max(36, Math.min(CHART_W - 36, scaleX(ghostPoint.x)));
-              const gLabel = formatY(ghostPoint.y);
-              const gLabelW = Math.max(48, gLabel.length * 5.5 + 16);
-              const gy0 = scaleY(ghostPoint.y!);
-              // Position par défaut : au-dessus du point.
-              let gy = gy0 - 22;
-              const chevauche = (y: number) =>
-                boiteCourante != null &&
-                gx - gLabelW / 2 < boiteCourante.x + boiteCourante.w &&
-                gx + gLabelW / 2 > boiteCourante.x &&
-                y < boiteCourante.y + boiteCourante.h &&
-                y + 18 > boiteCourante.y;
-              // ⚠️ C'est l'étiquette « Annonce » qui cède, jamais la valeur
-              // courante : cette dernière suit le curseur, la déplacer ferait
-              // sauter l'étiquette qu'on est en train de lire.
-              //
-              // ⚠️ On se cale sur la BOÎTE de l'étiquette courante, pas sur le
-              // point de l'annonce. Un simple « 6 px sous mon point » ne dégage
-              // rien quand les deux points sont proches en ordonnée : constaté
-              // à 288 000 €, où les deux pastilles se recouvraient encore de
-              // 1,5 px après déplacement.
-              if (chevauche(gy)) {
-                const b = boiteCourante!;
-                const dessous = b.y + b.h + 4;
-                const dessus = b.y - 18 - 4;
-                const tientDessous = dessous + 18 <= PAD.top + PLOT_H;
-                const tientDessus = dessus >= PAD.top;
-                // À défaut de place des deux côtés, on prend le plus proche du
-                // point d'annonce pour que le lien visuel reste lisible.
-                gy =
-                  tientDessous && (!tientDessus || Math.abs(dessous - gy0) <= Math.abs(dessus - gy0))
-                    ? dessous
-                    : tientDessus
-                      ? dessus
-                      : dessous;
-              } else {
-                gy = Math.max(PAD.top, Math.min(gy, PAD.top + PLOT_H - 18));
-              }
-              return (
-                <>
-                  <rect x={gx - gLabelW / 2} y={gy} width={gLabelW} height="18" rx="4" fill="white" stroke="#b0a8c0" strokeWidth=".8" />
-                  <text x={gx} y={gy + 12} textAnchor="middle" fontSize="8" fontWeight="600" fill="#6b6280" fontFamily="'Geist Mono', monospace">
-                    {gLabel}
-                  </text>
-                </>
-              );
-            })()}
+            {boiteAnnonce && (
+              <>
+                <rect x={boiteAnnonce.x} y={boiteAnnonce.y} width={boiteAnnonce.w} height={boiteAnnonce.h} rx="4" fill="white" stroke="#b0a8c0" strokeWidth=".8" />
+                <text x={boiteAnnonce.cx} y={boiteAnnonce.y + 12} textAnchor="middle" fontSize="8" fontWeight="600" fill="#6b6280" fontFamily="'Geist Mono', monospace">
+                  {boiteAnnonce.label}
+                </text>
+              </>
+            )}
           </>
         )}
 
@@ -641,19 +635,14 @@ function ThresholdChart({
           <>
             <line x1={scaleX(hoverX)} y1={PAD.top} x2={scaleX(hoverX)} y2={PAD.top + PLOT_H} stroke="#c4b9ec" strokeWidth="1" strokeDasharray="3 3" opacity=".6" />
             <circle cx={scaleX(hoverX)} cy={scaleY(hoverY)} r="3.5" fill="#b3a9e8" stroke="white" strokeWidth="1.5" />
-            {(() => {
-              const cx = Math.max(36, Math.min(CHART_W - 36, scaleX(hoverX)));
-              const label = formatY(hoverY);
-              const labelW = Math.max(48, label.length * 5.5 + 16);
-              return (
-                <>
-                  <rect x={cx - labelW / 2} y={scaleY(hoverY) - 22} width={labelW} height="18" rx="4" fill="white" stroke="#e3deed" strokeWidth=".8" />
-                  <text x={cx} y={scaleY(hoverY) - 10} textAnchor="middle" fontSize="8" fontWeight="600" fill="#332e3a" fontFamily="'Geist Mono', monospace">
-                    {label}
-                  </text>
-                </>
-              );
-            })()}
+            {boiteSurvol && (
+              <>
+                <rect x={boiteSurvol.x} y={boiteSurvol.y} width={boiteSurvol.w} height={boiteSurvol.h} rx="4" fill="white" stroke="#e3deed" strokeWidth=".8" />
+                <text x={boiteSurvol.cx} y={boiteSurvol.y + 12} textAnchor="middle" fontSize="8" fontWeight="600" fill="#332e3a" fontFamily="'Geist Mono', monospace">
+                  {boiteSurvol.label}
+                </text>
+              </>
+            )}
           </>
         )}
 

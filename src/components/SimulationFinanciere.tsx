@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Banknote, Calculator, Check, ChevronDown, Landmark, Plus, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
-import { DEFAULT_HYPOTHESE_GESTION_PCT } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
 import { TONE_TEXT_CLASS, cashflowTone, type CashflowSeuils } from "@/lib/analyse/scoring";
 import {
@@ -225,7 +224,6 @@ export default function SimulationFinanciere({
     + (savedInputs?.revalorisationLoyerPct != null ? 1 : 0)
     + (savedInputs?.indexationChargesPct != null ? 1 : 0)
     + (savedInputs?.vacanceLocativePct != null ? 1 : 0)
-    + (savedInputs?.gestionPct != null ? 1 : 0)
     + (savedInputs?.fraisReventePct != null ? 1 : 0);
 
   function set<K extends keyof SimulationInputs>(key: K, value: SimulationInputs[K]) {
@@ -301,7 +299,6 @@ export default function SimulationFinanciere({
       revalorisationLoyerPct: null,
       indexationChargesPct: null,
       vacanceLocativePct: null,
-      gestionPct: null,
       fraisReventePct: null,
     };
     setInputs(patched);
@@ -316,7 +313,7 @@ export default function SimulationFinanciere({
     return (
       <div className="rounded-xl border border-ink-100 bg-white p-10 text-center">
         <Calculator className="mx-auto h-8 w-8 text-ink-300" />
-        <h2 className="mt-3 font-display text-lg font-semibold text-ink-900">Simulation financière</h2>
+        <h2 className="mt-3 font-display text-lg font-semibold text-ink-900">Projection financière</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
           Renseigne d&apos;abord un loyer et un prix dans l&apos;onglet « Description de
           l&apos;appartement » pour simuler le cash-flow.
@@ -374,11 +371,6 @@ export default function SimulationFinanciere({
           <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
             TMI {formatNombre(resolusAffiches.tmiPct)} %
           </span>
-          {savedInputs?.gestionPct != null && (
-            <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
-              Frais de gestion {formatNombre(savedInputs.gestionPct)} % du loyer
-            </span>
-          )}
           {savedInputs?.vacanceLocativePct != null && (
             <span className="rounded-full bg-ink-50 px-2.5 py-0.5 text-[11px] font-medium text-ink-600">
               Vacance locative {formatNombre(savedInputs.vacanceLocativePct)} % du loyer
@@ -488,13 +480,6 @@ export default function SimulationFinanciere({
                           ligne. `gap-2.5` couvre les deux axes, boutons comme lignes actives. */}
                       <div className="flex flex-wrap gap-2.5">
                         <OptionalRateField
-                          label="Frais de gestion locative"
-                          value={inputs.gestionPct}
-                          defaut={DEFAULT_HYPOTHESE_GESTION_PCT}
-                          onChange={(v) => set("gestionPct", v)}
-                          suffix="% du loyer"
-                        />
-                        <OptionalRateField
                           label="Vacance locative"
                           value={inputs.vacanceLocativePct}
                           defaut={VACANCE_LOCATIVE_DEFAUT_PCT}
@@ -565,7 +550,6 @@ export default function SimulationFinanciere({
                     </div>
                     <div>
                       <FinSectionTitle>Projection</FinSectionTitle>
-                      <FinRow label="Frais de gestion locative" value={hypPct(savedInputs?.gestionPct ?? null)} />
                       <FinRow label="Vacance locative" value={hypPct(savedInputs?.vacanceLocativePct ?? null)} />
                       <FinRow label="Revalorisation du bien" value={hypPct(savedInputs?.revalorisationBienPct ?? null)} />
                       <FinRow label="Revalorisation du loyer" value={hypPct(savedInputs?.revalorisationLoyerPct ?? null)} />

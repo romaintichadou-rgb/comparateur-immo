@@ -190,6 +190,8 @@ export default function LoyerDetailPanel({
   const anilMinTotal = refCC != null && hasSurface ? Math.round(refCC.minM2 * surface) : null;
   const anilMaxTotal = refCC != null && hasSurface ? Math.round(refCC.maxM2 * surface) : null;
 
+  const hasStep1 = anil != null && refCC != null && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface;
+
   const ecartPct =
     hasLoyer && anilMedian != null && anilMedian > 0
       ? ((loyer - anilMedian) / anilMedian) * 100
@@ -280,7 +282,7 @@ export default function LoyerDetailPanel({
             <div className="space-y-5">
 
               {/* ── ÉTAPE 1 : Ancre ANIL ── */}
-              {anil && refCC && anilMedian != null && anilMinTotal != null && anilMaxTotal != null && hasSurface && (() => {
+              {hasStep1 && (() => {
                 // ⚠️ Bug réel corrigé après coup, relevé par un utilisateur sur
                 // un bien de 43,72 m² (réf. 37 m²) : `anilBrutTotal` multipliait
                 // le €/m² DE RÉFÉRENCE (mesuré pour un logement de
@@ -383,15 +385,10 @@ export default function LoyerDetailPanel({
                   de combien exactement chaque critère ». Refonte (retrait des
                   % par tag + dédoublonnage + phrase de synthèse) : voir
                   docs/reference/estimation-loyer-charges.md. */}
-              {aiEstimated && (
+              {hasStep1 && (
                 <section className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <h3 className={TITRE_SECTION}>Étape 2 — Ce qui fait varier ce loyer</h3>
-                    {/* Même nombre que l'Écart au marché de l'Étape 3 (même
-                        apt.loyer_retenu vs anilMedian), coloré avec EXACTEMENT
-                        la même fonction (`ecartTone`, pas `pctToneClasses`) —
-                        deux teintes différentes pour une seule valeur à
-                        quelques centimètres d'écart se liraient comme un bug. */}
                     {ecartPct != null && (
                       <span
                         className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold ${ecartTone(ecartPct, "wrap")} ${ecartTone(ecartPct, "value")}`}
@@ -401,14 +398,6 @@ export default function LoyerDetailPanel({
                     )}
                   </div>
                   <div className="space-y-3 rounded-lg border border-ink-100 bg-white p-4">
-                    {/* ── Contexte : TOUTES les caractéristiques du bien, effet
-                        ou non — colorée quand elle correspond à un facteur
-                        déterministe non neutre (voir `toneEtageEtAscenseur`
-                        et consorts plus bas), grise sinon. Chaque fait
-                        n'apparaît plus qu'UNE fois : avant cette refonte, un
-                        fait comme "Bon état" était répété ici EN GRIS puis,
-                        séparément, dans un tag "Ajustement automatique" avec
-                        son %. */}
                     {caracteristiquesBien.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {caracteristiquesBien.map((c) => (
@@ -421,23 +410,17 @@ export default function LoyerDetailPanel({
                         ))}
                       </div>
                     )}
-                    {!calcul ? (
-                      // Chemins sans résidu structuré (immeuble, logement sans
-                      // référence ANIL) : rien à décomposer, on retombe sur la
-                      // justification en prose.
+                    {!aiEstimated ? (
+                      <p className="text-sm leading-relaxed text-ink-500">
+                        Loyer renseigné manuellement — aucun ajustement n&apos;a été appliqué.
+                      </p>
+                    ) : !calcul ? (
                       apt.loyer_justification && (
                         <div className="rounded-lg bg-ink-50 p-3 text-sm text-ink-600 whitespace-pre-line">
                           {renderBoldInline(sanitizeJustification(apt.loyer_justification, apt.surface_m2, "€/mois", 6))}
                         </div>
                       )
                     ) : (
-                      // Phrase de synthèse — remplace l'ancienne liste de tags
-                      // "+ X · + Y · + Z" par une vraie phrase, en DEUX
-                      // clauses distinctes (barème puis résidu IA) plutôt
-                      // qu'une liste fusionnée : la fiabilité des deux sources
-                      // reste différente (coefficients reproductibles vs
-                      // jugement d'un LLM) — fusionner les MOTS reste
-                      // défendable, fusionner la DONNÉE ne l'était pas.
                       <p className="text-sm leading-relaxed text-ink-600">
                         {renderMarkdownBold(phraseSyntheseLoyer(facteursBareme, calcul.criteres, calcul.echecIa))}
                       </p>
@@ -448,7 +431,7 @@ export default function LoyerDetailPanel({
 
               {/* ── ÉTAPE 3 : Résultat final ── */}
               <section className="space-y-1.5">
-                <h3 className={TITRE_SECTION}>{aiEstimated ? "Étape 3 — " : ""}Loyer retenu</h3>
+                <h3 className={TITRE_SECTION}>{hasStep1 ? "Étape 3 — " : ""}Loyer retenu</h3>
                 <div className="rounded-lg border border-ink-100 bg-white p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl bg-accent-50 p-4">

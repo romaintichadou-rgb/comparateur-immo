@@ -295,14 +295,15 @@ ${CONSIGNE_JUSTIFICATION}`;
   let finalCopro: number | null = null;
   let chargesJustif = "";
   if (wantCopro) {
+    const detCopro = computeDeterministicCopro(input);
     const aiCopro = typeof parsed?.charges_copro_eur_an === "number" ? parsed.charges_copro_eur_an : null;
-    finalCopro = aiCopro;
     if (aiCopro != null && input.surface_m2 != null && input.surface_m2 > 0) {
-      const detCopro = computeDeterministicCopro(input);
       const blended = Math.round((1 - AI_WEIGHT) * detCopro + AI_WEIGHT * aiCopro);
       const minCopro = Math.round(detCopro * 0.7);
       const maxCopro = Math.round(detCopro * 1.4);
       finalCopro = Math.round(Math.max(minCopro, Math.min(maxCopro, blended)));
+    } else {
+      finalCopro = detCopro;
     }
     chargesJustif = typeof parsed?.charges_justification === "string"
       ? sanitizeJustification(parsed.charges_justification, input.surface_m2, "€/an")

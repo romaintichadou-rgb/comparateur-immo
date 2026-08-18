@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { TONE_TEXT_CLASS, type RendementTone } from "@/lib/analyse/scoring";
 
 /**
@@ -34,7 +34,7 @@ export function StatCard({
   /** When set, renders "avant → value" instead of value alone. */
   avant?: string;
   sub?: string;
-  badge?: { text: string; color?: "yellow" | "blue" | "neutral" };
+  badge?: { text: string; color?: "yellow" | "blue" | "neutral"; icon?: boolean };
   tone: StatCardTone;
   onClick?: () => void;
 }) {
@@ -53,7 +53,8 @@ export function StatCard({
       <div className="flex items-center gap-2">
         <p className="text-xs font-medium text-ink-500">{label}</p>
         {badge && (
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium leading-none ${BADGE_COLORS[badge.color ?? "neutral"]}`}>
+          <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium leading-none ${BADGE_COLORS[badge.color ?? "neutral"]}`}>
+            {badge.icon && <Sparkles className="h-2.5 w-2.5" />}
             {badge.text}
           </span>
         )}

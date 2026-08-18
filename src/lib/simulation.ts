@@ -46,7 +46,7 @@ export interface SimulationInputs {
   indexationChargesPct: number | null;
   /** Vacance locative, en % du loyer annuel (ex. 5 = 1 mois vide sur 20). null = désactivée (occupation 100 %). */
   vacanceLocativePct: number | null;
-  /** Frais de gestion locative, en % du loyer annuel. null = désactivés (occupation gratuite). */
+  /** @deprecated Migré vers `Apartment.hypothese_gestion_pct`. Ignoré par `simulate()`. */
   gestionPct: number | null;
   /**
    * Frais de revente (agence, diagnostics), en % de la valeur du bien au
@@ -474,7 +474,7 @@ export function simulate(apt: ApartmentWithComputed, inputs: InputsResolus): Sim
     // Loyer et frais de gestion (qui en sont un pourcentage) revalorisés
     // année après année.
     const loyersAnnuels = loyersAnnuelsAn1 * Math.pow(1 + tauxRevaloLoyer, a - 1) * tauxOccupation;
-    const gestionAnnuelle = loyersAnnuels * ((inputs.gestionPct ?? 0) / 100);
+    const gestionAnnuelle = loyersAnnuels * (apt.hypothese_gestion_pct / 100);
     const chargesIndexables = chargesIndexablesAn1 * Math.pow(1 + tauxIndexationCharges, a - 1);
     const chargesExploitation = chargesIndexables + (apt.assurance_annuelle ?? 0) + gestionAnnuelle;
     if (a === 1) chargesExploitationAn1 = chargesExploitation;

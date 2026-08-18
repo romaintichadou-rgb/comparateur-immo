@@ -95,7 +95,7 @@ Conséquence : seul l'onglet Analyse affiche ces chiffres.
 | Analyse (`ia`) | `Sparkles` | Analyse | Analyse |
 | Optimiser (`playground`) | `SlidersHorizontal` | Optimiser | Optim. |
 | Description (`donnees`) | `Home` | Description du bien | Bien |
-| Opération (`financiere`) | `HandCoins` | Détails de l'opération | Opération |
+| Coûts (`financiere`) | `HandCoins` | Coûts et revenus | Coûts |
 | Simulation (`simulation`) | `Calculator` | Simulation financière | Simulation |
 
 Le label court est dans `shortLabel` (TABS). Tab bar scrolle horizontalement
@@ -151,7 +151,7 @@ des états dégradés d'`OptimiserView`, qui sortent par `return` anticipé.
 | `playground` (pill Playground) | Optimiser | Visualisez à quel prix ou loyer votre investissement s'améliore. |
 | `playground` (pill Recommandations) | Optimiser | *dynamique* — voir « Sous-titre honnête » ci-dessous |
 | `donnees` | Description du bien | Les données extraites de l'annonce, corrigeables à la main. |
-| `financiere` | Détails de l'opération | Ce que coûte l'achat, ce que rapporte la location. |
+| `financiere` | Coûts et revenus | Les montants réels de l'opération — ils alimentent le rendement, le cash-flow et l'analyse. |
 | `simulation` | Simulation financière | Crédit, fiscalité LMNP au réel et cash-flow année par année. |
 
 Les trois derniers sont **fixes** ; les deux premiers décrivent un **état**.

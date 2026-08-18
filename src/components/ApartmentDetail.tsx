@@ -32,7 +32,6 @@ import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
 import {
   AiEstimatedBadge,
   BooleanField,
-  EstimatedBadge,
   ManualBadge,
   NumberField,
   SelectField,
@@ -170,8 +169,8 @@ const TABS: { key: Tab; label: string; shortLabel: string; icon: React.Component
   { key: "ia", label: "Analyse", shortLabel: "Analyse", icon: Sparkles },
   { key: "playground", label: "Optimiser", shortLabel: "Optim.", icon: SlidersHorizontal },
   { key: "donnees", label: "Description du bien", shortLabel: "Bien", icon: Home },
-  { key: "financiere", label: "Détails de l'opération", shortLabel: "Opération", icon: HandCoins },
-  { key: "simulation", label: "Simulation financière", shortLabel: "Simulation", icon: Calculator },
+  { key: "financiere", label: "Coûts et revenus", shortLabel: "Coûts", icon: HandCoins },
+  { key: "simulation", label: "Projection financière", shortLabel: "Projection", icon: Calculator },
 ];
 
 type OptimiserSub = "playground" | "recommandations";
@@ -253,6 +252,8 @@ export default function ApartmentDetail({
   const [finPatch, setFinPatch] = useState<ApartmentPatch>({});
   const [achatPatch, setAchatPatch] = useState<ApartmentPatch>({});
   const [editingAchat, setEditingAchat] = useState(false);
+  const [chargesPatch, setChargesPatch] = useState<ApartmentPatch>({});
+  const [editingCharges, setEditingCharges] = useState(false);
   // Recalcul en arrière-plan : quelles données sont en cours de rafraîchissement.
   const [rentPending, setRentPending] = useState(false);
   const [chargesPending, setChargesPending] = useState(false);
@@ -416,12 +417,13 @@ export default function ApartmentDetail({
       computeDerived({
         ...merged,
         frais_notaire_estimes: fraisNotaireLive,
-        taxe_fonciere: taxeFonciereLive,
-        charges_copro_annuelles: chargesCoproLive,
-        assurance_annuelle: assuranceLive,
+        taxe_fonciere: "taxe_fonciere" in chargesPatch ? (chargesPatch.taxe_fonciere ?? null) : taxeFonciereLive,
+        charges_copro_annuelles: "charges_copro_annuelles" in chargesPatch ? (chargesPatch.charges_copro_annuelles ?? null) : chargesCoproLive,
+        assurance_annuelle: "assurance_annuelle" in chargesPatch ? (chargesPatch.assurance_annuelle ?? null) : assuranceLive,
+        hypothese_gestion_pct: "hypothese_gestion_pct" in chargesPatch ? (chargesPatch.hypothese_gestion_pct ?? 0) : apt.hypothese_gestion_pct,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [apt, descPatch, finPatch, achatPatch, fraisNotaireLive, taxeFonciereLive, chargesCoproLive, assuranceLive]
+    [apt, descPatch, finPatch, achatPatch, chargesPatch, fraisNotaireLive, taxeFonciereLive, chargesCoproLive, assuranceLive]
   );
 
   async function save(patch: ApartmentPatch, clear: () => void) {
@@ -473,12 +475,10 @@ export default function ApartmentDetail({
     assurance_annuelle: { label: "assurance", url: "/api/estimate-assurance" },
   } as const;
 
-  function estimateFieldAI(key: keyof typeof CHAMPS_ESTIMABLES_UI) {
+  function estimateFieldAI(key: keyof typeof CHAMPS_ESTIMABLES_UI, opts?: { injectIntoPatch?: (updated: ApartmentWithComputed) => void }) {
     setEstimatingFields((prev) => new Set(prev).add(key));
 
     const { label, url } = CHAMPS_ESTIMABLES_UI[key];
-    // Le champ n'est passé qu'aux charges : les deux autres routes n'estiment
-    // qu'un seul champ, et un `field` inutile y serait ignoré en silence.
     const body: Record<string, string> = { apartmentId: apt.id };
     if (url === "/api/estimate-charges") body.field = key;
     showBanner(`Estimation IA ${label} en cours…`);
@@ -491,9 +491,10 @@ export default function ApartmentDetail({
           body: JSON.stringify(body),
         });
         if (res.ok) {
-          const updated = (await res.json()).apartment;
+          const updated = (await res.json()).apartment as ApartmentWithComputed;
           setApt(updated);
           ok = true;
+          if (opts?.injectIntoPatch) opts.injectIntoPatch(updated);
           if (key === "charges_copro_annuelles" && updated.loyer_retenu != null && !updated.champs_manuels.includes("loyer_retenu") && updated.charges_copro_annuelles != null) {
             const hc = updated.loyer_hc ?? deriveLoyerHC(updated.loyer_retenu, apt.charges_copro_annuelles ?? 0);
             const newLoyer = recalcLoyerCC(hc, updated.charges_copro_annuelles);
@@ -513,8 +514,6 @@ export default function ApartmentDetail({
         }
       } catch {}
       setEstimatingFields((prev) => { const next = new Set(prev); next.delete(key); return next; });
-      // Formulation invariable en genre : « Assurance recalculé » sortait d'un
-      // accord fait sur un libellé masculin par défaut.
       resolveBanner(ok, ok ? `Estimation ${label} mise à jour` : `Échec de l'estimation ${label} — réessayez`);
     })();
   }
@@ -619,6 +618,35 @@ export default function ApartmentDetail({
   function handleCancelAchat() {
     setAchatPatch({});
     setEditingAchat(false);
+  }
+
+  async function handleSaveCharges() {
+    if (Object.keys(chargesPatch).length === 0) {
+      setEditingCharges(false);
+      return;
+    }
+    const patch: ApartmentPatch = { ...chargesPatch };
+    if ("charges_copro_annuelles" in patch && apt.loyer_retenu != null && !apt.champs_manuels.includes("loyer_retenu")) {
+      const newCharges = patch.charges_copro_annuelles as number | null;
+      if (newCharges != null) {
+        const hc = apt.loyer_hc ?? deriveLoyerHC(apt.loyer_retenu, apt.charges_copro_annuelles ?? 0);
+        (patch as Record<string, unknown>).loyer_retenu = recalcLoyerCC(hc, newCharges);
+        if (apt.loyer_hc == null) (patch as Record<string, unknown>).loyer_hc = hc;
+        const chargesCoproChanged = patch.charges_copro_annuelles !== apt.charges_copro_annuelles;
+        (patch as Record<string, unknown>).champs_manuels = chargesCoproChanged
+          ? Array.from(new Set([...apt.champs_manuels, "charges_copro_annuelles" as const]))
+          : apt.champs_manuels;
+      }
+    }
+    setApt((prev) => computeDerived({ ...prev, ...patch }));
+    setChargesPatch({});
+    setEditingCharges(false);
+    void save(patch, () => {});
+  }
+
+  function handleCancelCharges() {
+    setChargesPatch({});
+    setEditingCharges(false);
   }
 
   // Sauvegarde immédiate, sans bouton "Enregistrer" — pour les réglages
@@ -938,8 +966,8 @@ export default function ApartmentDetail({
       {activeTab === "financiere" && (
         <>
           <TabHeader
-            title="Détails de l'opération"
-            subtitle="Ce que coûte l'achat, ce que rapporte la location."
+            title="Coûts et revenus"
+            subtitle="Les montants réels de l'opération — ils alimentent le rendement, le cash-flow et l'analyse."
           />
           <div className="space-y-6">
           {/* Résultat principal : la rentabilité au premier coup d'œil */}
@@ -992,7 +1020,7 @@ export default function ApartmentDetail({
                         label="Frais de notaire"
                         value={fraisNotaireLive}
                         onChange={(v) => setAchatPatch((p) => ({ ...p, frais_notaire_estimes: v }))}
-                        badge={!fraisNotaireManuel && fraisNotaireLive != null && <EstimatedBadge />}
+                        badge={!fraisNotaireManuel && fraisNotaireLive != null && <AiEstimatedBadge />}
                       />
                       <AchatEditRow label="Travaux" value={value(achatPatch, "travaux")} onChange={(v) => setAchatPatch((p) => ({ ...p, travaux: v }))} />
                       <li className="flex items-baseline justify-between gap-3 py-2">
@@ -1020,7 +1048,7 @@ export default function ApartmentDetail({
                         <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
                           <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
                           <span>Frais de notaire</span>
-                          {!fraisNotaireManuel && fraisNotaireLive != null && <span className="shrink-0 self-center"><EstimatedBadge /></span>}
+                          {!fraisNotaireManuel && fraisNotaireLive != null && <span className="shrink-0 self-center"><AiEstimatedBadge /></span>}
                         </span>
                         <span className="shrink-0 font-medium tabular-nums text-ink-800">{fraisNotaireLive != null ? formatEuros(fraisNotaireLive) : "—"}</span>
                       </li>
@@ -1066,7 +1094,7 @@ export default function ApartmentDetail({
                     label="Loyer mensuel, charges comprises"
                     value={apt.loyer_retenu}
                     suffix="€/mois CC"
-                    badge={isAiEstimated(apt, "loyer_retenu") ? <AiEstimatedBadge /> : apt.champs_manuels.includes("loyer_retenu") ? <ManualBadge /> : apt.loyer_retenu != null ? <EstimatedBadge /> : undefined}
+                    badge={isAiEstimated(apt, "loyer_retenu") ? <AiEstimatedBadge /> : apt.champs_manuels.includes("loyer_retenu") ? <ManualBadge /> : apt.loyer_retenu != null ? <AiEstimatedBadge /> : undefined}
                     onEdit={() => {
                       toggleEdit("loyer_retenu");
                       setFinPatch((p) => ({ ...p, loyer_retenu: apt.loyer_retenu }));
@@ -1122,107 +1150,146 @@ export default function ApartmentDetail({
             )}
           </section>
 
-          <section className="space-y-4 rounded-xl border border-ink-100 bg-white p-5">
-            <SectionHeader title="Charges annuelles" />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                {chargesPending ? (
-                  <>
-                    <PendingFieldLabel label={immeuble ? "Charges d'exploitation annuelles" : "Charges copro annuelles"} />
-                    <Skeleton className="mt-1.5 h-10 w-full rounded-md" />
-                    <Skeleton className="mt-2 h-16 w-full rounded-md" />
-                  </>
-                ) : !editingFields.has("charges_copro_annuelles") && !("charges_copro_annuelles" in finPatch) ? (
-                  <>
-                    <DisplayValue
-                      label={immeuble ? "Charges d'exploitation annuelles" : "Charges copro annuelles"}
-                      value={chargesCoproLive}
-                      suffix="€/an"
-                      badge={isAiEstimated(apt, "charges_copro_annuelles") ? <AiEstimatedBadge /> : apt.champs_manuels.includes("charges_copro_annuelles") ? <ManualBadge /> : chargesCoproLive != null ? <EstimatedBadge /> : undefined}
-                      onEdit={() => {
-                        toggleEdit("charges_copro_annuelles");
-                        setFinPatch((p) => ({ ...p, charges_copro_annuelles: chargesCoproLive }));
+          <section className="space-y-4 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <SectionHeader title="Charges annuelles" />
+                  {editingCharges ? (
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        onClick={handleCancelCharges}
+                        className="rounded-lg border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        onClick={handleSaveCharges}
+                        className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
+                      >
+                        Enregistrer
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setChargesPatch({
+                          charges_copro_annuelles: chargesCoproLive,
+                          taxe_fonciere: taxeFonciereLive,
+                          assurance_annuelle: assuranceLive,
+                          hypothese_gestion_pct: apt.hypothese_gestion_pct,
+                        });
+                        setEditingCharges(true);
                       }}
-                      onEstimate={() => estimateFieldAI("charges_copro_annuelles")}
+                      className="shrink-0 rounded-md border border-ink-300 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50"
+                    >
+                      Modifier
+                    </button>
+                  )}
+                </div>
+
+                {chargesPending ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-5 w-full rounded-md" />
+                    <Skeleton className="h-5 w-full rounded-md" />
+                    <Skeleton className="h-5 w-full rounded-md" />
+                    <Skeleton className="h-6 w-full rounded-md" />
+                  </div>
+                ) : editingCharges ? (
+                  <ul className="divide-y divide-ink-100/50 text-sm">
+                    <AchatEditRow
+                      label={immeuble ? "Charges d'exploitation" : "Charges de copropriété"}
+                      value={value(chargesPatch, "charges_copro_annuelles")}
+                      onChange={(v) => setChargesPatch((p) => ({ ...p, charges_copro_annuelles: v }))}
+                      badge={isAiEstimated(apt, "charges_copro_annuelles") ? <AiEstimatedBadge /> : apt.champs_manuels.includes("charges_copro_annuelles") ? <ManualBadge /> : chargesCoproLive != null ? <AiEstimatedBadge /> : undefined}
+                      suffix="€/an"
+                      onEstimate={() => estimateFieldAI("charges_copro_annuelles", { injectIntoPatch: (u) => { if (u.charges_copro_annuelles != null) setChargesPatch((p) => ({ ...p, charges_copro_annuelles: u.charges_copro_annuelles })); } })}
                       estimating={estimatingFields.has("charges_copro_annuelles")}
                     />
-                    {apt.charges_justification && (
-                      <p className="mt-2 rounded-md bg-ink-50 p-3 text-xs text-ink-600 whitespace-pre-line">{renderBoldInline(sanitizeJustification(apt.charges_justification, apt.surface_m2, "€/an"))}</p>
-                    )}
-                  </>
-                ) : (
-                  <EditableValue
-                    label={immeuble ? "Charges d'exploitation annuelles" : "Charges copro annuelles"}
-                    value={chargesCoproLive}
-                    suffix="€/an"
-                    onChange={(v) => setFinPatch((p) => ({ ...p, charges_copro_annuelles: v }))}
-                    onSave={() => saveField("charges_copro_annuelles")}
-                    onCancel={() => cancelField("charges_copro_annuelles")}
-                  />
-                )}
-              </div>
-              <div>
-                {chargesPending ? (
-                  <>
-                    <PendingFieldLabel label="Taxe foncière" />
-                    <Skeleton className="mt-1.5 h-10 w-full rounded-md" />
-                    <Skeleton className="mt-2 h-16 w-full rounded-md" />
-                  </>
-                ) : !editingFields.has("taxe_fonciere") && !("taxe_fonciere" in finPatch) ? (
-                  <>
-                    <DisplayValue
+                    <AchatEditRow
                       label="Taxe foncière"
-                      value={taxeFonciereLive}
-                      suffix="€/an"
+                      value={value(chargesPatch, "taxe_fonciere")}
+                      onChange={(v) => setChargesPatch((p) => ({ ...p, taxe_fonciere: v }))}
                       badge={isAiEstimated(apt, "taxe_fonciere") ? <AiEstimatedBadge /> : apt.champs_manuels.includes("taxe_fonciere") ? <ManualBadge /> : taxeFonciereLive != null ? <AiEstimatedBadge /> : undefined}
-                      onEdit={() => {
-                        toggleEdit("taxe_fonciere");
-                        setFinPatch((p) => ({ ...p, taxe_fonciere: taxeFonciereLive }));
-                      }}
-                      onEstimate={() => estimateFieldAI("taxe_fonciere")}
+                      suffix="€/an"
+                      onEstimate={() => estimateFieldAI("taxe_fonciere", { injectIntoPatch: (u) => { if (u.taxe_fonciere != null) setChargesPatch((p) => ({ ...p, taxe_fonciere: u.taxe_fonciere })); } })}
                       estimating={estimatingFields.has("taxe_fonciere")}
                     />
-                    {apt.taxe_fonciere_justification && (
-                      <p className="mt-2 rounded-md bg-ink-50 p-3 text-xs text-ink-600 whitespace-pre-line">{renderBoldInline(sanitizeJustification(apt.taxe_fonciere_justification, apt.surface_m2, "€/an"))}</p>
+                    <AchatEditRow
+                      label="Assurance PNO"
+                      value={value(chargesPatch, "assurance_annuelle")}
+                      onChange={(v) => setChargesPatch((p) => ({ ...p, assurance_annuelle: v }))}
+                      badge={isAiEstimated(apt, "assurance_annuelle") ? <AiEstimatedBadge /> : apt.champs_manuels.includes("assurance_annuelle") ? <ManualBadge /> : assuranceLive != null ? <AiEstimatedBadge /> : undefined}
+                      suffix="€/an"
+                      onEstimate={() => estimateFieldAI("assurance_annuelle", { injectIntoPatch: (u) => { if (u.assurance_annuelle != null) setChargesPatch((p) => ({ ...p, assurance_annuelle: u.assurance_annuelle })); } })}
+                      estimating={estimatingFields.has("assurance_annuelle")}
+                    />
+                    <li className="flex items-center justify-between gap-3 py-2">
+                      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ink-600">
+                        <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                        <span>Gestion locative</span>
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="relative w-36">
+                          <input
+                            type="number"
+                            className="w-full rounded-md border border-ink-300 bg-white px-3 py-1.5 text-left text-sm text-ink-900 pr-20 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+                            value={chargesPatch.hypothese_gestion_pct ?? 0}
+                            onChange={(e) => { const v = Number(e.target.value); if (!Number.isNaN(v) && v >= 0) setChargesPatch((p) => ({ ...p, hypothese_gestion_pct: v })); }}
+                          />
+                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">% du loyer</span>
+                        </div>
+                      </div>
+                    </li>
+                    <li className="flex items-baseline justify-between gap-3 py-2">
+                      <span className="font-semibold text-ink-900">Total annuel</span>
+                      <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">{formatEuros((value(chargesPatch, "charges_copro_annuelles") ?? 0) + (value(chargesPatch, "taxe_fonciere") ?? 0) + (value(chargesPatch, "assurance_annuelle") ?? 0) + (live.loyer_retenu ?? 0) * 12 * ((chargesPatch.hypothese_gestion_pct ?? 0) / 100))}</span>
+                    </li>
+                  </ul>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-ink-100/50 text-sm">
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>{immeuble ? "Charges d'exploitation" : "Charges de copropriété"}</span>
+                          {(isAiEstimated(apt, "charges_copro_annuelles") ? <span className="shrink-0 self-center"><AiEstimatedBadge /></span> : apt.champs_manuels.includes("charges_copro_annuelles") ? <span className="shrink-0 self-center"><ManualBadge /></span> : chargesCoproLive != null ? <span className="shrink-0 self-center"><AiEstimatedBadge /></span> : null)}
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{chargesCoproLive != null ? formatEuros(chargesCoproLive) : "—"}</span>
+                      </li>
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>Taxe foncière</span>
+                          {(isAiEstimated(apt, "taxe_fonciere") ? <span className="shrink-0 self-center"><AiEstimatedBadge /></span> : apt.champs_manuels.includes("taxe_fonciere") ? <span className="shrink-0 self-center"><ManualBadge /></span> : taxeFonciereLive != null ? <span className="shrink-0 self-center"><AiEstimatedBadge /></span> : null)}
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{taxeFonciereLive != null ? formatEuros(taxeFonciereLive) : "—"}</span>
+                      </li>
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>Assurance PNO</span>
+                          {(isAiEstimated(apt, "assurance_annuelle") ? <span className="shrink-0 self-center"><AiEstimatedBadge /></span> : apt.champs_manuels.includes("assurance_annuelle") ? <span className="shrink-0 self-center"><ManualBadge /></span> : assuranceLive != null ? <span className="shrink-0 self-center"><AiEstimatedBadge /></span> : null)}
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{assuranceLive != null ? formatEuros(assuranceLive) : "—"}</span>
+                      </li>
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
+                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
+                          <span>Gestion locative{apt.hypothese_gestion_pct > 0 ? ` (${apt.hypothese_gestion_pct} %)` : ""}</span>
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{apt.hypothese_gestion_pct > 0 ? formatEuros((live.loyer_retenu ?? 0) * 12 * (apt.hypothese_gestion_pct / 100)) : "—"}</span>
+                      </li>
+                      <li className="flex items-baseline justify-between gap-3 py-2">
+                        <span className="font-semibold text-ink-900">Total annuel</span>
+                        <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">{formatEuros((chargesCoproLive ?? 0) + (taxeFonciereLive ?? 0) + (assuranceLive ?? 0) + (live.loyer_retenu ?? 0) * 12 * (apt.hypothese_gestion_pct / 100))}</span>
+                      </li>
+                    </ul>
+                    {(chargesCoproLive ?? 0) + (taxeFonciereLive ?? 0) + (assuranceLive ?? 0) + (live.loyer_retenu ?? 0) * 12 * (apt.hypothese_gestion_pct / 100) > 0 && (
+                      <p className="text-xs text-ink-400">
+                        Soit <span className="tabular-nums font-medium text-ink-600">{formatEuros(((chargesCoproLive ?? 0) + (taxeFonciereLive ?? 0) + (assuranceLive ?? 0) + (live.loyer_retenu ?? 0) * 12 * (apt.hypothese_gestion_pct / 100)) / 12)}/mois</span>
+                      </p>
                     )}
                   </>
-                ) : (
-                  <EditableValue
-                    label="Taxe foncière"
-                    value={taxeFonciereLive}
-                    suffix="€/an"
-                    onChange={(v) => setFinPatch((p) => ({ ...p, taxe_fonciere: v }))}
-                    onSave={() => saveField("taxe_fonciere")}
-                    onCancel={() => cancelField("taxe_fonciere")}
-                  />
                 )}
-              </div>
-              <div>
-                {!editingFields.has("assurance_annuelle") && !("assurance_annuelle" in finPatch) ? (
-                  <DisplayValue
-                    label="Assurance"
-                    value={assuranceLive}
-                    suffix="€/an"
-                    badge={isAiEstimated(apt, "assurance_annuelle") ? <AiEstimatedBadge /> : apt.champs_manuels.includes("assurance_annuelle") ? <ManualBadge /> : assuranceLive != null ? <AiEstimatedBadge /> : undefined}
-                    onEdit={() => {
-                      toggleEdit("assurance_annuelle");
-                      setFinPatch((p) => ({ ...p, assurance_annuelle: assuranceLive }));
-                    }}
-                    onEstimate={() => estimateFieldAI("assurance_annuelle")}
-                    estimating={estimatingFields.has("assurance_annuelle")}
-                  />
-                ) : (
-                  <EditableValue
-                    label="Assurance"
-                    value={assuranceLive}
-                    suffix="€/an"
-                    onChange={(v) => setFinPatch((p) => ({ ...p, assurance_annuelle: v }))}
-                    onSave={() => saveField("assurance_annuelle")}
-                    onCancel={() => cancelField("assurance_annuelle")}
-                  />
-                )}
-              </div>
-            </div>
           </section>
           </div>
         </>
@@ -1231,8 +1298,8 @@ export default function ApartmentDetail({
       {activeTab === "simulation" && (
         <>
           <TabHeader
-            title="Simulation financière"
-            subtitle="Crédit, fiscalité LMNP au réel et cash-flow année par année."
+            title="Projection financière"
+            subtitle="Crédit, fiscalité LMNP au réel et projection année par année."
           />
           <SimulationFinanciere
             key={`sim-${apt.id}`}
@@ -1650,11 +1717,17 @@ function AchatEditRow({
   value,
   onChange,
   badge,
+  suffix = "€",
+  onEstimate,
+  estimating,
 }: {
   label: string;
   value: number | null;
   onChange: (v: number | null) => void;
   badge?: React.ReactNode;
+  suffix?: string;
+  onEstimate?: () => void;
+  estimating?: boolean;
 }) {
   const [texte, setTexte] = useState(value != null ? String(value) : "");
   const [prev, setPrev] = useState(value);
@@ -1675,14 +1748,27 @@ function AchatEditRow({
         <span>{label}</span>
         {badge && <span className="shrink-0">{badge}</span>}
       </span>
-      <div className="relative w-36 shrink-0">
-        <input
-          type="number"
-          className="w-full rounded-md border border-ink-300 bg-white px-3 py-1.5 pr-8 text-left text-sm text-ink-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
-          value={texte}
-          onChange={(e) => handle(e.target.value)}
-        />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">€</span>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {onEstimate && (
+          <button
+            type="button"
+            onClick={onEstimate}
+            disabled={estimating}
+            className="rounded-md p-1.5 text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50"
+            title="Relancer l'estimation IA"
+          >
+            {estimating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          </button>
+        )}
+        <div className="relative w-36">
+          <input
+            type="number"
+            className={`w-full rounded-md border border-ink-300 bg-white px-3 py-1.5 text-left text-sm text-ink-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500 ${suffix.length > 2 ? "pr-12" : "pr-8"}`}
+            value={texte}
+            onChange={(e) => handle(e.target.value)}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">{suffix}</span>
+        </div>
       </div>
     </li>
   );

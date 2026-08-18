@@ -100,7 +100,8 @@ export async function reestimerLoyer(apartment: Apartment): Promise<Apartment> {
 /** `field` absent = les deux champs (charges de copropriété ET taxe foncière). */
 export async function reestimerCharges(
   apartment: Apartment,
-  field?: ChargesField
+  field?: ChargesField,
+  force?: boolean,
 ): Promise<Apartment> {
   const result = await estimateCharges(
     {
@@ -118,7 +119,7 @@ export async function reestimerCharges(
       code_insee: apartment.code_insee,
     },
     field,
-    apartment.charges_calcul,
+    force ? undefined : apartment.charges_calcul,
   );
 
   if (result.chargesCalcul?.reutilise) {

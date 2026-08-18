@@ -468,7 +468,7 @@ export default function AnalyseIA({
           label="Loyer mensuel"
           value={loyerRetenu != null ? formatEuros(loyerRetenu) : "—"}
           sub={loyerRetenu != null ? "/mois" : "À estimer"}
-          badge={loyerEstimeIA ? { text: "Estimation IA", color: "yellow" } : loyerManuel ? { text: "Manuel", color: "blue" } : undefined}
+          badge={loyerEstimeIA ? { text: "IA", color: "yellow", icon: true } : loyerManuel ? { text: "Manuel", color: "blue" } : undefined}
           tone="neutral"
           onClick={() => openLoyerDetail(apartment)}
         />

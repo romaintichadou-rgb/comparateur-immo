@@ -153,9 +153,9 @@ score via `fill-*` classes (pas `text-*` — SVG utilise `fill`).
 
 | CTA | Onglet | Ancre (`id`) | Fichier de l'ancre |
 |---|---|---|---|
-| Rendement net | Détails de l'opération | `fin-resultats` | `ApartmentDetail.tsx` |
+| Rendement net | Coûts et revenus | `fin-resultats` | `ApartmentDetail.tsx` |
 | Prix vs marché | Analyse | `bloc-prix` | `AnalyseIA.tsx` (`FlatSection`) |
-| Prix au m² (fallback) | Détails de l'opération | `fin-achat` | `ApartmentDetail.tsx` |
+| Prix au m² (fallback) | Coûts et revenus | `fin-achat` | `ApartmentDetail.tsx` |
 | DPE | Analyse | `bloc-risque` | `AnalyseIA.tsx` (`FlatSection`) |
 
 **Le cash-flow ne navigue plus** : la MetricCard « Cash-flow mensuel » et les
@@ -513,43 +513,44 @@ cash-flow s'affiche : elle garde ainsi exactement la taille des deux autres. En
 pleine largeur, le même graphe changeait d'échelle d'un facteur à l'autre et
 devenait incomparable.
 
-### Étiquettes de courbe : l'« Annonce » cède, jamais la valeur courante
+### Étiquettes de courbe : une cascade de priorité, pas des règles au cas par cas
 
-Deux pastilles cohabitent sur chaque courbe — la valeur COURANTE (accent, suit
-le curseur) et le repère ANNONCE (blanc, au prix d'origine). Elles étaient
-placées chacune de son côté sans se connaître et se chevauchaient dès que le
-curseur approchait du prix d'annonce, c'est-à-dire **au démarrage**, le cas le
-plus fréquent.
+**TROIS** pastilles peuvent cohabiter sur une même courbe :
 
-La géométrie de l'étiquette courante (`boiteCourante`) est donc hissée hors du
-JSX pour que celle de l'annonce puisse l'éviter.
+| Priorité | Étiquette | Style | Comportement |
+|---|---|---|---|
+| 1 | **Valeur courante** | accent plein | ancre — **ne bouge jamais** |
+| 2 | **Survol** | blanc, bord `e3deed` | cède à la courante |
+| 3 | **Annonce** | blanc, bord `b0a8c0` | cède aux deux |
 
-- **C'est l'« Annonce » qui se déplace.** La courante suit le curseur : la
-  bouger ferait sauter l'étiquette qu'on est justement en train de lire.
-- ⚠️ **Le déplacement se cale sur la BOÎTE de l'étiquette courante, pas sur le
-  point d'annonce.** Un « 6 px sous mon point » ne dégage rien quand les deux
-  points sont proches en ordonnée : constaté à 288 000 €, où les deux pastilles
-  se recouvraient encore de 1,5 px après déplacement. On place donc l'étiquette
-  entièrement sous (ou sur) la boîte adverse, en gardant le côté le plus proche
-  du point d'annonce pour que le lien visuel reste lisible.
-- Vérifié sur 30 positions du curseur : aucune collision.
+Chacune ne connaît que celles qui lui sont prioritaires : le placement est donc
+déterministe, aucune paire ne peut se disputer la même place. Les trois boîtes
+(`boiteCourante`, `boiteSurvol`, `boiteAnnonce`) sont calculées **hors du JSX**,
+via `placerEtiquette()` — elles étaient auparavant positionnées chacune de son
+côté sans se connaître.
 
-### Le chiffre pivot est PORTÉ PAR LE TITRE
+Pourquoi cet ordre : la courante suit le curseur du simulateur, la déplacer
+ferait sauter l'étiquette qu'on est en train de lire ; le survol est produit par
+la souris à l'instant même, il prime donc sur le repère statique qu'est
+l'annonce.
 
-Le pivot est le chiffre que l'investisseur **contrôle** (prix, loyer, budget,
-apport) — jamais une conséquence (rendement, cash-flow). Un pivot fixé sur le
-cash-flow mettrait mécaniquement le levier financement en tête, or c'est le
-levier d'appoint.
+⚠️ **Les positions de repli se calent sur la BOÎTE de l'obstacle, jamais sur son
+propre point.** Un décalage relatif à son point ne dégage rien quand deux points
+sont proches en ordonnée : constaté à 288 000 €, où deux pastilles se
+recouvraient encore de 1,5 px après déplacement.
 
-**Il n'y a pas de carte pivot** : `reco.action` porte le chiffre (« Négocie à
-272 800 € »). `buildPivot` ne fournit que le contexte (`label`, `avant`,
-`delta`), pas la valeur cible — `null` pour travaux et financement (grandeur
-sèche, déjà dans le titre).
+⚠️ `placerEtiquette` retombe sur la position préférée (bornée au tracé) quand
+aucun candidat ne tient : mieux vaut un chevauchement résiduel qu'une étiquette
+hors du graphique.
 
-### Bandeau d'alerte
+Vérifié sur **224 combinaisons** (8 positions de curseur × 28 positions de
+survol), sur les deux courbes : aucun chevauchement.
 
-Le `caveat` s'affiche en bandeau sous les chiffres. Rouge **uniquement** si
-`caveatBloquant` est vrai (frein rédhibitoire nommé), ambre sinon.
+⚠️ Piège de vérification : mesurer le DOM juste après avoir déplacé le curseur
+lit l'état AVANT le rendu de React, et produit des faux négatifs. Décaler la
+mesure d'un cran (mesurer la position précédente) est la seule méthode fiable
+ici — `requestAnimationFrame` ne se déclenche pas quand le pane de
+prévisualisation est masqué, et `setTimeout` y est étranglé.
 
 ## Verdict = source unique (`src/lib/analyse/decision.ts`)
 

@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const apartment = await requireApartment(apartmentId);
-    const updated = await reestimerCharges(apartment, field);
+    const updated = await reestimerCharges(apartment, field, true);
     return NextResponse.json({ apartment: computeDerived(updated) });
   } catch (err) {
     // Avant le message générique : un utilisateur déconnecté ne doit pas lire
