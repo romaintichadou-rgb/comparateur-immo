@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
@@ -40,11 +39,11 @@ import {
   TextField,
 } from "@/components/form/Fields";
 
-const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"));
-const OptimiserView = dynamic(() => import("@/components/OptimiserView"));
-const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"));
-const FinancementSection = dynamic(() => import("@/components/FinancementSection"));
-const PlaygroundView = dynamic(() => import("@/components/PlaygroundView"));
+import AnalyseIA from "@/components/AnalyseIA";
+import OptimiserView from "@/components/OptimiserView";
+import SimulationFinanciere from "@/components/SimulationFinanciere";
+import FinancementSection from "@/components/FinancementSection";
+import PlaygroundView from "@/components/PlaygroundView";
 import { DECISION_CHIP, cashflowSeuilsFromSettings, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
 import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
 import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
@@ -55,13 +54,7 @@ import { useLoyerDetail } from "@/components/LoyerDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
 import Skeleton from "@/components/Skeleton";
 
-const ApartmentLocationMap = dynamic(() => import("./ApartmentLocationMap"), {
-  loading: () => (
-    <div className="flex h-full items-center justify-center bg-ink-100 text-xs text-ink-400">
-      Chargement de la carte...
-    </div>
-  ),
-});
+import ApartmentLocationMap from "./ApartmentLocationMap";
 
 function DisplayValue({
   label,
