@@ -249,6 +249,11 @@ function useBanner() {
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
+  // Afficher le skeleton uniquement lors d'un recalcul, pas au démarrage initial
+  useEffect(() => {
+    if (analysisPending) setHasInteracted(true);
+  }, [analysisPending]);
+
   return { banner, show, resolve, dismiss } as const;
 }
 
@@ -289,6 +294,8 @@ export default function ApartmentDetail({
   const [chargesPending, setChargesPending] = useState(false);
   const [analysisPending, setAnalysisPending] = useState(false);
   const [quotaNotice, setQuotaNotice] = useState(false);
+  // Ne pas afficher le skeleton au démarrage initial (données pré-chargées côté serveur)
+  const [hasInteracted, setHasInteracted] = useState(false);
   const [editingFields, setEditingFields] = useState<Set<string>>(new Set());
   const [estimatingFields, setEstimatingFields] = useState<Set<string>>(new Set());
   const toggleEdit = useCallback((key: string) => {
@@ -1038,7 +1045,7 @@ export default function ApartmentDetail({
       {activeTab === "ia" && (
         <>
           <TabHeader title="Analyse" subtitle={sousTitreAnalyse} />
-          {analysisPending ? (
+          {analysisPending && hasInteracted ? (
             <AnalyseIASkeleton />
           ) : (
             <AnalyseIA apartment={apt} settings={settings} seuilsRendement={seuilsRendement} cashflowSeuils={cashflowSeuils} onAnalysed={setApt} onRelancer={handleRelancerAnalyse} onGoTab={goToSection} quotaNotice={quotaNotice} />
