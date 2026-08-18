@@ -1041,7 +1041,7 @@ export default function ApartmentDetail({
       />
     ) : null}
 
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl space-y-10 px-4 py-8 sm:px-6">
 
       {activeTab === "ia" && (
         <>
@@ -1060,7 +1060,7 @@ export default function ApartmentDetail({
             title="Coûts et revenus"
             subtitle="Les montants réels de l'opération — ils alimentent le rendement, le cash-flow et l'analyse."
           />
-          <div className="space-y-6">
+          <div className="space-y-8">
           {/* Résultat principal : la rentabilité au premier coup d'œil */}
           {finDirty && (
             <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
@@ -1075,7 +1075,7 @@ export default function ApartmentDetail({
             </div>
           )}
 
-          <section id="fin-achat" className="space-y-4 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
+          <section id="fin-achat" className="space-y-6 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <SectionHeader title="Achat" />
                   {editingAchat ? (
@@ -1104,7 +1104,7 @@ export default function ApartmentDetail({
                 </div>
 
                 {editingAchat ? (
-                  <div className="space-y-3">
+                  <div className="space-y-5">
                     <ul className="divide-y divide-ink-100/50 text-sm">
                       <AchatEditRow label="Prix d'achat" value={value(achatPatch, "prix")} onChange={(v) => setAchatPatch((p) => ({ ...p, prix: v }))} badge={<span className="text-red-500" title="Obligatoire">*</span>} />
                       <AchatEditRow
@@ -1173,7 +1173,7 @@ export default function ApartmentDetail({
           <section className="space-y-4 rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Revenus" />
             {rentPending ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <PendingFieldLabel label="Loyer mensuel, charges comprises" />
                 <Skeleton className="h-10 w-full rounded-md" />
                 <Skeleton className="h-16 w-full rounded-md" />
@@ -1278,7 +1278,7 @@ export default function ApartmentDetail({
                 </div>
 
                 {chargesPending ? (
-                  <div className="space-y-3">
+                  <div className="space-y-5">
                     <Skeleton className="h-5 w-full rounded-md" />
                     <Skeleton className="h-5 w-full rounded-md" />
                     <Skeleton className="h-5 w-full rounded-md" />
@@ -1616,7 +1616,7 @@ export default function ApartmentDetail({
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Suivi" className="mb-4" />
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
                 <span className="mb-1.5 block text-sm font-medium text-ink-700">Statut</span>
                 <select
@@ -1666,7 +1666,7 @@ export default function ApartmentDetail({
 
           <div className="rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Contact" className="mb-4" />
-            <div className="space-y-3">
+            <div className="space-y-4">
               <TextField
                 label="Nom"
                 value={contactNom}

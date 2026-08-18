@@ -161,10 +161,10 @@ export function TabHeader({
     // `flex-wrap` + `gap-y` obligatoires : sans eux l'action passe PAR-DESSUS
     // le sous-titre dès que la colonne se resserre (cf. AGENTS.md, « les quatre
     // pièges du mobile », cas n°1 — constaté sur la carte verdict).
-    <div className={`mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
+    <div className={`mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
       <div className="min-w-0">
         <h2 className="font-display text-[22px] font-normal text-ink-900">{title}</h2>
-        <p className="mt-1 text-sm text-ink-500">{subtitle}</p>
+        <p className="mt-3 text-sm text-ink-500">{subtitle}</p>
       </div>
       {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
     </div>
@@ -226,13 +226,13 @@ export function GroupHeader({
     // `flex-wrap` + `gap-y` obligatoires, même piège que `TabHeader` : sans
     // eux le contrôle de droite passe PAR-DESSUS le sous-titre dès que la
     // colonne se resserre (AGENTS.md, « les quatre pièges du mobile », n°1).
-    <div className={`mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2 ${className}`}>
+    <div className={`mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-2 ${className}`}>
       <div className="min-w-0">
         <div className="flex items-baseline gap-2">
           <Tag className={TITRE_GROUPE}>{title}</Tag>
           {count != null && <span className="text-xs tabular-nums text-ink-400">{count}</span>}
         </div>
-        {subtitle && <p className="mt-0.5 text-sm text-ink-500">{subtitle}</p>}
+        {subtitle && <p className="mt-2 text-sm text-ink-500">{subtitle}</p>}
       </div>
       {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
     </div>

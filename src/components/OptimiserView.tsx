@@ -6,7 +6,6 @@ import {
   Check,
   ChevronDown,
   Hammer,
-  Landmark,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
@@ -35,7 +34,7 @@ const LEVIER_ICON: Record<RecommandationLevier, typeof Hammer> = {
   prix: BLOC_ICON.prix,
   travaux: Hammer,
   loyer: BLOC_ICON.location,
-  financement: Landmark,
+  financement: BLOC_ICON.simulation,
 };
 
 /**
@@ -62,7 +61,7 @@ const LEVIER_COLORS: Record<RecommandationLevier, { bg: string; text: string }> 
   prix: BLOC_COLORS.prix,
   travaux: { bg: "bg-amber-50", text: "text-amber-600" },
   loyer: BLOC_COLORS.location,
-  financement: { bg: "bg-violet-50", text: "text-violet-600" },
+  financement: BLOC_COLORS.simulation,
 };
 
 const fmtCashflow = formatEurosSigned;
