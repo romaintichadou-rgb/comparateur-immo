@@ -40,7 +40,7 @@ import {
   TextField,
 } from "@/components/form/Fields";
 
-const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"), { ssr: false });
+const AnalyseIA = dynamic(() => import("@/components/AnalyseIA"));
 const OptimiserView = dynamic(() => import("@/components/OptimiserView"), { ssr: false });
 const SimulationFinanciere = dynamic(() => import("@/components/SimulationFinanciere"), { ssr: false });
 const FinancementSection = dynamic(() => import("@/components/FinancementSection"), { ssr: false });
