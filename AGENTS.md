@@ -67,6 +67,7 @@ réellement leur domaine, pas systématiquement.
 | Estimation loyer/charges (IA + déterministe) | `docs/reference/estimation-loyer-charges.md` | `rentEstimation.ts`, `chargesEstimation.ts`, `anilReference.ts`, `encadrementLoyers.ts`, `/api/estimate-*` |
 | Taxe foncière + quote-part terrain | `docs/reference/taxe-fonciere.md` | `taxeFonciereCommune.ts`, `taxeFonciereData.ts`, `quote_part_terrain_pct` |
 | Couleurs sémantiques & scoring (tables tonalité complètes) | `docs/reference/couleurs-scoring.md` | tout chiffre coloré par un seuil, `scoring.ts`, bloc Risques/DPE |
+| Typographie responsive, breakpoints, espacements, tap zones | `docs/reference/typographie-responsive.md` | `globals.css`, H1-H4 breakpoints, rythme vertical, audit mobile 375px-1280px |
 | Profil investisseur, simulation financière, héritage | `docs/reference/simulation-financiere.md` | `SimulationFinanciere.tsx`, `SettingsForm.tsx`, `simulation.ts`, `resolveInputs` |
 | Onglet Analyse, sous-pill Recommandations (OptimiserView), moteur de recommandations, collecte des sources | `docs/reference/analyse-optimiser.md` | `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts`, `analyse/recommandations.ts`, `analyse/run.ts`, `analyse/sources/*`, `narration.ts`, `geocoding.ts` |
 | Page appartement (en-tête, onglets, ajout de bien) | `docs/reference/page-appartement-ui.md` | `ApartmentDetail.tsx` (en-tête/onglets/Description), `AddApartmentFlow.tsx` |
