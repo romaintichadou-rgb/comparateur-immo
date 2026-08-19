@@ -16,7 +16,6 @@ import {
   cashflowTone,
   noteTone,
   rendementNetTone,
-  DECISION_CHIP,
   TONE_PANEL_STYLES,
   type CashflowSeuils,
   type RendementSeuils,
@@ -68,9 +67,7 @@ const DECISION_STYLES: Record<
 };
 
 
-/** Titre-verdict de la card. Registre volontairement différent de
- * `DECISION_CHIP` (« À écarter ») : la pastille CLASSE le bien pour les listes,
- * ce titre ADRESSE le lecteur. Ne pas fusionner les deux tables. */
+/** Titre-verdict de la card. */
 const DECISION_TITRES: Record<Decision, string> = {
   achete: "Acheter",
   negocie: "Négocier",
@@ -121,10 +118,10 @@ function raisonDecision(
 }
 
 /** Couleurs par décision — bordure du curseur et du badge, texte du score. */
-const TREND_COLORS: Record<Decision, { border: string; text: string; badgeBorder: string }> = {
-  passe: { border: "border-red-500", text: "text-red-600", badgeBorder: "border-red-200" },
-  negocie: { border: "border-amber-500", text: "text-amber-600", badgeBorder: "border-amber-200" },
-  achete: { border: "border-emerald-500", text: "text-emerald-600", badgeBorder: "border-emerald-200" },
+const TREND_COLORS: Record<Decision, { border: string; text: string; badgeBg: string }> = {
+  passe: { border: "border-red-500", text: "text-red-600", badgeBg: "from-red-500/[0.08] to-red-500/[0.02]" },
+  negocie: { border: "border-amber-500", text: "text-amber-600", badgeBg: "from-amber-500/[0.08] to-amber-500/[0.02]" },
+  achete: { border: "border-emerald-500", text: "text-emerald-600", badgeBg: "from-emerald-500/[0.08] to-emerald-500/[0.02]" },
 };
 
 /** Zones de la barre : proportions 30 / 28 / 42, frontières à 30 % et 58 %. */
@@ -203,13 +200,13 @@ function ScoreBadge({ score, decision }: { score: number | null; decision: Decis
   const colors = TREND_COLORS[decision];
   return (
     <div
-      className={`flex shrink-0 flex-col items-center gap-0.5 rounded-[10px] border bg-white px-3.5 py-2 ${colors.badgeBorder}`}
+      className={`flex shrink-0 items-baseline gap-1 rounded-xl bg-gradient-to-br px-3.5 py-2 ${colors.badgeBg}`}
       aria-label={score == null ? "Analyse non générée" : `Score ${formatNote(score)} sur 10`}
     >
-      <span className={`font-mono text-[22px] font-semibold leading-none tabular-nums ${colors.text}`}>
+      <span className={`font-mono text-[28px] font-semibold leading-none tabular-nums ${colors.text}`}>
         {score != null ? formatNote(score) : "—"}
       </span>
-      <span className="text-[9px] font-medium text-ink-400">/10</span>
+      <span className="text-[13px] font-medium text-ink-400">/10</span>
     </div>
   );
 }
@@ -401,9 +398,6 @@ export default function AnalyseIA({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${DECISION_CHIP[decision].className}`}>
-                {DECISION_CHIP[decision].label}
-              </span>
               <span className="whitespace-nowrap text-[10px] text-ink-400">
                 {formatDateTime(analyse.genere_le)}
               </span>
