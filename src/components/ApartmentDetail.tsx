@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Calculator, HandCoins, Check, CheckCircle2, ExternalLink, Home, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, X, XCircle } from "lucide-react";
+import { ArrowLeft, Calculator, Check, CheckCircle2, ExternalLink, Home, Landmark, Lightbulb, Loader2, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, SlidersHorizontal, Trash2, Sparkles, Star, Wallet, X, XCircle } from "lucide-react";
 import {
   DEFAULT_HYPOTHESE_GESTION_PCT,
   DPE_GES_VALEURS,
@@ -160,7 +160,7 @@ function EditableValue({
   );
 }
 
-type Tab = "ia" | "recos" | "donnees" | "financiere" | "simulation" | "playground";
+type Tab = "ia" | "recos" | "donnees" | "financiere" | "tresorerie" | "simulation" | "playground";
 
 /**
  * Onglets de la barre — ce qui décrit LE BIEN.
@@ -176,9 +176,10 @@ type Tab = "ia" | "recos" | "donnees" | "financiere" | "simulation" | "playgroun
 const TABS: { key: Tab; label: string; shortLabel: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
   { key: "ia", label: "Analyse", shortLabel: "Analyse", icon: Sparkles },
   { key: "recos", label: "Recommandations", shortLabel: "Recos", icon: Lightbulb },
-  { key: "donnees", label: "Description du bien", shortLabel: "Bien", icon: Home },
-  { key: "financiere", label: "Coûts et revenus", shortLabel: "Coûts", icon: HandCoins },
+  { key: "financiere", label: "Financement", shortLabel: "Financement", icon: Landmark },
+  { key: "tresorerie", label: "Trésorerie", shortLabel: "Trésorerie", icon: Wallet },
   { key: "simulation", label: "Projection financière", shortLabel: "Projection", icon: Calculator },
+  { key: "donnees", label: "Annonce", shortLabel: "Annonce", icon: Home },
 ];
 
 /**
@@ -1060,24 +1061,10 @@ export default function ApartmentDetail({
       {activeTab === "financiere" && (
         <>
           <TabHeader
-            title="Coûts et revenus"
-            subtitle="Les montants réels de l'opération — ils alimentent le rendement, le cash-flow et l'analyse."
+            title="Financement"
+            subtitle="Prix d'achat, frais, apport et crédit — le montage financier de l'opération."
           />
           <div className="space-y-8">
-          {/* Résultat principal : la rentabilité au premier coup d'œil */}
-          {finDirty && (
-            <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
-              <p className="text-xs text-accent-700">Modifications non enregistrées.</p>
-              <button
-                onClick={() => save(finPatch, () => setFinPatch({}))}
-                disabled={banner?.phase === "saving"}
-                className="shrink-0 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
-              >
-                {banner?.phase === "saving" ? "Enregistrement…" : "Enregistrer"}
-              </button>
-            </div>
-          )}
-
           <section id="fin-achat" className="space-y-6 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <SectionHeader title="Achat" as="h3" />
@@ -1172,6 +1159,29 @@ export default function ApartmentDetail({
             settings={settings}
             onSaved={setApt}
           />
+          </div>
+        </>
+      )}
+
+      {activeTab === "tresorerie" && (
+        <>
+          <TabHeader
+            title="Trésorerie"
+            subtitle="Loyer perçu et charges récurrentes — ce que le bien rapporte et coûte chaque mois."
+          />
+          <div className="space-y-8">
+          {finDirty && (
+            <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
+              <p className="text-xs text-accent-700">Modifications non enregistrées.</p>
+              <button
+                onClick={() => save(finPatch, () => setFinPatch({}))}
+                disabled={banner?.phase === "saving"}
+                className="shrink-0 rounded-md bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+              >
+                {banner?.phase === "saving" ? "Enregistrement…" : "Enregistrer"}
+              </button>
+            </div>
+          )}
 
           <section className="space-y-4 rounded-xl border border-ink-100 bg-white p-5">
             <SectionHeader title="Revenus" as="h3" />
@@ -1427,11 +1437,8 @@ export default function ApartmentDetail({
 
       {activeTab === "donnees" && (
       <>
-      {/* Le titre « Description du bien » vivait DANS la colonne principale,
-          donc décalé sous la grille et absent au-dessus de la colonne latérale.
-          Il est remonté en en-tête d'onglet, avec ses actions. */}
       <TabHeader
-        title="Description du bien"
+        title="Annonce"
         subtitle="Les données extraites de l'annonce, corrigeables à la main."
       >
         {editingDesc ? (
