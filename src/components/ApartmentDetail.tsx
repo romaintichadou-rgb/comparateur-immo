@@ -45,7 +45,7 @@ import SimulationFinanciere from "@/components/SimulationFinanciere";
 import FinancementSection from "@/components/FinancementSection";
 import PlaygroundView from "@/components/PlaygroundView";
 import { DECISION_CHIP, cashflowSeuilsFromSettings, seuilsRendementFromSettings } from "@/lib/analyse/scoring";
-import { computeDecision, ecartPrixMarche } from "@/lib/analyse/decision";
+import { computeDecision, ecartPrixMarche, extractBlocNotes } from "@/lib/analyse/decision";
 import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
 import { facteursBaremeEffectifs, phraseSyntheseLoyer } from "@/lib/loyerSynthese";
 import { SectionHeader, TabHeader } from "@/components/SectionHeader";
@@ -248,11 +248,6 @@ function useBanner() {
   }, [dismiss]);
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
-
-  // Afficher le skeleton uniquement lors d'un recalcul, pas au démarrage initial
-  useEffect(() => {
-    if (analysisPending) setHasInteracted(true);
-  }, [analysisPending]);
 
   return { banner, show, resolve, dismiss } as const;
 }
@@ -808,7 +803,10 @@ export default function ApartmentDetail({
       : computeDecision(
           scoreGlobal,
           apt.analyse_ia?.verdicts ?? [],
-          ecartPrixMarche(apt.analyse_ia?.blocs?.prix)
+          ecartPrixMarche(apt.analyse_ia?.blocs?.prix),
+          extractBlocNotes(apt.analyse_ia?.blocs ?? {}),
+          apt.rendement_net,
+          seuilsRendement,
         );
 
   // Sous-titres des onglets. Les trois onglets de données décrivent ce qu'ils
@@ -901,13 +899,15 @@ export default function ApartmentDetail({
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h1 className="truncate text-lg font-semibold text-ink-900 sm:text-xl">
+              {/* Titre du bien : texte IBM 20px (non-heading, fait partie de l'en-tête)
+                  Toute la ligne (titre + séparateur + prix) en IBM Plex, même taille */}
+              <div className="truncate text-xl font-semibold text-ink-900">
                 {formatApartmentTitle(apt)}
-              </h1>
+              </div>
               {apt.prix != null && (
                 <>
-                  <span className="text-lg font-semibold text-ink-900 sm:text-xl">·</span>
-                  <span className="shrink-0 text-lg font-semibold text-ink-900 sm:text-xl">
+                  <span className="text-xl font-semibold text-ink-900">·</span>
+                  <span className="shrink-0 text-xl font-semibold text-ink-900">
                     {formatEuros(apt.prix)}
                   </span>
                 </>
@@ -1076,7 +1076,7 @@ export default function ApartmentDetail({
 
           <section id="fin-achat" className="space-y-6 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
-                  <SectionHeader title="Achat" />
+                  <SectionHeader title="Achat" as="h3" />
                   {editingAchat ? (
                     <div className="flex shrink-0 gap-2">
                       <button
@@ -1170,7 +1170,7 @@ export default function ApartmentDetail({
           />
 
           <section className="space-y-4 rounded-xl border border-ink-100 bg-white p-5">
-            <SectionHeader title="Revenus" />
+            <SectionHeader title="Revenus" as="h3" />
             {rentPending ? (
               <div className="space-y-4">
                 <PendingFieldLabel label="Loyer mensuel, charges comprises" />
@@ -1242,7 +1242,7 @@ export default function ApartmentDetail({
 
           <section className="space-y-4 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
-                  <SectionHeader title="Charges annuelles" />
+                  <SectionHeader title="Charges annuelles" as="h3" />
                   {editingCharges ? (
                     <div className="flex shrink-0 gap-2">
                       <button
@@ -1614,7 +1614,7 @@ export default function ApartmentDetail({
         {/* Colonne latérale */}
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-xl border border-ink-100 bg-white p-5">
-            <SectionHeader title="Suivi" className="mb-4" />
+            <SectionHeader title="Suivi" as="h3" className="mb-4" />
             <div className="space-y-5">
               <div>
                 <span className="mb-1.5 block text-sm font-medium text-ink-700">Statut</span>
@@ -1664,7 +1664,7 @@ export default function ApartmentDetail({
           </div>
 
           <div className="rounded-xl border border-ink-100 bg-white p-5">
-            <SectionHeader title="Contact" className="mb-4" />
+            <SectionHeader title="Contact" as="h3" className="mb-4" />
             <div className="space-y-4">
               <TextField
                 label="Nom"
@@ -1880,7 +1880,7 @@ function AchatEditRow({
 function FieldCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-ink-100 bg-white p-5">
-      <SectionHeader title={title} className="mb-2" />
+      <SectionHeader title={title} as="h3" className="mb-2" />
       {children}
     </section>
   );

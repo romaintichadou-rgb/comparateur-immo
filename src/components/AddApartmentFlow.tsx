@@ -426,7 +426,7 @@ export default function AddApartmentFlow() {
       </Link>
 
       <div className="mt-4 mb-8">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+        <h1 className="heading-h1">
           Ajouter un bien
         </h1>
         <p className="mt-1.5 text-sm text-ink-500">
@@ -598,7 +598,8 @@ export default function AddApartmentFlow() {
             <SectionHeader title="Données financières" />
 
             <div>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Achat</h3>
+              {/* Étiquette de section (pas un heading) — micro-label pour groupe de champs */}
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Achat</div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <NumberField
                   label="Prix"
@@ -620,7 +621,8 @@ export default function AddApartmentFlow() {
             </div>
 
             <div className="border-t border-ink-100 pt-6">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Charges annuelles</h3>
+              {/* Étiquette de section (pas un heading) — micro-label pour groupe de champs */}
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Charges annuelles</div>
               <p className="mb-3 text-xs text-ink-400">Laisse vide pour estimer automatiquement.</p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <ChampOptionnel
@@ -785,7 +787,7 @@ function ScrapingScreen({ scrapingPhase }: { scrapingPhase: ScrapingPhase }) {
           </svg>
         </div>
 
-        <h1 className="font-display flex items-center justify-center gap-2 text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+        <h1 className="heading-h1 flex items-center justify-center gap-2">
           <Link2 className="h-5 w-5 text-accent-500" />
           Récupération de l&apos;annonce
         </h1>
@@ -837,7 +839,7 @@ function ProcessingScreen({ procPhase }: { procPhase: ProcPhase }) {
           </svg>
         </div>
 
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+        <h1 className="heading-h1">
           Analyse en cours
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">

@@ -54,7 +54,7 @@ export default function ResetPasswordForm() {
   return (
     <AuthShell>
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 max-lg:text-center sm:text-3xl">
+        <h1 className="heading-h1 max-lg:text-center">
           Nouveau mot de passe
         </h1>
         <p className="mt-2 text-sm text-ink-500 max-lg:text-center">

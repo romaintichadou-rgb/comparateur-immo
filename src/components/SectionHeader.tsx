@@ -3,18 +3,23 @@ import type { ReactNode } from "react";
 /**
  * ÉCHELLE TYPOGRAPHIQUE DES TITRES — source unique.
  *
- * Tous les titres de l'app sont en `font-display` (Fraunces), `font-semibold`,
- * `text-ink-900`. Seule la TAILLE distingue les niveaux :
+ * Tous les titres de l'app sont en `font-display` (Fraunces), `font-weight: 500`,
+ * `text-ink-900`. La taille ET la variation optique (`opsz`) distinguent les
+ * niveaux — source de vérité dans globals.css et AGENTS.md :
  *
- * | Niveau  | Rôle                                   | Classe                |
- * |---------|----------------------------------------|-----------------------|
- * | Hero    | Écran plein : vide, erreur, upgrade    | `text-3xl sm:text-4xl`|
- * | H1      | Titre de page                          | `text-2xl sm:text-3xl`|
- * | Onglet  | Titre d'un onglet de la fiche bien     | `text-[22px]` 400 (`TabHeader`) |
- * | H2      | Titre d'une carte de section           | `text-lg`  ← ici      |
- * | H3      | Groupe / sous-section                  | `text-lg` 400 (`GroupTitle` / `GroupHeader`) |
+ * | Niveau  | Rôle                                   | Classe       | opsz |
+ * |---------|----------------------------------------|--------------|------|
+ * | Hero    | Écran plein : vide, erreur, upgrade    | `.heading-hero` | 36 |
+ * | H1      | Titre de page                          | `.heading-h1`   | 36 |
+ * | H2      | Titre d'un onglet de la fiche bien     | `.heading-h2` (22px) | 24 |
+ * | H3      | Titre d'une carte de section           | `.heading-h3` (18px) | 20 |
+ * | H4      | Groupe / sous-section                  | `.heading-h4` (16px) | 18 |
  *
- * Sous le H3, on QUITTE l'échelle : titres de courbes, libellés de curseurs et
+ * La variation optique (`font-variation-settings: 'opsz'`) ajuste la typométrie
+ * de Fraunces selon le contexte : opsz 36 (typage ouvert) pour gros titres,
+ * opsz 18 (compacte) pour petits titres.
+ *
+ * Sous le H4, on QUITTE l'échelle : titres de courbes, libellés de curseurs et
  * en-têtes de colonnes passent en `LABEL_BLOC` (IBM Plex `text-sm`), jamais en
  * Fraunces rapetissé.
  *
@@ -35,11 +40,23 @@ import type { ReactNode } from "react";
  * Y recopier les classes à la main est précisément ce qui avait laissé les
  * cartes Financement et Hypothèses sur l'ancien style alors que tout le reste
  * avait bougé.
+ *
+ * ⚠️ Tous les titres de cartes (de section) sont maintenant en IBM Plex Sans
+ * au lieu de Fraunces, avec taille text-sm / text-base (14-16px). Voir
+ * AGENTS.md, « Charte graphique — Titres de cartes » pour la justification.
+ *
+ * Source de vérité : cette constante (IBM Plex Sans, 14-16px, font-semibold).
  */
-export const TITRE_SECTION = "font-display text-lg font-semibold text-ink-900";
+export const TITRE_SECTION = "font-sans text-sm font-semibold text-ink-900 sm:text-base";
 
-/** Idem, pour un titre de groupe (`GroupTitle`) rendu hors heading. */
-export const TITRE_GROUPE = "font-display text-lg font-normal text-ink-900";
+/** Idem, pour un titre de groupe (`GroupTitle`) rendu hors heading.
+ *
+ * ⚠️ Les groupes sont aussi en IBM Plex Sans. Même taille que TITRE_SECTION :
+ * pas de distinction visuelle, mais sémantiquement un groupe (H4) vs une section (H3).
+ *
+ * Source de vérité : cette constante (IBM Plex Sans, 14-16px, font-semibold).
+ */
+export const TITRE_GROUPE = "font-sans text-sm font-semibold text-ink-900 sm:text-base";
 
 /**
  * EXCEPTION ASSUMÉE — titre d'une carte de recommandation (onglet Recommandations).
@@ -63,6 +80,16 @@ export const TITRE_GROUPE = "font-display text-lg font-normal text-ink-900";
 export const TITRE_RECOMMANDATION = "font-sans text-sm font-semibold text-ink-900 sm:text-base";
 
 /**
+ * Titre H2 : sous-sections dans les onglets (ex: "Analyse par dimension", "Vue d'ensemble").
+ *
+ * ⚠️ À distinguer de H3 (cartes IBM Plex) et H4 (groupes IBM Plex).
+ * H2 est Fraunces 22px (20px mobile), un cran entre H1 onglet (24-28px) et H3 cartes (14-16px).
+ *
+ * Source de vérité : `.heading-h2-subsection` dans globals.css (20px / 22px, opsz 24).
+ */
+export const TITRE_H2 = "heading-h2-subsection";
+
+/**
  * Étiquette d'un bloc SOUS le niveau groupe : titre de courbe, libellé de
  * curseur, en-tête de colonne. L'échelle Fraunces s'arrête à `GroupTitle`
  * (`text-base`) — plus bas, on quitte les titres pour des étiquettes en
@@ -73,7 +100,7 @@ export const TITRE_RECOMMANDATION = "font-sans text-sm font-semibold text-ink-90
 export const LABEL_BLOC = "text-sm font-medium text-ink-700";
 
 /**
- * Titre d'une carte de section.
+ * Titre d'une carte de section — classe `.heading-h3` (18px, opsz 20).
  *
  * ── Pourquoi plus d'icône ────────────────────────────────────────────────
  * Le composant posait une pastille `accent-50` avec une icône Lucide devant
@@ -86,8 +113,8 @@ export const LABEL_BLOC = "text-sm font-medium text-ink-700";
  * Le niveau SÉMANTIQUE et la taille VISUELLE sont deux choses distinctes. Une
  * carte de section vit directement sous le `h1` de la page : la nommer `h3`
  * sauterait un niveau, ce que les lecteurs d'écran signalent comme une
- * hiérarchie cassée (WCAG `heading-hierarchy`). Le rendu est bien celui d'un
- * titre de troisième rang — Fraunces, `text-lg` — mais la balise reste `h2`.
+ * hiérarchie cassée (WCAG `heading-hierarchy`). Le rendu visuel est celui d'un
+ * H3 de l'échelle (18px), mais la balise reste `h2` sémantiquement.
  * Passer `as="h3"` quand la carte est elle-même imbriquée sous un `h2`.
  */
 export function SectionHeader({
@@ -122,6 +149,25 @@ export function SectionTitle({
 }
 
 /**
+ * Sous-section H2 dans un onglet — Fraunces 22px, un cran entre H1 onglet (24-28px)
+ * et H3 cartes (14-16px).
+ *
+ * Exemples : "Vue d'ensemble", "Financement du projet", "Analyse par dimension".
+ *
+ * ⚠️ À ne pas confondre avec `SectionHeader` (H2 sémantique mais IBM Plex 14-16px visuellement
+ * pour les cartes).
+ */
+export function SectionH2({
+  title,
+  className = "",
+}: {
+  title: string;
+  className?: string;
+}) {
+  return <h2 className={`${TITRE_H2} ${className}`}>{title}</h2>;
+}
+
+/**
  * En-tête d'un ONGLET de la fiche bien : titre + sous-titre, action à droite.
  *
  * Les cinq onglets s'ouvraient directement sur leur contenu — une grille de
@@ -129,20 +175,16 @@ export function SectionTitle({
  * ça sert. Le seul repère était l'onglet actif dans la barre, un `text-sm` de
  * 14 px qui défile hors champ sur mobile.
  *
- * ── Pourquoi un niveau à part, entre le H1 et les cartes ──────────────────
- * Il lui faut être plus gros qu'un titre de carte (`text-lg`), sinon il ne
- * domine pas les cartes qu'il coiffe, et plus petit que le titre de la fiche
- * (`text-xl sm:text-2xl`), qui reste le nom du bien. `text-xl` fixe est le seul
- * cran disponible entre les deux — d'où un palier de plus dans l'échelle,
- * assumé, plutôt qu'un `text-lg` qui aurait fait doublon avec `SectionHeader`
- * dès la première carte du panneau.
+ * ── H1 pour la hiérarchie de chaque onglet ────────────────────────────────
+ * Le titre du bien dans l'en-tête n'est PAS un H1 sémantique (c'est un div en
+ * IBM Plex) : chaque onglet doit donc avoir un H1 propre comme titre principal.
+ * Les cartes de section à l'intérieur passent à `h3`, et les groupes à `h4`,
+ * maintenant une hiérarchie valide sans sauter de niveau.
  *
- * ── `h2`, et les cartes en dessous restent des `h2` ───────────────────────
- * Aucun niveau n'est sauté (le `h1` est celui de la fiche), donc la hiérarchie
- * reste valide au sens WCAG : les cartes deviennent des SŒURS du titre
- * d'onglet au lieu de ses filles. Le resserrement exact demanderait `as="h3"`
- * sur chaque `SectionHeader` des cinq onglets — à faire d'un bloc si on le
- * fait, jamais onglet par onglet, sous peine de laisser deux conventions.
+ * La taille visuelle reste `heading-h2` (24px) : plus gros qu'un titre de carte,
+ * mais cohérent avec le visuel habituel d'un onglet.
+ * ⚠️ IMPORTANT : tout appel à `SectionHeader` dans un onglet DOIT passer `as="h3"`
+ * pour maintenir la hiérarchie H1 → H3 → H4.
  */
 export function TabHeader({
   title,
@@ -163,7 +205,7 @@ export function TabHeader({
     // pièges du mobile », cas n°1 — constaté sur la carte verdict).
     <div className={`mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
       <div className="min-w-0">
-        <h2 className="font-display text-[22px] font-normal text-ink-900">{title}</h2>
+        <h1 className="heading-h2">{title}</h1>
         <p className="mt-3 text-sm text-ink-500">{subtitle}</p>
       </div>
       {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
@@ -219,9 +261,12 @@ export function GroupHeader({
   count?: number;
   /** Contrôle du groupe, aligné à droite (bascule, bouton…). */
   children?: ReactNode;
-  as?: "h3" | "h4";
+  as?: "h2" | "h3" | "h4";
   className?: string;
 }) {
+  // H2 = sous-sections (Fraunces 22px), H3/H4 = groupes (IBM Plex 14-16px)
+  const titleClass = Tag === "h2" ? TITRE_H2 : TITRE_GROUPE;
+
   return (
     // `flex-wrap` + `gap-y` obligatoires, même piège que `TabHeader` : sans
     // eux le contrôle de droite passe PAR-DESSUS le sous-titre dès que la
@@ -229,7 +274,7 @@ export function GroupHeader({
     <div className={`mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-2 ${className}`}>
       <div className="min-w-0">
         <div className="flex items-baseline gap-2">
-          <Tag className={TITRE_GROUPE}>{title}</Tag>
+          <Tag className={titleClass}>{title}</Tag>
           {count != null && <span className="text-xs tabular-nums text-ink-400">{count}</span>}
         </div>
         {subtitle && <p className="mt-2 text-sm text-ink-500">{subtitle}</p>}

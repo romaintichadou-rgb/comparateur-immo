@@ -110,7 +110,7 @@ export default function SettingsForm({ initial }: { initial: AppSettings }) {
       {/* Pas d'icône « i » ici : son contenu tenait en une phrase, et un tooltip
           isolé à l'autre bout du titre se lit comme un élément orphelin. */}
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">Profil investisseur</h1>
+        <h1 className="heading-h1">Profil investisseur</h1>
         <p className="mt-1 max-w-prose text-sm leading-relaxed text-ink-500">
           Tes conditions d&apos;emprunt et tes seuils par défaut, appliqués à tous tes biens.
           Chaque bien peut les surcharger dans sa Simulation financière.

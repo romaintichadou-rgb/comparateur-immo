@@ -69,7 +69,7 @@ export default function ApartmentsCardList({
                 </p>
               </div>
               <div className="shrink-0">
-                <ScoreRing score={score} decision={decisionToneOf(apt)} />
+                <ScoreRing score={score} decision={decisionToneOf(apt, seuilsRendement)} />
               </div>
             </div>
 

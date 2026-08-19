@@ -2,6 +2,7 @@ import "server-only";
 
 import { v4 as uuidv4 } from "uuid";
 import { Apartment, ApartmentInput, ApartmentListItem, emptyApartment } from "./types";
+import type { AnalyseIA, BlocAnalyse, BlocKey } from "./analyse/types";
 import { AppSettings, DEFAULT_SETTINGS, type FinancementMode } from "./settings";
 import { createClient } from "./supabase/server";
 import { requireUserId } from "./auth";
@@ -106,9 +107,23 @@ function avecAnalyseResumee(row: Apartment): ApartmentListItem {
       // (cf. AGENTS.md, causes de panne connues).
       verdicts: analyse.verdicts ?? [],
       genere_le: analyse.genere_le,
-      blocs: { prix: analyse.blocs?.prix },
+      // Le bloc Prix complet (pour l'écart au marché) + les notes de tous les
+      // blocs pondérés (pour `computeDecision` qui vérifie qu'aucun n'est < 5).
+      // Seule la note est extraite des autres blocs — pas les faits/narrations.
+      blocs: resumeBlocs(analyse),
     },
   };
+}
+
+/** Le bloc Prix complet + un stub léger pour chaque autre bloc pondéré
+ * (seule la note et la clé comptent pour `computeDecision`). */
+function resumeBlocs(analyse: AnalyseIA): Partial<Record<BlocKey, BlocAnalyse>> {
+  const out: Partial<Record<BlocKey, BlocAnalyse>> = { prix: analyse.blocs?.prix };
+  for (const [k, b] of Object.entries(analyse.blocs ?? {}) as [BlocKey, BlocAnalyse | undefined][]) {
+    if (k === "prix" || !b || b.poids <= 0) continue;
+    out[k] = { cle: b.cle, titre: b.titre, note: b.note, poids: b.poids, disponible: b.disponible, faits: [], sources: [], narration: "" };
+  }
+  return out;
 }
 
 /**

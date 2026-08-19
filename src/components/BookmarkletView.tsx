@@ -67,7 +67,7 @@ export default function BookmarkletView() {
       <RetourPagePrecedente />
 
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+        <h1 className="heading-h1">
           Importer une annonce depuis ton navigateur
         </h1>
         <p className="mt-2 text-sm text-ink-600">

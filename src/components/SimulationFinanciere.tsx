@@ -24,7 +24,7 @@ import {
   type SimulationResult,
 } from "@/lib/simulation";
 import { NumberField, SelectField } from "@/components/form/Fields";
-import { GroupTitle, SectionHeader, TITRE_SECTION } from "@/components/SectionHeader";
+import { GroupTitle, SectionHeader, SectionH2, TITRE_SECTION } from "@/components/SectionHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
 
@@ -313,7 +313,9 @@ export default function SimulationFinanciere({
     return (
       <div className="rounded-xl border border-ink-100 bg-white p-10 text-center">
         <Calculator className="mx-auto h-8 w-8 text-ink-300" />
-        <h2 className="mt-3 font-display text-lg font-semibold text-ink-900">Projection financière</h2>
+        {/* H2 sémantique (section) + heading-h3 visuellement (18px)
+            Pattern: cartes d'erreur/empty-state utilisent ce ratio */}
+        <h2 className="mt-3 heading-h3">Projection financière</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
           Renseigne d&apos;abord un loyer et un prix dans l&apos;onglet « Description de
           l&apos;appartement » pour simuler le cash-flow.
@@ -611,7 +613,7 @@ export default function SimulationFinanciere({
       {/* Graphiques (remontés avant le tableau) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-100 bg-white p-5">
-          <SectionHeader title="Financement du projet" as="h3" />
+          <SectionH2 title="Financement du projet" />
           <p className="text-xs text-ink-400">
             {`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolusAffiches.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
           </p>
@@ -619,7 +621,7 @@ export default function SimulationFinanciere({
         </section>
 
         <section className="min-w-0 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
-          <SectionHeader title="Évolution du patrimoine" as="h3" />
+          <SectionH2 title="Évolution du patrimoine" />
           <p className="text-xs text-ink-400">
             Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
             (valeur du bien au-delà de la dette et de l&apos;apport non récupéré), et l&apos;effort
@@ -635,7 +637,7 @@ export default function SimulationFinanciere({
 
       {/* Rentabilité de l'opération (TRI) */}
       <section id="sim-tri" className="scroll-mt-24 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
-        <SectionHeader title="Rentabilité de l'opération" as="h3" />
+        <SectionH2 title="Rentabilité de l'opération" />
         <p className="text-xs text-ink-400">
           Le rendement net juge <strong className="font-medium text-ink-500">le bien</strong> : il
           divise le loyer par le coût total, quel que soit ton financement. Le TRI juge{" "}
@@ -1138,7 +1140,7 @@ function SimKpiSummary({ result, resolus }: { result: SimulationResult; resolus:
   return (
     <section className="space-y-3">
       <div>
-        <SectionHeader title="Vue d'ensemble" as="h3" />
+        <SectionH2 title="Vue d'ensemble" />
         <p className="mt-0.5 text-[10px] text-ink-400">
           Hypothèses : taux {resolus.tauxCreditPct} %, durée {resolus.dureeAnnees} ans, TMI{" "}
           {resolus.tmiPct} %

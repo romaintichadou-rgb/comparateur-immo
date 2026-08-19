@@ -173,9 +173,9 @@ export const DECISION_RING_STYLES: Record<DecisionTone, { stroke: string; text: 
  * teinté (voir « Intensité du rouge » dans AGENTS.md).
  */
 export const DECISION_CHIP: Record<DecisionTone, { label: string; className: string }> = {
-  achete: { label: "À acheter", className: "border-emerald-100 bg-emerald-50 text-emerald-700" },
-  negocie: { label: "À négocier", className: "border-amber-100 bg-amber-50 text-amber-700" },
-  passe: { label: "À écarter", className: "border-red-100 bg-red-50 text-red-700" },
+  achete: { label: "Acheter", className: "border-emerald-100 bg-emerald-50 text-emerald-700" },
+  negocie: { label: "Négocier", className: "border-amber-100 bg-amber-50 text-amber-700" },
+  passe: { label: "Passer", className: "border-red-100 bg-red-50 text-red-700" },
   inconnu: { label: "Non analysé", className: "border-ink-100 bg-ink-50 text-ink-500" },
 };
 

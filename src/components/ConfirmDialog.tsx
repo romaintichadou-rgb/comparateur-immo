@@ -98,7 +98,9 @@ export default function ConfirmDialog({
           show ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
-        <h2 id="confirm-dialog-title" className="font-display text-lg font-semibold text-ink-900">
+        {/* H2 sémantique (modale) + heading-h3 visuellement (18px)
+            Pattern: modales de confirmation utilisent ce ratio */}
+        <h2 id="confirm-dialog-title" className="heading-h3">
           {title}
         </h2>
         {description && <p className="mt-2 text-sm leading-relaxed text-ink-500">{description}</p>}

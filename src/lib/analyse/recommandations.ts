@@ -9,7 +9,7 @@ import {
   computeScoreGlobal,
   type RendementSeuils,
 } from "./scoring";
-import { computeDecision, ecartPrixMarche } from "./decision";
+import { computeDecision, ecartPrixMarche, extractBlocNotes } from "./decision";
 import { buildBlocPrix } from "./blocs/prix";
 import { buildBlocLocation } from "./blocs/location";
 import { referenceCCMeuble, typologieAnil } from "@/lib/anilReference";
@@ -317,7 +317,10 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
     computeDecision(
       computeScoreGlobal(blocs, rendementNet, ctx.seuils),
       buildVerdicts(blocs, rendementNet, ctx.seuils),
-      ecartPrixMarche(blocs.prix)
+      ecartPrixMarche(blocs.prix),
+      extractBlocNotes(blocs),
+      rendementNet,
+      ctx.seuils,
     );
 
   const aptBase = computeDerived(apt);
@@ -326,7 +329,10 @@ export function buildRecommandations(apt: Apartment, ctx: RecommandationContext)
   const currentDecision = computeDecision(
     ctx.baseScore,
     ctx.baseVerdicts,
-    ecartPrixMarche(ctx.baseBlocs.prix)
+    ecartPrixMarche(ctx.baseBlocs.prix),
+    extractBlocNotes(ctx.baseBlocs),
+    ctx.rendementNetBase,
+    ctx.seuils,
   );
   const dejaAchat = currentDecision === "achete";
 

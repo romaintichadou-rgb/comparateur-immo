@@ -28,7 +28,7 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
             {tail && <span className="font-bold text-accent-600">{tail}</span>}
           </p>
 
-          <h2 className="mt-8 max-w-[17rem] text-center font-display text-2xl font-semibold leading-tight tracking-tight text-ink-900">
+          <h2 className="mt-8 max-w-[17rem] text-center heading-h2">
             Trouve tes prochains investissements locatifs
           </h2>
           <p className="mt-3 max-w-xs text-center text-sm leading-relaxed text-ink-500">

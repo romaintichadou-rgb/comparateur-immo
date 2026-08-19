@@ -24,10 +24,13 @@ import { useDeleteApartment } from "@/components/useDeleteApartment";
  * « achetable ou pas », pas « bien noté ou pas ». Un 7,5 surcoté doit donc
  * apparaître en ambre ici, comme sur sa fiche.
  */
-export function decisionToneOf(apt: ApartmentListItemWithComputed): DecisionTone {
+export function decisionToneOf(
+  apt: ApartmentListItemWithComputed,
+  seuils: RendementSeuils | null = null,
+): DecisionTone {
   const analyse = apt.analyse_ia;
   if (!analyse || analyse.score_global == null) return "inconnu";
-  return decisionFromAnalyse(analyse).decision;
+  return decisionFromAnalyse(analyse, apt.rendement_net, seuils).decision;
 }
 
 // Habillage propre au tableau (fond, rail, dégradé). Le trait et le chiffre de
@@ -110,7 +113,7 @@ export default function ApartmentsTable({
           {sorted.map((apt) => {
             const tone = rendementNetTone(apt.rendement_net, seuilsRendement);
             const score = apt.analyse_ia?.score_global ?? null;
-            const decision = decisionToneOf(apt);
+            const decision = decisionToneOf(apt, seuilsRendement);
             const scoreTone = DECISION_ROW_CLASSES[decision];
             return (
               <tr

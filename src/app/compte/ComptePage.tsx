@@ -139,7 +139,7 @@ export default function ComptePage({ email, profil }: { email: string; profil: U
     <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
       <div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">Mon compte</h1>
+          <h1 className="heading-h1">Mon compte</h1>
           <BadgePlan plan={profil.plan} isTester={profil.isTester} />
         </div>
         <p className="mt-1 text-sm text-ink-500">{email}</p>

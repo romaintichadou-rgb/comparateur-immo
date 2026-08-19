@@ -55,7 +55,7 @@ export default function EmptyHomeState() {
           <AppMark className="h-9 w-9 text-accent-600" />
         </span>
       </div>
-      <h1 className="mt-6 font-display text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
+      <h1 className="mt-6 heading-hero">
         Trouve tes prochains investissements locatifs
       </h1>
       <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ink-500 sm:text-base">
@@ -96,7 +96,7 @@ export default function EmptyHomeState() {
             <span className="font-mono text-xs font-semibold tracking-wide text-accent-600">
               0{i + 1}
             </span>
-            <h3 className="mt-2 text-sm font-semibold text-ink-900">{step.title}</h3>
+            <h3 className="mt-2 heading-h4">{step.title}</h3>
             <p className="mt-1 text-xs leading-relaxed text-ink-500">{step.desc}</p>
           </div>
         ))}

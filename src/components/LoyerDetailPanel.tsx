@@ -256,7 +256,7 @@ export default function LoyerDetailPanel({
       >
         <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-6 py-3.5">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-500">
+            <h2 className="heading-h3 tracking-wide">
               Détail du calcul du loyer
             </h2>
             <p className="mt-0.5 truncate text-sm text-ink-400">{formatApartmentTitle(apt)}</p>

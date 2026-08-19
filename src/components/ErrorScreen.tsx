@@ -44,7 +44,7 @@ export default function ErrorScreen({
             <Icon className={`h-8 w-8 ${toneClass.icon}`} aria-hidden="true" />
           </span>
         </div>
-        <h1 className="mt-7 font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">{title}</h1>
+        <h1 className="mt-7 heading-h1">{title}</h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink-500 sm:text-base">{message}</p>
         {reference && <p className="mt-2 font-mono text-xs text-ink-300">Référence : {reference}</p>}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">{actions}</div>

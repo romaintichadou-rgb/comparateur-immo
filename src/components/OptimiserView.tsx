@@ -214,7 +214,7 @@ export default function OptimiserView({
   }
 
   const recos = analyse.recommandations;
-  const dejaAchat = decisionFromAnalyse(analyse).decision === "achete";
+  const dejaAchat = decisionFromAnalyse(analyse, apt.rendement_net, seuilsRendement).decision === "achete";
 
   if (recos.length === 0) {
     return (

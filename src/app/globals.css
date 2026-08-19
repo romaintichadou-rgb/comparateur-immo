@@ -53,6 +53,143 @@ body {
   color: var(--foreground);
 }
 
+/* ---------- Rythme vertical global — espacements de page et sections ---------- */
+
+/* Page container : padding standard pour tous les écrans. */
+.page-container {
+  padding: 48px 28px 80px;
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding: 48px 16px 80px; /* px-4 sur mobile */
+  }
+}
+
+/* Section spacing : margin-bottom crée l'espace avant le divider. */
+.section {
+  margin-bottom: 48px;
+}
+
+/* Divider : margin top/bottom, ensemble = 136px total entre sections. */
+.divider {
+  margin: 44px 0;
+}
+
+/* Entre titre de section et contenu : toujours 16px. */
+.section-title-spacing {
+  margin-bottom: 16px;
+}
+
+/* Gap par défaut dans les grilles de cartes : 16px. */
+.cards-grid {
+  gap: 16px;
+}
+
+/* Espacement entre groupes d'onglet : 48px. */
+.tab-section-gap {
+  margin-bottom: 48px;
+}
+
+/* ---------- Échelle typographique des titres (Fraunces + opsz) ---------- */
+
+/* Hero : écrans vides/erreurs/upgrade. Variation optique ouverte (opsz 36)
+   pour une meilleure lisibilité sur gros titres. */
+.heading-hero {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 36;
+  line-height: 1.2;
+  text-wrap: balance;
+  color: var(--color-ink-900);
+}
+
+@media (min-width: 640px) {
+  .heading-hero {
+    font-size: 64px;
+  }
+}
+
+/* H1 : titre de page. Plus grand que H2 pour la hiérarchie. */
+.heading-h1 {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 36;
+  line-height: 1.2;
+  text-wrap: balance;
+  color: var(--color-ink-900);
+}
+
+@media (min-width: 640px) {
+  .heading-h1 {
+    font-size: 48px;
+  }
+}
+
+/* H2 (Onglet) : titre d'un onglet de la fiche bien. Variation optique
+   intermédiaire (opsz 24) pour balance taille/compacité. */
+.heading-h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 24;
+  line-height: 1.3;
+  color: var(--color-ink-900);
+}
+
+@media (min-width: 640px) {
+  .heading-h2 {
+    font-size: 28px;
+  }
+}
+
+/* H2 (Sous-section) : titre de sous-section dans onglet, un cran sous H1 onglet
+   et au-dessus des H3 cartes (IBM Plex). Variation optique intermédiaire (opsz 24). */
+.heading-h2-subsection {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 24;
+  line-height: 1.3;
+  color: var(--color-ink-900);
+}
+
+@media (min-width: 640px) {
+  .heading-h2-subsection {
+    font-size: 22px;
+  }
+}
+
+/* H3 (Carte) : titre d'une carte de section. Variation optique resserrée
+   (opsz 20) pour une meilleure compacité. */
+.heading-h3 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 20;
+  line-height: 1.3;
+  color: var(--color-ink-900);
+}
+
+/* H4 (Groupe) : titre de groupe à l'intérieur d'une carte. Variation optique
+   compacte (opsz 18). */
+.heading-h4 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 18;
+  line-height: 1.4;
+  color: var(--color-ink-900);
+}
+
+@media (min-width: 640px) {
+  .heading-h4 {
+    font-size: 22px;
+  }
+}
+
 /* Trame technique subtile (direction "tech, géométrique/dense") : grille fine
    qui s'estompe vers les bords, réservée aux fonds décoratifs (hero, écrans
    vides) — jamais sur du texte ou une zone de lecture dense. */

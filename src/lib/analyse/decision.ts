@@ -1,16 +1,18 @@
 import type { AnalyseResume } from "@/lib/types";
-import type { BlocAnalyse, Decision, Verdict } from "./types";
+import type { BlocAnalyse, BlocKey, Decision, Verdict } from "./types";
+import type { RendementSeuils } from "./scoring";
 
 /**
  * Décision d'achat à 3 niveaux — SOURCE UNIQUE, partagée par l'onglet Analyse
  * (`AnalyseIA`), l'onglet Recommandations (`OptimiserView`) et le moteur de
- * recommandations. Dérivée des signaux existants (score, verdicts, écart au
- * prix de marché), jamais recalculée à la main ailleurs pour ne pas diverger.
+ * recommandations. Fondée sur les signaux RÉELS du bien et du marché, pas sur
+ * un seuil arbitraire du score composite.
  *
- * - `passe`   : un verdict `alerte` **objectif** existe OU score < 5.
- * - `achete`  : score ≥ 7 ET aucun verdict `attention` ET pas de surcote
- *               (écart au marché ≤ 5 %). GO volontairement exigeant.
- * - `negocie` : sinon.
+ * - `passe`   : un verdict `alerte` objectif existe OU score < 4.
+ * - `achete`  : TOUS les signaux convergent — prix vérifié et au marché,
+ *               rendement ≥ seuil vert du profil, aucun bloc < 5/10, aucun
+ *               verdict attention, données DVF disponibles.
+ * - `negocie` : au moins un signal n'est pas au vert, sans être rédhibitoire.
  */
 export type { Decision };
 
@@ -26,17 +28,23 @@ export function ecartPrixMarche(prixBloc: BlocAnalyse | undefined): number | nul
 }
 
 /**
+ * Notes de tous les blocs pondérés — format léger utilisé par `computeDecision`
+ * pour vérifier qu'aucun bloc n'est faible, sans exiger les objets
+ * `BlocAnalyse` complets (qui portent faits, narrations, sources…).
+ */
+export type BlocNotes = Partial<Record<BlocKey, number | null>>;
+
+/** Extrait les notes des blocs pondérés (poids > 0, note non null). */
+export function extractBlocNotes(blocs: Partial<Record<BlocKey, BlocAnalyse>>): BlocNotes {
+  const out: BlocNotes = {};
+  for (const [k, b] of Object.entries(blocs) as [BlocKey, BlocAnalyse | undefined][]) {
+    if (b && b.poids > 0 && b.note != null) out[k] = b.note;
+  }
+  return out;
+}
+
+/**
  * ⚠️ **Un verdict `origine: "bloc"` ne condamne PAS le bien.**
- *
- * Ces verdicts sont, par construction, la simple relecture d'un sous-score
- * (« Prix trop élevé » = le bloc Prix est à 2/10). Or ce sous-score est DÉJÀ
- * dans la note globale, au poids de son bloc. Le laisser opposer un veto
- * comptait la même information deux fois : une fois comme ingrédient de la
- * moyenne, une fois comme couperet annulant cette moyenne. Constaté en vrai —
- * un bien à 6,6/10 (rendement 7, potentiel 9,5, risques 9,8) affichait « Passe
- * ton chemin » sur le seul motif d'un prix élevé, et le texte affirmait
- * qu'« une négociation ne le rattrape pas » alors que l'onglet Optimiser
- * calculait justement le prix à négocier.
  *
  * Restent bloquants les verdicts `critere` : rendement sous le seuil
  * rédhibitoire du profil, DPE F/G interdit à la location. Ceux-là n'existent
@@ -45,35 +53,68 @@ export function ecartPrixMarche(prixBloc: BlocAnalyse | undefined): number | nul
  * `origine` absente = analyse d'un schéma antérieur : on ne peut pas savoir,
  * on garde donc l'ancien comportement (bloquant) plutôt que d'assouplir à
  * l'aveugle.
+ *
+ * La décision ACHETER est un diagnostic multi-critères : tous les signaux
+ * doivent être au vert. Un seuil fixe sur le score composite (ex. ≥ 7)
+ * masquait l'hétérogénéité des blocs et ignorait des données clés (rendement
+ * vs seuil du profil, disponibilité des données DVF).
  */
 export function computeDecision(
   score: number | null,
   verdicts: Verdict[],
-  ecartPct: number | null
+  ecartPct: number | null,
+  blocNotes: BlocNotes = {},
+  rendementNet: number | null = null,
+  seuils: RendementSeuils | null = null,
 ): Decision {
   if (score == null) return "passe";
-  const alerte = verdicts.some((v) => v.niveau === "alerte" && v.origine !== "bloc");
+
+  // ── PASSER ──
+  const alerteCritere = verdicts.some((v) => v.niveau === "alerte" && v.origine !== "bloc");
+  if (alerteCritere || score < 4) return "passe";
+
+  // ── ACHETER — tous les signaux doivent converger ──
   const attention = verdicts.some((v) => v.niveau === "attention");
-  const surcote = ecartPct != null && ecartPct > 5;
-  if (alerte || score < 5) return "passe";
-  if (score >= 7 && !attention && !surcote) return "achete";
+  const prixDisponible = blocNotes.prix !== undefined;
+  const prixAuMarche = ecartPct != null && ecartPct <= 0;
+  const rendementOk = rendementNet != null && seuils != null && rendementNet >= seuils.modeste;
+  const notesPonderees = Object.values(blocNotes).filter((n): n is number => n != null);
+  const aucunBlocFaible = notesPonderees.length > 0 && notesPonderees.every((n) => n >= 5);
+
+  if (!attention && prixDisponible && prixAuMarche && rendementOk && aucunBlocFaible) {
+    return "achete";
+  }
+
+  // ── NÉGOCIER ──
   return "negocie";
 }
 
-/** Décision + écart marché dérivés d'une analyse complète. */
 /**
- * Prend un `AnalyseResume` et non un `AnalyseIA` complet : la décision ne
- * dépend que du score, des verdicts et du bloc Prix — c'est précisément ce que
- * l'accueil charge (voir `listApartments`). Une analyse complète reste
- * acceptée, elle satisfait ce contrat.
+ * Décision + écart marché dérivés d'une analyse résumée et des données
+ * complémentaires (rendement net, seuils).
+ *
+ * Prend un `AnalyseResume` (ce que l'accueil charge) enrichi du rendement net
+ * et des seuils du profil. Les blocs notes sont extraits des blocs du résumé.
  */
-export function decisionFromAnalyse(analyse: AnalyseResume): {
+export function decisionFromAnalyse(
+  analyse: AnalyseResume,
+  rendementNet: number | null = null,
+  seuils: RendementSeuils | null = null,
+): {
   decision: Decision;
   ecartPct: number | null;
 } {
   const ecartPct = ecartPrixMarche(analyse.blocs?.prix);
+  const notes = extractBlocNotes(analyse.blocs ?? {});
   return {
-    decision: computeDecision(analyse.score_global, analyse.verdicts ?? [], ecartPct),
+    decision: computeDecision(
+      analyse.score_global,
+      analyse.verdicts ?? [],
+      ecartPct,
+      notes,
+      rendementNet,
+      seuils,
+    ),
     ecartPct,
   };
 }

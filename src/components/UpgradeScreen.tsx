@@ -50,7 +50,7 @@ export default function UpgradeScreen({
           </span>
         </div>
 
-        <h1 className="mt-7 font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+        <h1 className="mt-7 heading-h1">
           {title}
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink-500 sm:text-base">

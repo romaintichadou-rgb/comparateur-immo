@@ -19,11 +19,13 @@ sources de dérive).
 ## Layout (de haut en bas)
 
 1. **Carte verdict** — dégradé tonal (`from-white to-{emerald|amber|red}-50`),
-   score global à droite dans une jauge circulaire (`VerdictGauge`, anneau
-   épais 100px, stroke 8), titre verdict en Fraunces (`text-4xl` /
-   `sm:text-5xl`), raison actionnable (jamais de score brut), puis ligne de
-   sous-scores par bloc (couleurs `noteTone()`), puis — au plus — l'avis
-   d'interdiction de louer (voir « Un seul avis en tête »).
+   titre verdict en Fraunces (`text-4xl` / `sm:text-5xl`), score en badge
+   compact (`ScoreBadge`, 48px, coin supérieur droit), barre de tendance
+   3 zones (`TrendBar` : PASSER rouge / NÉGOCIER ambre / ACHETER vert, curseur
+   positionné par le score DANS la zone dictée par la décision), raison
+   actionnable (jamais de score brut), puis ligne de sous-scores par bloc
+   (couleurs `noteTone()`), puis — au plus — l'avis d'interdiction de louer
+   (voir « Un seul avis en tête »).
 2. **Bloc synthèse** — narration IA sur fond `bg-ink-100/40`.
 4. **Sections plates** (`FlatSection`) — séparées par des `<hr>`, chaque bloc
    d'analyse (Prix, Rendement, Risques, Potentiel, Simulation) avec note,
@@ -77,11 +79,13 @@ que les entrées `enTete`. Invariant tenu par l'UI : `enTete: true` implique
 
 ## Verdict (décision à 3 niveaux)
 
-`computeDecision(score, verdicts, ecartPct)` → `"achete"` | `"negocie"` | `"passe"` :
-- **passe** si un verdict `alerte` existe OU `score < 5` ;
-- **achète** si `score >= 7` ET aucun verdict `attention` ET pas de surcote
-  (`ecartPct <= 5`) ;
-- **négocie** sinon.
+`computeDecision(score, verdicts, ecartPct, blocNotes, rendementNet, seuils)`
+→ `"achete"` | `"negocie"` | `"passe"` :
+- **passe** si un verdict `alerte` (critère) existe OU `score < 4` ;
+- **achète** si TOUS les signaux convergent : aucun verdict `attention`, prix
+  DVF disponible ET au marché (`ecartPct <= 0`), rendement net ≥ seuil vert
+  du profil (`seuils.modeste`), aucun bloc pondéré < 5/10 ;
+- **négocie** sinon (au moins un signal n'est pas au vert).
 
 **Le bloc Simulation ne contribue ni au score global ni aux verdicts.**
 Le cash-flow dépend du montage financier personnel (apport, taux, durée),
@@ -557,10 +561,12 @@ prévisualisation est masqué, et `setTimeout` y est étranglé.
 
 ## Verdict = source unique (`src/lib/analyse/decision.ts`)
 
-`computeDecision(score, verdicts, ecartPct)` est la SEULE définition du
-verdict Achète/Négocie/Passe, partagée par `AnalyseIA`, `OptimiserView` et le
-moteur de recommandations. `ecartPrixMarche(prixBloc)` extrait l'écart au
-marché du bloc Prix — avec une garde sur `.faits`.
+`computeDecision(score, verdicts, ecartPct, blocNotes, rendementNet, seuils)`
+est la SEULE définition du verdict Achète/Négocie/Passe, partagée par
+`AnalyseIA`, `OptimiserView` et le moteur de recommandations. La décision
+est un diagnostic multi-critères (tous les signaux doivent converger pour
+ACHETER), pas un seuil sur le score composite. `ecartPrixMarche(prixBloc)`
+extrait l'écart au marché du bloc Prix — avec une garde sur `.faits`.
 
 ## Moteur (`src/lib/analyse/recommandations.ts`)
 

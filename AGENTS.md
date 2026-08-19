@@ -250,59 +250,80 @@ Asymétries restantes, connues et assumées : `photo_url` est éditable sans
 Providers : `RendementDetailProvider`, `LoyerDetailProvider`,
 `CashflowDetailProvider` — montés dans `layout.tsx`, consommés via hooks.
 
-## Spacing
+## Rythme vertical — Espacements cohérents
 
-| Contexte | Valeur | Classe |
+**Cible de design** : ratio 2:1 (échelle musicale), source de vérité : `memory/typographie-espacements-v2.md`.
+
+| Échelon | Valeurs | Usage |
 |---|---|---|
-| Padding de carte section | 20px | `p-5` |
-| Padding de StatCard | 16px | `p-4` |
-| Gap dans une grille de cartes | 12px | `gap-3` |
-| Espacement entre GROUPES d'un onglet | 40px | `space-y-10` |
-| Espacement titre de groupe → contenu | 16px | `mb-4` (dans `GroupHeader`) |
-| Espacement entre sections (FlatSection) | 56px | `pt-14 pb-14` |
-| Espacement onglet → contenu | 24px mobile / 32px desktop | `pb-6 sm:pb-8` |
-| Séparateur de section | — | `border-t border-ink-100/50` |
-| Séparateur de faits | — | `divide-y divide-ink-100/50` |
+| **XS** | 4px / 6px | Micro-espacements (label/valeur inline) |
+| **S** | 10px / 12px | Titre → contenu dans une carte, entre label et champ |
+| **M** | 16px / 20px | Titre d'onglet → contenu, gap grille, margin titre groupe |
+| **L** | 24px / 28px | Padding interne des cartes, margin entre cartes, gap boîtes |
+| **XL** | 44px / 48px | Entre deux sections, marge en bas de groupe d'onglet |
+| **XXL** | 80px | Padding-bottom de page (espace avant sticky footer) |
+
+### Espacements de page et sections
+
+| Contexte | Valeur |
+|---|---|
+| Padding page (conteneur global) | `48px top` / `28px sides` / `80px bottom` |
+| Margin-bottom section | `48px` |
+| Margin-bottom titre section (H2, H3) | `16px` |
+| Padding interne carte | `24px` (tous côtés) |
+| Margin-bottom entre cartes | `16px` |
+| Margin-bottom titre groupe (H4) | `10px` |
+| Divider (margin top/bottom) | `44px` |
+| **Espacement total entre deux sections** | `136px` (48 + 44 + divider + 44) |
+
+**Séparateurs** : tous les dividers utilisent `border-ink-100/50`, jamais d'autre teinte.
 
 ## Échelle typographique des titres — source unique
 
-**Tous** les titres de l'app sont en `font-display` (Fraunces), `font-semibold`,
-`text-ink-900`. **Seule la taille distingue les niveaux.** Source de vérité :
-`SectionHeader.tsx`.
+**Hiérarchie de deux polices** :
+- **Fraunces** (`font-display`, `font-weight: 500`) : titres de page/onglets (H1)
+- **IBM Plex Sans** (`font-sans`, `font-semibold`) : titres de cartes et groupes (H3, H4)
 
-| Niveau | Rôle | Classe | Composant |
-|---|---|---|---|
-| Hero | Écran plein : vide, erreur, upgrade | `text-3xl sm:text-4xl` | inline |
-| H1 | Titre de page | `text-2xl sm:text-3xl` | inline |
-| Onglet | Titre d'un onglet de la fiche bien | `text-xl` | **`TabHeader`** |
-| H2 | Titre d'une carte de section | `text-lg` | **`SectionHeader`** / `SectionTitle` |
-| H3 | Groupe à l'intérieur d'une carte | `text-base` | **`GroupTitle`** |
+**SOURCE UNIQUE POUR TOUS LES TITRES** :
+- Fraunces : `src/app/globals.css` (`.heading-h1`, `.heading-h2`)
+- IBM Plex : constantes `TITRE_SECTION` et `TITRE_GROUPE` dans `src/components/SectionHeader.tsx`
+- Documentation complète : `SectionHeader.tsx`
 
-⚠️ Le niveau « Onglet » n'a **pas** de variante responsive, contrairement aux
-deux du dessus — palier fixe. Sur mobile il égale le titre de la fiche.
+**RÈGLE** : Tout titre HTML (`<h1>` → `<h4>`) doit avoir une classe `.heading-*` ou une constante de style. Pas d'exceptions.
 
-⚠️ **L'échelle s'arrête au H3.** Sous ce niveau (titre de courbe, libellé de
-curseur, en-tête de colonne) on quitte Fraunces pour `LABEL_BLOC`
-(`text-sm font-medium text-ink-700`, `SectionHeader.tsx`). Un
-`font-display text-sm` n'existe nulle part dans l'échelle : le rapetissement
-de Fraunces sous 16 px se lit comme un bug de police, pas comme un cran
-hiérarchique.
+| Niveau | Rôle | Police | Taille (mobile / sm) | Composant |
+|---|---|---|---|---|
+| Hero | Écran plein : vide, erreur, upgrade | Fraunces | 48px / 64px | inline |
+| H1 | Titre de page OR titre d'onglet de fiche bien | Fraunces | 40px / 48px (page) — 24px / 28px (onglet) | inline OR **`TabHeader`** |
+| H2 | Sous-section dans onglet (ex: "Vue d'ensemble", "Analyse par dimension") | Fraunces | **22px** | **`SectionH2`** OR **`GroupHeader as="h2"`** |
+| H3 (Carte) | Titre d'une carte de section | **IBM Plex Sans** | **14px / 16px** | **`SectionHeader`** / `SectionTitle` (avec `as="h3"`) |
+| H4 (Groupe) | Groupe à l'intérieur d'une carte | **IBM Plex Sans** | **14px / 16px** | **`GroupTitle`** / **`GroupHeader as="h4"`** |
 
-Trois exceptions assumées : **Verdict de l'Analyse** (`text-4xl sm:text-5xl`,
+**Pourquoi IBM Plex pour les cartes ?**
+
+Les titres de cartes (et groupes) portent souvent des données chiffrées ou des montants — prix, loyer, rendement. En Fraunces, les chiffres se traitent en caractères de titrage, donnant un air de magazine plutôt que de donnée. IBM Plex traite les chiffres comme du texte, ce qui les rend lisibles comme donnée brute.
+
+C'est l'inverse d'un titre de page (Fraunces) : là, la hiérarchie prime, pas la donnée.
+
+**Trois exceptions assumées** : **Verdict de l'Analyse** (`text-4xl sm:text-5xl`,
 c'est LE résultat de l'écran), **en-tête compact de la fiche bien**
-(`text-xl sm:text-2xl`, un cran sous un H1 de page), et **titre d'une carte de
-recommandation** (`TITRE_RECOMMANDATION`, `SectionHeader.tsx`).
-
-⚠️ Cette dernière est le **seul titre de l'app en IBM Plex Sans** et non en
-Fraunces, `text-xl`. La règle « tous les titres en `font-display` » vaut pour
-des titres qui NOMMENT une section ; là, la ligne EST la recommandation, une
-phrase courte portant un montant (« Négocie à 240 000 € »). Fraunces y traitait
-les chiffres en caractères de titrage, donnant à une donnée un air de titre de
-magazine au milieu d'un écran de chiffres. Ne pas la « corriger » en Fraunces :
-c'est un choix, pas un oubli.
+(`text-xl sm:text-2xl`, un cran sous un H1 de page), et **titre bien dans l'en-tête**
+(IBM Plex, `text-xl`, pas sémantique).
 
 Les micro-libellés en capitales des panneaux latéraux (`text-xs uppercase
-tracking-wide`) ne font **pas** partie de cette échelle — pas de Fraunces.
+tracking-wide`, `heading-h3`) restent en Fraunces — ce sont des étiquettes, pas des cartes.
+
+## Patterns de titres par contexte
+
+**Pages (Accueil, Ajout bien, Auth, Compte)** → `<h1 className="heading-h1">` (Fraunces, 40-48px)  
+**Onglets de fiche bien** → `<h1 className="heading-h2">` via **`TabHeader`** (Fraunces H1, taille visuelle 24-28px)  
+**Sous-sections d'onglet** → `<h2 className="heading-h2">` via **`SectionH2`** ou **`GroupHeader as="h2"`** (Fraunces, 22px) — ex: "Vue d'ensemble", "Analyse par dimension"  
+**Titres de cartes DANS ONGLET** → `<h3 className={TITRE_SECTION}>` via **`SectionHeader as="h3"`** (IBM Plex, 14-16px, hiérarchie H1 → H2 → H3)  
+**Titres de cartes hors onglets** → `<h2>` ou `<h3 className={TITRE_SECTION}>` via **`SectionHeader`** (IBM Plex, 14-16px)  
+**Groupes dans cartes** → `<h3>` ou `<h4 className={TITRE_GROUPE}>` via **`GroupTitle`** (IBM Plex, 14-16px)  
+**Panneaux latéraux** (LoyerDetailPanel, etc.) → `<h2 className="heading-h3 uppercase tracking-wide">` (Fraunces, étiquette)  
+**Titre du bien (en-tête fiche)** → `<div className="text-xl font-semibold text-ink-900">` (IBM Plex, pas heading)  
+**Étiquettes de données** → `<div className="text-xs uppercase tracking-wide text-ink-400">` (jamais d'éléments h1-h4)
 
 `SectionHeader`/`SectionTitle` ne portent **plus d'icône** (chaque carte
 réclamait une icône choisie arbitrairement, et le titre restait un petit
@@ -410,12 +431,6 @@ observés, pas des précautions théoriques.
 débordent (onglets de la fiche, sélecteur de leviers). ⚠️ Ne pas l'appliquer
 à un tableau qui déborde (année par année, `ApartmentsTable`) : la scrollbar
 y est la seule affordance signalant des colonnes hors champ.
-
-### Un SVG à taille fixe vole la place du texte
-
-Les dimensions passent par les CLASSES (`size-20 sm:size-25`), le `viewBox`
-mettant le dessin à l'échelle ; `width`/`height` ne servent qu'à fixer le
-ratio de repli.
 
 ## Icônes
 

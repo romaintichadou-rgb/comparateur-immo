@@ -9,7 +9,6 @@ import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
 import type { BlocAnalyse, BlocHighlight, BlocKey, Fait, FaitGravite, Verdict } from "@/lib/analyse/types";
 import {
-  DECISION_RING_STYLES,
   NOTE_TEXT_CLASS,
   SEUILS_RENDEMENT_DEFAUT,
   avisDpeEnTete,
@@ -23,7 +22,7 @@ import {
   type RendementSeuils,
   type ScoreTone,
 } from "@/lib/analyse/scoring";
-import { computeDecision, ecartPrixMarche, type Decision } from "@/lib/analyse/decision";
+import { computeDecision, ecartPrixMarche, extractBlocNotes, type Decision } from "@/lib/analyse/decision";
 import type { AppSettings } from "@/lib/settings";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useCashflowDetail } from "@/components/CashflowDetailProvider";
@@ -58,17 +57,14 @@ const CATEGORIE_TAG_STYLES: Record<ScoreTone, string> = {
   neutral: "bg-ink-100 text-ink-500",
 };
 
-/** Habillage de la CARTE verdict. Les couleurs de l'anneau lui-même (trait et
- * chiffre) viennent de `DECISION_RING_STYLES` — partagé avec le `ScoreRing` de
- * l'accueil, pour que les deux anneaux ne puissent pas diverger. Seul le fond
- * de piste reste ici : il est teinté parce que la carte l'est. */
+/** Habillage de la CARTE verdict (fond dégradé, bordure, couleurs de texte). */
 const DECISION_STYLES: Record<
   Decision,
-  { grad: string; border: string; title: string; caption: string; trackStroke: string }
+  { grad: string; border: string; title: string; caption: string }
 > = {
-  achete: { grad: "bg-gradient-to-r from-white to-emerald-50", border: "border-emerald-200", title: "text-emerald-900", caption: "text-emerald-700", trackStroke: "stroke-emerald-100" },
-  negocie: { grad: "bg-gradient-to-r from-white to-amber-50", border: "border-amber-200", title: "text-amber-900", caption: "text-amber-700", trackStroke: "stroke-amber-100" },
-  passe: { grad: "bg-gradient-to-r from-white to-red-50", border: "border-red-200", title: "text-red-900", caption: "text-red-700", trackStroke: "stroke-red-100" },
+  achete: { grad: "bg-gradient-to-r from-white to-emerald-50", border: "border-emerald-200", title: "text-emerald-900", caption: "text-emerald-700" },
+  negocie: { grad: "bg-gradient-to-r from-white to-amber-50", border: "border-amber-200", title: "text-amber-900", caption: "text-amber-700" },
+  passe: { grad: "bg-gradient-to-r from-white to-red-50", border: "border-red-200", title: "text-red-900", caption: "text-red-700" },
 };
 
 
@@ -76,9 +72,9 @@ const DECISION_STYLES: Record<
  * `DECISION_CHIP` (« À écarter ») : la pastille CLASSE le bien pour les listes,
  * ce titre ADRESSE le lecteur. Ne pas fusionner les deux tables. */
 const DECISION_TITRES: Record<Decision, string> = {
-  achete: "Achète",
-  negocie: "Achète — si tu négocies",
-  passe: "Passe ton chemin",
+  achete: "Acheter",
+  negocie: "Négocier",
+  passe: "Passer",
 };
 
 /** Repli de `onGoTab` — hors composant, sinon une nouvelle identité par rendu. */
@@ -115,70 +111,106 @@ function raisonDecision(
       : "Aucun frein détecté : prix, rendement et risques sont alignés pour investir.";
   }
 
-  if (ecartPct != null && ecartPct > 5) {
+  if (ecartPct != null && ecartPct > 0) {
     return `Le prix affiché est ${ecartPct} % au-dessus des ventes comparables du secteur. Négocie-le vers le marché : c'est là qu'est ta marge.`;
   }
   const attention = verdicts.find((v) => v.niveau === "attention");
   return attention
     ? `${attention.titre}. Le bien reste intéressant, mais négocie le prix d'achat pour compenser ce point.`
-    : "Bon dossier dans l'ensemble, mais la marge est mince. Une négociation du prix d'achat sécurise l'opération.";
+    : "Un signal n'est pas encore au vert. Une négociation du prix d'achat sécurise l'opération.";
 }
 
-const GAUGE_SIZE = 100;
-const GAUGE_STROKE = 8;
-const GAUGE_RADIUS = (GAUGE_SIZE - GAUGE_STROKE) / 2;
-const GAUGE_CENTER = GAUGE_SIZE / 2;
-const GAUGE_CIRCUMFERENCE = 2 * Math.PI * GAUGE_RADIUS;
+/** Couleurs par décision — bordure du curseur et du badge, texte du score. */
+const TREND_COLORS: Record<Decision, { border: string; text: string; badgeBorder: string }> = {
+  passe: { border: "border-red-500", text: "text-red-600", badgeBorder: "border-red-200" },
+  negocie: { border: "border-amber-500", text: "text-amber-600", badgeBorder: "border-amber-200" },
+  achete: { border: "border-emerald-500", text: "text-emerald-600", badgeBorder: "border-emerald-200" },
+};
 
-function VerdictGauge({
-  score,
-  decision,
-  styles: s,
-}: {
-  score: number | null;
-  decision: Decision;
-  styles: typeof DECISION_STYLES[Decision];
-}) {
-  const ring = DECISION_RING_STYLES[decision];
-  const filled = score == null ? 0 : Math.max(0, Math.min(1, score / 10));
-  const offset = GAUGE_CIRCUMFERENCE * (1 - filled);
+/** Zones de la barre : proportions 30 / 28 / 42, frontières à 30 % et 58 %. */
+const TREND_ZONES = [
+  { key: "passe" as const, label: "Passer", flex: 30, start: 0, labelColor: "text-red-600", align: "text-left" as const },
+  { key: "negocie" as const, label: "Négocier", flex: 28, start: 30, labelColor: "text-amber-600", align: "text-center" as const },
+  { key: "achete" as const, label: "Acheter", flex: 42, start: 58, labelColor: "text-emerald-600", align: "text-right" as const },
+];
+
+function TrendBar({ score, decision }: { score: number | null; decision: Decision }) {
+  const zone = TREND_ZONES.find((z) => z.key === decision) ?? TREND_ZONES[0];
+  const colors = TREND_COLORS[decision];
+
+  const cursorPct = (() => {
+    if (score == null) return zone.start + zone.flex / 2;
+    const t = Math.max(0, Math.min(10, score)) / 10;
+    return zone.start + t * zone.flex;
+  })();
+
   return (
-    <svg
-      /* Dimensions pilotées par les CLASSES, pas par width/height (qui ne font
-         plus que fixer le ratio de repli) : à 100 px fixes, la jauge ne laissait
-         que ~205 px au verdict sur un écran de 375 px, et la raison tombait sur
-         cinq lignes. Le viewBox met le dessin à l'échelle tout seul. */
-      className="size-20 shrink-0 sm:size-25"
-      width={GAUGE_SIZE}
-      height={GAUGE_SIZE}
-      viewBox={`0 0 ${GAUGE_SIZE} ${GAUGE_SIZE}`}
-      role="img"
+    <div
+      className="w-full"
+      role="meter"
+      aria-label={`Tendance : ${zone.label}`}
+      aria-valuenow={score ?? undefined}
+      aria-valuemin={0}
+      aria-valuemax={10}
+    >
+      {/* Labels — toujours tous colorés */}
+      <div className="mb-1.5 flex font-mono text-[9px] font-semibold uppercase tracking-wide">
+        {TREND_ZONES.map((z) => (
+          <span key={z.key} className={`${z.labelColor} ${z.align}`} style={{ width: `${z.flex}%` }}>
+            {z.label}
+          </span>
+        ))}
+      </div>
+
+      {/* Barre */}
+      <div className="relative h-2.5" style={{ borderRadius: 5 }}>
+        {/* Piste fadée — 3 zones à 15 % */}
+        <div className="absolute inset-0 flex overflow-hidden" style={{ borderRadius: 5 }}>
+          <div className="h-full bg-red-500" style={{ flex: 30, opacity: 0.15 }} />
+          <div className="h-full bg-amber-500" style={{ flex: 28, opacity: 0.15 }} />
+          <div className="h-full bg-emerald-500" style={{ flex: 42, opacity: 0.15 }} />
+        </div>
+
+        {/* Remplissage dégradé opaque jusqu'au curseur */}
+        {score != null && (
+          <div
+            className="absolute left-0 top-0 h-full transition-[width] duration-700 ease-out"
+            style={{
+              width: `${cursorPct}%`,
+              borderRadius: 5,
+              background: "linear-gradient(90deg, #dc2626 0%, #d97706 46%, #059669 100%)",
+            }}
+          />
+        )}
+
+        {/* Séparateurs de zones */}
+        <div className="absolute border-l border-dashed border-ink-200" style={{ left: "30%", top: -2, bottom: -2 }} />
+        <div className="absolute border-l border-dashed border-ink-200" style={{ left: "58%", top: -2, bottom: -2 }} />
+
+        {/* Curseur */}
+        {score != null && (
+          <div
+            className={`absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-white ${colors.border} transition-[left] duration-700 ease-out`}
+            style={{ left: `${cursorPct}%`, boxShadow: "0 1px 5px rgba(0,0,0,0.18)", zIndex: 2 }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScoreBadge({ score, decision }: { score: number | null; decision: Decision }) {
+  const colors = TREND_COLORS[decision];
+  return (
+    <div
+      className={`flex shrink-0 flex-col items-center gap-0.5 rounded-[10px] border bg-white px-3.5 py-2 ${colors.badgeBorder}`}
       aria-label={score == null ? "Analyse non générée" : `Score ${formatNote(score)} sur 10`}
     >
-      <circle
-        cx={GAUGE_CENTER} cy={GAUGE_CENTER} r={GAUGE_RADIUS}
-        fill="none" strokeWidth={GAUGE_STROKE}
-        className={s.trackStroke}
-      />
-      {score != null && (
-        <circle
-          cx={GAUGE_CENTER} cy={GAUGE_CENTER} r={GAUGE_RADIUS}
-          fill="none" strokeWidth={GAUGE_STROKE} strokeLinecap="round"
-          strokeDasharray={GAUGE_CIRCUMFERENCE}
-          strokeDashoffset={offset}
-          transform={`rotate(-90 ${GAUGE_CENTER} ${GAUGE_CENTER})`}
-          className={`${ring.stroke} transition-[stroke-dashoffset] duration-700 ease-out`}
-        />
-      )}
-      <text
-        x={GAUGE_CENTER} y={GAUGE_CENTER}
-        textAnchor="middle" dominantBaseline="central"
-        style={{ fontFamily: "var(--font-mono)", fontSize: 30, fontWeight: 700 }}
-        className={ring.fill}
-      >
+      <span className={`font-mono text-[22px] font-semibold leading-none tabular-nums ${colors.text}`}>
         {score != null ? formatNote(score) : "—"}
-      </text>
-    </svg>
+      </span>
+      <span className="text-[9px] font-medium text-ink-400">/10</span>
+    </div>
   );
 }
 
@@ -272,9 +304,9 @@ export default function AnalyseIA({
     return (
       <section className="rounded-xl border border-ink-100 bg-gradient-to-r from-white to-accent-50 p-8 text-center sm:p-12">
         <Sparkles className="mx-auto h-8 w-8 text-accent-500" />
-        <h2 className="mt-3 font-display text-2xl font-semibold text-ink-900">
+        <h1 className="mt-3 heading-h1">
           Pas encore de bilan pour {immeuble ? "cet immeuble" : "ce bien"}
-        </h2>
+        </h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-ink-500">
           L&apos;analyse s&apos;appuie uniquement sur des données publiques réelles (DVF, ADEME, Géorisques, ANIL…) : score global, comparaison au marché et points rédhibitoires.
         </p>
@@ -317,7 +349,10 @@ export default function AnalyseIA({
   const ecartPct = ecartPrixMarche(analyse.blocs?.prix);
 
   // --- Decision --------------------------------------------------------------
-  const decision: Decision = score != null ? computeDecision(score, verdicts, ecartPct) : "passe";
+  const blocNotes = extractBlocNotes(analyse.blocs ?? {});
+  const decision: Decision = score != null
+    ? computeDecision(score, verdicts, ecartPct, blocNotes, apartment.rendement_net, seuilsRendement)
+    : "passe";
   const raison = raisonDecision(score, decision, ecartPct, verdicts);
   const styles = DECISION_STYLES[decision];
 
@@ -363,21 +398,9 @@ export default function AnalyseIA({
     <div className="space-y-0">
       {/* ── 1. Verdict Card ── */}
       <section className={`rounded-2xl border p-6 sm:p-8 ${styles.border} ${styles.grad}`}>
-        <div className="flex items-start justify-between gap-5 sm:gap-6">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            {/* `flex-wrap` obligatoire : sans lui, ces trois éléments (dont un
-                tag qui passe à deux lignes sur mobile) débordaient de la colonne
-                et le bouton « Relancer » se retrouvait affiché PAR-DESSUS la
-                jauge. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {/* ⚠️ Pastille pilotée par la DÉCISION, pas par la tranche de
-                  note. Elle lisait `scoreCategorie(score)`, dont le libellé de
-                  la tranche 5–7 est littéralement « À négocier » — le même mot
-                  que la décision `negocie`. Deux classements concurrents à
-                  quarante pixels l'un de l'autre : un bien à 6,6 avec une
-                  alerte affichait la pastille « À négocier » sous le titre
-                  « Passe ton chemin ». `DECISION_CHIP` est la même puce que
-                  celle des listes — un bien se lit pareil partout. */}
               <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${DECISION_CHIP[decision].className}`}>
                 {DECISION_CHIP[decision].label}
               </span>
@@ -397,7 +420,11 @@ export default function AnalyseIA({
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-600">{raison}</p>
           </div>
-          <VerdictGauge score={score} decision={decision} styles={styles} />
+          <ScoreBadge score={score} decision={decision} />
+        </div>
+
+        <div className="mt-5">
+          <TrendBar score={score} decision={decision} />
         </div>
 
         {blocsAvecNote.length > 0 && (
@@ -487,6 +514,7 @@ export default function AnalyseIA({
         <GroupHeader
           title="Analyse par dimension"
           subtitle="Ce qui fait monter ou baisser le score"
+          as="h2"
         />
         <div className="space-y-2">
           {blocs.map((bloc, i) => (
