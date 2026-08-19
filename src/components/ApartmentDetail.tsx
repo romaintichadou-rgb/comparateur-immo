@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -54,7 +55,10 @@ import { useLoyerDetail } from "@/components/LoyerDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
 import Skeleton from "@/components/Skeleton";
 
-import ApartmentLocationMap from "./ApartmentLocationMap";
+const ApartmentLocationMap = dynamic(() => import("./ApartmentLocationMap"), {
+  ssr: false,
+  loading: () => <div className="h-96 bg-ink-100 rounded-xl animate-pulse" />,
+});
 
 function DisplayValue({
   label,

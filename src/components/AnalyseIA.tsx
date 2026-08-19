@@ -516,7 +516,7 @@ export default function AnalyseIA({
           subtitle="Ce qui fait monter ou baisser le score"
           as="h2"
         />
-        <div className="space-y-2">
+        <div className="space-y-4">
           {blocs.map((bloc, i) => (
             <AccordionBloc
               key={bloc.cle}
