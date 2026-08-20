@@ -27,7 +27,7 @@ import { CHAMPS_ESTIMABLES, type Apartment, type ApartmentPatch, type ChampEstim
 const CHAMPS_LOCALISATION = ["adresse", "quartier", "ville", "code_postal"] as const;
 
 // Champs qui changent le COÛT TOTAL de l'opération, donc le plan de financement.
-const CHAMPS_COUT_OPERATION = ["prix", "travaux", "frais_notaire_estimes"] as const;
+const CHAMPS_COUT_OPERATION = ["prix", "travaux", "frais_notaire_estimes", "ameublement"] as const;
 
 /**
  * Fait suivre un montant emprunté FIGÉ quand le coût de l'opération change.

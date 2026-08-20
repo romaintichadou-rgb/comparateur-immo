@@ -71,6 +71,7 @@ réellement leur domaine, pas systématiquement.
 | Profil investisseur, simulation financière, héritage | `docs/reference/simulation-financiere.md` | `SimulationFinanciere.tsx`, `SettingsForm.tsx`, `simulation.ts`, `resolveInputs` |
 | Onglet Analyse, sous-pill Recommandations (OptimiserView), moteur de recommandations, collecte des sources | `docs/reference/analyse-optimiser.md` | `AnalyseIA.tsx`, `OptimiserView.tsx`, `analyse/decision.ts`, `analyse/recommandations.ts`, `analyse/run.ts`, `analyse/sources/*`, `narration.ts`, `geocoding.ts` |
 | Page appartement (en-tête, onglets, ajout de bien) | `docs/reference/page-appartement-ui.md` | `ApartmentDetail.tsx` (en-tête/onglets/Description), `AddApartmentFlow.tsx` |
+| Graphiques (charts) — librairie, mark specs, couleur, animation | `docs/reference/graphiques-dataviz.md` | tout ajout/modif de graphique — passer par le skill `dataviz` avant de coder |
 | Bookmarklet (pipeline d'extraction par plateforme) | `docs/reference/bookmarklet.md` | `src/lib/bookmarklet.ts`, `src/lib/parsers/common.ts` |
 
 Plans produit : `docs/plan-authentification.md`, `docs/UX-monetisation.md`,

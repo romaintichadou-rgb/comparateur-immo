@@ -26,7 +26,7 @@ import {
   TF_JUSTIF_COMMUNE_PREFIX,
 } from "@/lib/estimates";
 import { formatAdressePostale, lienGoogleMaps } from "@/lib/adresse";
-import { formatApartmentTitle, formatDate, formatEuros, formatNote, sanitizeJustification } from "@/lib/format";
+import { formatApartmentTitle, formatEuros, formatNote, sanitizeJustification } from "@/lib/format";
 import { redirectionQuota } from "@/lib/quota";
 import { computeRecalcNeeds, etapesRecalc } from "@/lib/recalc";
 import { ANALYSE_VERSION, empreinteBien } from "@/lib/analyse/types";
@@ -50,6 +50,7 @@ import { computeDecision, ecartPrixMarche, extractBlocNotes } from "@/lib/analys
 import { renderBoldInline, renderMarkdownBold } from "@/components/richText";
 import { facteursBaremeEffectifs, phraseSyntheseLoyer } from "@/lib/loyerSynthese";
 import { SectionHeader, TabHeader } from "@/components/SectionHeader";
+import { DonutChart, type DonutSegment } from "@/components/charts/DonutChart";
 import { memeProfil, type AppSettings } from "@/lib/settings";
 import { useLoyerDetail } from "@/components/LoyerDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
@@ -166,7 +167,7 @@ type Tab = "ia" | "recos" | "donnees" | "financiere" | "tresorerie" | "simulatio
  * Onglets de la barre — ce qui décrit LE BIEN.
  *
  * Tous portent sur le bien tel qu'il est (ou tel qu'on le corrige), et tout ce
- * qu'on y modifie est ENREGISTRÉ. Y compris « Projection financière », dont les
+ * qu'on y modifie est ENREGISTRÉ. Y compris « Projection », dont les
  * hypothèses (revalorisation, vacance, indexation) sont persistées.
  *
  * ⚠️ `playground` n'y figure PAS : c'est un MODE, pas une section — voir
@@ -178,7 +179,7 @@ const TABS: { key: Tab; label: string; shortLabel: string; icon: React.Component
   { key: "recos", label: "Recommandations", shortLabel: "Recos", icon: Lightbulb },
   { key: "financiere", label: "Financement", shortLabel: "Financement", icon: Landmark },
   { key: "tresorerie", label: "Trésorerie", shortLabel: "Trésorerie", icon: Wallet },
-  { key: "simulation", label: "Projection financière", shortLabel: "Projection", icon: Calculator },
+  { key: "simulation", label: "Projection", shortLabel: "Projection", icon: Calculator },
   { key: "donnees", label: "Annonce", shortLabel: "Annonce", icon: Home },
 ];
 
@@ -441,6 +442,27 @@ export default function ApartmentDetail({
   const fraisNotaireLive = fraisNotaireManuel
     ? merged.frais_notaire_estimes
     : estimateFraisNotaire(merged.prix, merged.etat_bien);
+  // Édité en % du prix (pas en €) — le montant € reste la valeur stockée et
+  // celle utilisée par budget_total, seule la représentation en édition change.
+  const fraisNotairePct =
+    merged.prix != null && merged.prix > 0 && fraisNotaireLive != null
+      ? Math.round((fraisNotaireLive / merged.prix) * 1000) / 10
+      : null;
+
+  // Palette catégorielle dédiée au donut Budget total — validée par
+  // scripts/validate_palette.js du skill dataviz (voir
+  // docs/reference/graphiques-dataviz.md). #c2703f (terracotta) et #3d8f8f
+  // (teal) sont deux teintes inédites dans la charte : accent-500/accent-300
+  // seuls ne passaient pas le test de distinction à l'œil nu (ΔE < 15).
+  // Ordre fixe (Prix d'achat, Frais de notaire, Travaux, Ameublement) par
+  // identité de champ, jamais par montant — revalidé par le script dans cet
+  // ordre précis pour les paires adjacentes du donut.
+  const budgetSegments: DonutSegment[] = [
+    { key: "prix", label: "Prix d'achat", value: apt.prix ?? 0, color: "#5b4fa0" },
+    { key: "notaire", label: "Frais de notaire", value: fraisNotaireLive ?? 0, color: "#b3a9e8" },
+    { key: "travaux", label: "Travaux", value: apt.travaux ?? 0, color: "#c2703f" },
+    { key: "ameublement", label: "Ameublement", value: apt.ameublement, color: "#3d8f8f" },
+  ];
 
   // Un champ estimé par IA (champs_estimes_ia) est lui aussi "figé" pour cet
   // aperçu live : la formule déterministe ne doit pas prendre le pas sur une
@@ -814,30 +836,6 @@ export default function ApartmentDetail({
           seuilsRendement,
         );
 
-  // Sous-titres des onglets. Les trois onglets de données décrivent ce qu'ils
-  // montrent (texte fixe) ; Analyse et Optimiser décrivent leur ÉTAT, seule
-  // information que l'utilisateur ne peut pas déduire de l'onglet lui-même.
-  // Tous les accès à `analyse_ia` sont gardés : une analyse stockée dans un
-  // schéma antérieur n'a pas forcément les champs que le type promet.
-  const sousTitreAnalyse = apt.analyse_ia?.genere_le
-    ? `Verdict d'achat, sous-scores et faits chiffrés · analysée le ${formatDate(apt.analyse_ia.genere_le)}`
-    : "Pas encore analysée — le verdict et les sous-scores apparaîtront ici.";
-
-  // ⚠️ Ne JAMAIS promettre un « Achète » que le moteur n'a pas trouvé : les
-  // recommandations portent `flipVersAchat`, on lit ce drapeau au lieu de
-  // supposer. Un bien déjà « Achète » n'a rien à faire basculer — ses leviers
-  // servent à gagner en rentabilité, pas à changer la décision.
-  const recosOptimiser = apt.analyse_ia?.recommandations ?? null;
-  const flipsOptimiser = recosOptimiser?.filter((r) => r.flipVersAchat).length ?? 0;
-  const sousTitreOptimiser =
-    recosOptimiser == null || recosOptimiser.length === 0
-      ? "Les leviers chiffrés qui amélioreraient la rentabilité de ce bien."
-      : decisionEntete === "achete"
-        ? "Ce bien est déjà un achat — voici comment en améliorer la rentabilité."
-        : flipsOptimiser > 0
-          ? `${flipsOptimiser} levier${flipsOptimiser > 1 ? "s" : ""} ${flipsOptimiser > 1 ? "font" : "fait"} basculer ce bien en « Achète ».`
-          : "Aucun levier ne fait basculer la décision — voici ce qui améliore quand même la rentabilité.";
-
   // Une analyse stockée est périmée pour DEUX raisons distinctes, et le message
   // doit dire laquelle : le code a changé (nouveaux blocs, nouveau scoring), ou
   // le Profil investisseur a changé depuis le calcul. Le second cas passait
@@ -1049,7 +1047,7 @@ export default function ApartmentDetail({
 
       {activeTab === "ia" && (
         <>
-          <TabHeader title="Analyse" subtitle={sousTitreAnalyse} />
+          <TabHeader title="Analyse" />
           {analysisPending && hasInteracted ? (
             <AnalyseIASkeleton />
           ) : (
@@ -1060,14 +1058,11 @@ export default function ApartmentDetail({
 
       {activeTab === "financiere" && (
         <>
-          <TabHeader
-            title="Financement"
-            subtitle="Prix d'achat, frais, apport et crédit — le montage financier de l'opération."
-          />
+          <TabHeader title="Financement" />
           <div className="space-y-8">
           <section id="fin-achat" className="space-y-6 scroll-mt-24 rounded-xl border border-ink-100 bg-white p-4 sm:p-5">
                 <div className="flex items-center justify-between">
-                  <SectionHeader title="Achat" as="h3" />
+                  <SectionHeader title="Budget Total" as="h3" />
                   {editingAchat ? (
                     <div className="flex shrink-0 gap-2">
                       <button
@@ -1099,11 +1094,18 @@ export default function ApartmentDetail({
                       <AchatEditRow label="Prix d'achat" value={value(achatPatch, "prix")} onChange={(v) => setAchatPatch((p) => ({ ...p, prix: v }))} badge={<span className="text-red-500" title="Obligatoire">*</span>} />
                       <AchatEditRow
                         label="Frais de notaire"
-                        value={fraisNotaireLive}
-                        onChange={(v) => setAchatPatch((p) => ({ ...p, frais_notaire_estimes: v }))}
-                        badge={!fraisNotaireManuel && fraisNotaireLive != null && <AiEstimatedBadge />}
+                        value={fraisNotairePct}
+                        suffix="%"
+                        onChange={(pct) =>
+                          setAchatPatch((p) => ({
+                            ...p,
+                            frais_notaire_estimes:
+                              pct == null || merged.prix == null ? null : Math.round(merged.prix * (pct / 100)),
+                          }))
+                        }
                       />
                       <AchatEditRow label="Travaux" value={value(achatPatch, "travaux")} onChange={(v) => setAchatPatch((p) => ({ ...p, travaux: v }))} />
+                      <AchatEditRow label="Ameublement" value={value(achatPatch, "ameublement")} onChange={(v) => setAchatPatch((p) => ({ ...p, ameublement: v ?? 0 }))} />
                       <li className="flex items-baseline justify-between gap-3 py-2">
                         <span className="font-semibold text-ink-900">Budget total</span>
                         <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
@@ -1116,41 +1118,10 @@ export default function ApartmentDetail({
                     )}
                   </div>
                 ) : (
-                  <>
-                    <ul className="divide-y divide-ink-100/50 text-sm">
-                      <li className="flex items-baseline justify-between gap-3 py-2">
-                        <span className="flex items-baseline gap-x-2 text-ink-600">
-                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
-                          <span>Prix d&apos;achat</span>
-                        </span>
-                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{formatEuros(apt.prix)}</span>
-                      </li>
-                      <li className="flex items-baseline justify-between gap-3 py-2">
-                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-ink-600">
-                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
-                          <span>Frais de notaire</span>
-                          {!fraisNotaireManuel && fraisNotaireLive != null && <span className="shrink-0 self-center"><AiEstimatedBadge /></span>}
-                        </span>
-                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{fraisNotaireLive != null ? formatEuros(fraisNotaireLive) : "—"}</span>
-                      </li>
-                      <li className="flex items-baseline justify-between gap-3 py-2">
-                        <span className="flex items-baseline gap-x-2 text-ink-600">
-                          <span className="inline-block w-3 shrink-0 text-center font-semibold text-ink-400">+</span>
-                          <span>Travaux</span>
-                        </span>
-                        <span className="shrink-0 font-medium tabular-nums text-ink-800">{apt.travaux != null ? formatEuros(apt.travaux) : formatEuros(0)}</span>
-                      </li>
-                      <li className="flex items-baseline justify-between gap-3 py-2">
-                        <span className="font-semibold text-ink-900">Budget total</span>
-                        <span className="shrink-0 text-base font-bold tabular-nums text-ink-900">{formatEuros(live.budget_total)}</span>
-                      </li>
-                    </ul>
-                    {live.prix_m2 != null && (
-                      <p className="text-xs text-ink-400">
-                        Prix au m² (achat + travaux) : <span className="tabular-nums font-medium text-ink-600">{formatEuros(live.prix_m2)}</span>
-                      </p>
-                    )}
-                  </>
+                  <DonutChart
+                    segments={budgetSegments}
+                    centerValue={live.budget_total != null && live.budget_total > 0 ? formatEuros(live.budget_total) : "-"}
+                  />
                 )}
           </section>
 
@@ -1165,10 +1136,7 @@ export default function ApartmentDetail({
 
       {activeTab === "tresorerie" && (
         <>
-          <TabHeader
-            title="Trésorerie"
-            subtitle="Loyer perçu et charges récurrentes — ce que le bien rapporte et coûte chaque mois."
-          />
+          <TabHeader title="Trésorerie" />
           <div className="space-y-8">
           {finDirty && (
             <div className="flex items-center justify-between gap-3 rounded-md bg-accent-50 px-4 py-2.5">
@@ -1422,10 +1390,7 @@ export default function ApartmentDetail({
 
       {activeTab === "simulation" && (
         <>
-          <TabHeader
-            title="Projection financière"
-            subtitle="Crédit, fiscalité LMNP au réel et projection année par année."
-          />
+          <TabHeader title="Projection financière" />
           <SimulationFinanciere
             key={`sim-${apt.id}`}
             apartment={live}
@@ -1437,10 +1402,7 @@ export default function ApartmentDetail({
 
       {activeTab === "donnees" && (
       <>
-      <TabHeader
-        title="Annonce"
-        subtitle="Les données extraites de l'annonce, corrigeables à la main."
-      >
+      <TabHeader title="Annonce">
         {editingDesc ? (
           <>
             <button
@@ -1731,10 +1693,7 @@ export default function ApartmentDetail({
       {/* Bac à sable — le seul écran de la fiche qui n'enregistre rien. */}
       {activeTab === "playground" && (
         <div className="space-y-8">
-          <TabHeader
-            title="Simulateur"
-            subtitle="Testez d'autres prix, loyers et apports pour voir où l'opération bascule. Rien n'est enregistré."
-          />
+          <TabHeader title="Simulateur" />
           <PlaygroundView apartment={live} settings={settings} />
         </div>
       )}
@@ -1743,7 +1702,7 @@ export default function ApartmentDetail({
           l'Analyse dans la barre d'onglets, pas le bac à sable. */}
       {activeTab === "recos" && (
         <div className="space-y-8">
-          <TabHeader title="Recommandations" subtitle={sousTitreOptimiser} />
+          <TabHeader title="Recommandations" />
           {analysisPending ? (
             <OptimiserSkeleton />
           ) : (

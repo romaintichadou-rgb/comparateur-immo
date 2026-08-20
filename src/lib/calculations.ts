@@ -15,6 +15,8 @@ export function computeDerived<T extends ApartmentListItem>(apartment: T): T & C
 
   // Prix/m² tient compte du prix d'achat ET des travaux (coût réel total
   // rapporté à la surface), pas seulement du prix affiché sur l'annonce.
+  // L'ameublement en est volontairement exclu : un coût de mobilier ne
+  // reflète pas la valeur du bien au m², contrairement aux travaux.
   const prix_m2 =
     apt.prix != null && apt.surface_m2 != null && apt.surface_m2 > 0
       ? (apt.prix + (apt.travaux ?? 0)) / apt.surface_m2
@@ -23,11 +25,11 @@ export function computeDerived<T extends ApartmentListItem>(apartment: T): T & C
   // Charges de copro et taxe foncière sont des charges récurrentes annuelles,
   // pas un coût d'acquisition : elles n'entrent pas dans le budget_total
   // (cohérent avec rendement_brut = loyer_retenu * 12 / budget_total).
-  // Les travaux sont en revanche un coût d'acquisition ponctuel, au même
-  // titre que les frais de notaire.
+  // Les travaux ET l'ameublement sont en revanche des coûts d'acquisition
+  // ponctuels, au même titre que les frais de notaire.
   const budget_total =
     apt.prix != null
-      ? apt.prix + (apt.frais_notaire_estimes ?? 0) + (apt.travaux ?? 0)
+      ? apt.prix + (apt.frais_notaire_estimes ?? 0) + (apt.travaux ?? 0) + apt.ameublement
       : null;
 
   const loyerAnnuel = apt.loyer_retenu != null ? apt.loyer_retenu * 12 : null;

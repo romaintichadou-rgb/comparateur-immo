@@ -32,7 +32,7 @@ const ASSURANCE_FIELDS = ["surface_m2", "type_bien", "nb_lots"] as const;
 
 /** Champs qui changent un bloc de l'Analyse IA (prix/DVF, localisation, DPE…). */
 const ANALYSIS_FIELDS = [
-  "prix", "travaux", "frais_notaire_estimes", "surface_m2", "type_bien",
+  "prix", "travaux", "frais_notaire_estimes", "ameublement", "surface_m2", "type_bien",
   "nb_lots", "nb_pieces", "nb_chambres", "etage", "ascenseur",
   "annee_construction", "etat_bien", "dpe", "ges", "ville", "quartier",
   "code_postal", "adresse",

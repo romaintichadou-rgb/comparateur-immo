@@ -96,7 +96,7 @@ Conséquence : seul l'onglet Analyse affiche ces chiffres.
 | Recommandations (`recos`) | `Lightbulb` | Recommandations | Recos |
 | Description (`donnees`) | `Home` | Description du bien | Bien |
 | Coûts (`financiere`) | `HandCoins` | Coûts et revenus | Coûts |
-| Projection (`simulation`) | `Calculator` | Projection financière | Projection |
+| Projection (`simulation`) | `Calculator` | Projection | Projection |
 
 Le label court est dans `shortLabel` (TABS). Tab bar scrolle horizontalement
 sur mobile (`overflow-x-auto`).
@@ -110,7 +110,7 @@ dans une barre qui en porte un en bas.
 
 **Le critère du partage est la PERSISTANCE, pas « données vs scénarios ».** Les
 cinq onglets décrivent le bien et enregistrent ce qu'on y change — y compris
-« Projection financière », dont les hypothèses (revalorisation, vacance,
+« Projection », dont les hypothèses (revalorisation, vacance,
 indexation) sont persistées par son `persist()`. Le Playground est le seul écran
 de la fiche où **rien** n'est enregistré.
 
@@ -165,35 +165,27 @@ rétrocompatibilité.
 
 ## En-têtes d'onglets (`TabHeader`)
 
-Chaque onglet s'ouvre sur un titre + sous-titre, rendu par `TabHeader`
+Chaque onglet s'ouvre sur un titre seul, rendu par `TabHeader`
 (`SectionHeader.tsx`) depuis `ApartmentDetail`, **jamais** depuis le composant
 de l'onglet — sinon il n'apparaît pas au-dessus des skeletons de recalcul et
 des états dégradés d'`OptimiserView`, qui sortent par `return` anticipé.
 
-| Onglet | Titre | Sous-titre |
-|---|---|---|
-| `ia` | Analyse | *dynamique* — « Verdict d'achat, sous-scores et faits chiffrés · analysée le {date} », ou « Pas encore analysée… » |
-| `recos` | Recommandations | *dynamique* — voir « Sous-titre honnête » ci-dessous |
-| `playground` (bouton Simulateur) | Simulateur | Testez d'autres prix, loyers et apports pour voir où l'opération bascule. Rien n'est enregistré. |
-| `donnees` | Description du bien | Les données extraites de l'annonce, corrigeables à la main. |
-| `financiere` | Coûts et revenus | Les montants réels de l'opération — ils alimentent le rendement, le cash-flow et l'analyse. |
-| `simulation` | Projection financière | Crédit, fiscalité LMNP au réel et cash-flow année par année. |
+| Onglet | Titre |
+|---|---|
+| `ia` | Analyse |
+| `recos` | Recommandations |
+| `playground` (bouton Simulateur) | Simulateur |
+| `donnees` | Description du bien |
+| `financiere` | Coûts et revenus |
+| `simulation` | Projection financière |
 
-Les fixes disent ce que l'onglet MONTRE ; `ia` et `recos` décrivent un **état**.
-
-### Sous-titre honnête d'Optimiser
-
-Quatre formulations, dans cet ordre de test — ne jamais promettre un
-« Achète » que le moteur n'a pas trouvé :
-
-1. pas de reco → « Les leviers chiffrés qui amélioreraient la rentabilité… » ;
-2. décision déjà `achete` → « Ce bien est déjà un achat — voici comment en
-   améliorer la rentabilité. » (`flipVersAchat` vaut `!dejaAchat && …`, donc
-   structurellement `false` sur un bien déjà achetable) ;
-3. au moins un `flipVersAchat` → « N levier(s) fait/font basculer ce bien en
-   « Achète ». » ;
-4. sinon → « Aucun levier ne fait basculer la décision — voici ce qui améliore
-   quand même la rentabilité. »
+⚠️ **`subtitle` est optionnel sur `TabHeader`** (`SectionHeader.tsx`) — les
+sous-titres de tous les onglets ont été retirés (2026-08-20). Le sous-titre
+dynamique d'Analyse (`sousTitreAnalyse`) et celui d'Optimiser
+(`sousTitreOptimiser`, ex-« Sous-titre honnête », logique `flipVersAchat` à
+4 formulations) ont été supprimés avec leur code — ne pas les réintroduire
+sans redemander l'arbitrage produit. Le prop reste disponible pour un futur
+onglet qui en aurait réellement besoin.
 
 ## Onglet Description — quatre cartes + le texte de l'annonce
 
@@ -231,6 +223,56 @@ description est connue à la création puis **jetée** à l'enregistrement. Les
 afficher demanderait une colonne supplémentaire et une remise à zéro par
 champ dans `updateApartment`. Le slot `badge` existe pour ce jour-là — ne
 PAS le remplir avec autre chose en attendant.
+
+## Onglet Financement — card « Budget Total » (ex-« Achat »)
+
+Section `#fin-achat` (`ApartmentDetail.tsx`) : Prix d'achat, Frais de
+notaire, Travaux, **Ameublement** (nouveau champ, 2026-08-20), Budget total
+(= somme des quatre).
+
+**En mode lecture, le `DonutChart` (`src/components/charts/DonutChart.tsx`,
+voir `docs/reference/graphiques-dataviz.md`) est le SEUL affichage** —
+donut + légende (dot/libellé/valeur) + total au centre. La liste à plat
+(« + Prix d'achat », « + Frais de notaire »… ) qui doublonnait ces mêmes
+valeurs, et la ligne « Prix au m² », ont été retirées de ce mode : la
+légende du donut porte déjà chaque valeur exacte, aucun survol requis (voir
+`references/marks-and-anatomy.md` du skill `dataviz` — légende = label
+direct). La liste éditable (`AchatEditRow` × 4) reste inchangée en mode
+édition, donut non affiché (rien à résumer visuellement pendant la saisie).
+
+- **Ordre d'affichage FIXE** (donut, légende, liste éditée) : Prix d'achat,
+  Frais de notaire, Travaux, Ameublement — jamais par montant.
+- **Valeur nulle ou à 0 → « - »**, jamais « 0 € » : ces quatre montants ne
+  sont jamais négatifs, donc `valeur > 0` suffit à distinguer "il y a un
+  montant" de "rien à afficher" (voir le commentaire dans `DonutChart.tsx`).
+- **Chiffres du donut en IBM Plex Sans 14px** (`text-sm`, pas `font-mono`) —
+  dérogation EXPLICITE et délibérée à la règle générale « Geist Mono pour
+  tout chiffre clé » (AGENTS.md) : demandée pour ce chart précisément, ne
+  pas la « corriger » en la repassant en mono.
+
+- **`ameublement` est `number`, jamais `null`** (défaut 0, contrairement à
+  `travaux`/`frais_notaire_estimes`) : l'absence de saisie veut dire « pas de
+  dépense », pas « non renseigné ». Migration `0016_ameublement.sql`.
+- **Coût d'acquisition, pas de valeur au m²** : entre dans `budget_total`
+  (`calculations.ts`) comme `travaux`, mais volontairement EXCLU de
+  `prix_m2` — un budget mobilier ne reflète pas la valeur du bien au m².
+- **Trois points câblés** (même logique que pour `travaux`, voir
+  `patchApartment.ts`/`recalc.ts`) : `CHAMPS_COUT_OPERATION` (suivi du
+  montant emprunté à apport constant), `ANALYSIS_FIELDS` (l'Analyse IA lit
+  `budget_total`, donc se périme si `ameublement` change), **pas**
+  `RENT_FIELDS` (contrairement à `travaux` — aucun lien établi entre le
+  montant d'ameublement et l'estimation de loyer, le régime LMNP assume déjà
+  meublé structurellement).
+- **Pas dans `AddApartmentFlow.tsx`** : asymétrie assumée (comme
+  `photo_url`/`url`/`plateforme`) — un défaut à 0 € n'a pas besoin d'être
+  saisi à la création, seulement corrigeable sur la fiche.
+- **Frais de notaire s'édite en %, pas en €** (`fraisNotairePct`, dérivé de
+  `fraisNotaireLive / prix`) — la valeur stockée reste en euros
+  (`frais_notaire_estimes`), seule la représentation en édition change.
+  Le badge `AiEstimatedBadge` a été retiré pour ce champ (lecture ET
+  édition) — reste dans `CHAMPS_ESTIMABLES`/`champs_manuels` en interne
+  (le recalcul auto via `estimateFraisNotaire` continue de fonctionner),
+  seul l'affichage du chip a disparu.
 
 ## Ajouter un bien — champs financiers optionnels repliés
 

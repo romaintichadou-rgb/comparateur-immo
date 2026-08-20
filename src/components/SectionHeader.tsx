@@ -194,7 +194,7 @@ export function TabHeader({
 }: {
   title: string;
   /** Une phrase : ce que l'onglet montre, ou son état actuel. */
-  subtitle: string;
+  subtitle?: string;
   /** Action de l'onglet, alignée à droite (« Modifier », « Enregistrer »…). */
   children?: ReactNode;
   className?: string;
@@ -206,7 +206,7 @@ export function TabHeader({
     <div className={`mb-8 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 ${className}`}>
       <div className="min-w-0">
         <h1 className="heading-h2">{title}</h1>
-        <p className="mt-3 text-sm text-ink-500">{subtitle}</p>
+        {subtitle && <p className="mt-3 text-sm text-ink-500">{subtitle}</p>}
       </div>
       {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
     </div>

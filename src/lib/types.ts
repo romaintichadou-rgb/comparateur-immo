@@ -171,6 +171,7 @@ export interface Apartment {
   prix: number | null;
   frais_notaire_estimes: number | null;
   travaux: number | null;
+  ameublement: number;
 
   // Financier — location
   loyer_retenu: number | null;
@@ -263,6 +264,7 @@ export function emptyApartment(): Omit<Apartment, "id" | "date_ajout"> {
     prix: null,
     frais_notaire_estimes: null,
     travaux: null,
+    ameublement: 0,
     charges_copro_annuelles: null,
     charges_justification: "",
     taxe_fonciere: null,
@@ -319,6 +321,7 @@ const apartmentBaseFields = {
   prix: z.number().nullable(),
   frais_notaire_estimes: z.number().nullable(),
   travaux: z.number().nullable(),
+  ameublement: z.number(),
   charges_copro_annuelles: z.number().nullable(),
   charges_justification: z.string(),
   taxe_fonciere: z.number().nullable(),
@@ -392,6 +395,7 @@ export const apartmentInputSchema = z
     prix: data.prix ?? null,
     frais_notaire_estimes: data.frais_notaire_estimes ?? null,
     travaux: data.travaux ?? null,
+    ameublement: data.ameublement ?? 0,
     charges_copro_annuelles: data.charges_copro_annuelles ?? null,
     charges_justification: data.charges_justification ?? "",
     taxe_fonciere: data.taxe_fonciere ?? null,

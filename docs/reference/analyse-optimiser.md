@@ -667,9 +667,11 @@ gardent leurs leviers non-matériels jusqu'à la prochaine relance d'analyse.
   depuis le nouveau prix par `applyLiveEstimates` (sauf si saisis
   manuellement).
 - **`cashflowOf` utilise `mod.simulation_inputs`** (pas les inputs d'origine).
-- **Sous-titre honnête** : vit dans le `TabHeader` de l'onglet, donc dans
-  `ApartmentDetail`, pas dans `OptimiserView` — voir « Sous-titre honnête
-  d'Optimiser » dans `AGENTS.md`. Lit `flipVersAchat` sur les recos.
+- **Sous-titre honnête (supprimé 2026-08-20)** : cette logique lisant
+  `flipVersAchat` pour formuler le sous-titre de l'onglet a été retirée avec
+  tous les sous-titres d'onglets — voir `docs/reference/page-appartement-ui.md`
+  § En-têtes d'onglets. `flipVersAchat` reste utilisé ailleurs sur les recos,
+  seul son usage pour ce sous-titre a disparu.
 
 ## Popups de détail (rendement + cash-flow) & couleurs profil
 

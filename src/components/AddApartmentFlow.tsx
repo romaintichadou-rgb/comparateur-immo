@@ -64,6 +64,7 @@ function emptyInput(): ApartmentInput {
     prix: null,
     frais_notaire_estimes: null,
     travaux: null,
+    ameublement: 0,
     charges_copro_annuelles: null,
     charges_justification: "",
     taxe_fonciere: null,
