@@ -16,6 +16,7 @@ import {
 import { decisionFromAnalyse } from "@/lib/analyse/decision";
 import { useRendementDetail } from "@/components/RendementDetailProvider";
 import { useDeleteApartment } from "@/components/useDeleteApartment";
+import { useInView } from "@/components/charts/useInView";
 
 /**
  * Décision d'achat du bien, ou "inconnu" si l'analyse n'a pas été générée.
@@ -209,8 +210,12 @@ export function ScoreRing({ score, decision }: { score: number | null; decision:
   const tone = DECISION_RING_STYLES[decision];
   const filled = score == null ? 0 : Math.max(0, Math.min(1, score / 10));
   const offset = RING_CIRCUMFERENCE * (1 - filled);
+  // Entrée déclenchée à l'apparition dans le viewport, même hook que les
+  // autres graphiques — voir docs/reference/graphiques-dataviz.md.
+  const { ref: viewRef, inView: entered } = useInView<SVGSVGElement>();
   return (
     <svg
+      ref={viewRef}
       width="40"
       height="40"
       viewBox="0 0 40 40"
@@ -228,9 +233,9 @@ export function ScoreRing({ score, decision }: { score: number | null; decision:
           strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray={RING_CIRCUMFERENCE}
-          strokeDashoffset={offset}
+          strokeDashoffset={entered ? offset : RING_CIRCUMFERENCE}
           transform="rotate(-90 20 20)"
-          className={tone.stroke}
+          className={`${tone.stroke} transition-[stroke-dashoffset] duration-700 ease-out`}
         />
       )}
       <text x="20" y="24" textAnchor="middle" className={`font-mono text-[11px] font-bold ${tone.text}`}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Banknote, Calculator, Check, ChevronDown, Landmark, Plus, TrendingUp, X } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import type { AppSettings } from "@/lib/settings";
@@ -18,7 +18,6 @@ import {
   REVALORISATION_LOYER_DEFAUT_PCT,
   VACANCE_LOCATIVE_DEFAUT_PCT,
   FRAIS_REVENTE_DEFAUT_PCT,
-  type AnneeSimulation,
   type InputsResolus,
   type SimulationInputs,
   type SimulationResult,
@@ -27,6 +26,8 @@ import { NumberField, SelectField } from "@/components/form/Fields";
 import { GroupTitle, SectionHeader, SectionH2, TITRE_SECTION } from "@/components/SectionHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { StackedBarChart } from "@/components/charts/StackedBarChart";
 
 /**
  * Onglet "Simulation financière" : cash-flow mensuel réel en LMNP réel,
@@ -613,25 +614,57 @@ export default function SimulationFinanciere({
       {/* Graphiques (remontés avant le tableau) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         <section className="min-w-0 space-y-3 rounded-xl border border-ink-100 bg-white p-5">
-          <SectionH2 title="Financement du projet" />
-          <p className="text-xs text-ink-400">
-            {`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolusAffiches.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
-          </p>
-          <FinancementDonut financement={resultAffiche.financementProjet} />
+          <SectionH2
+            title="Financement du projet"
+            info={`D'où vient l'argent qui couvre le coût total de l'opération sur ${resolusAffiches.dureeAnnees} ans : les loyers collectés, une économie fiscale éventuelle, et la part de l'apport encore non « remboursée » par le cash-flow au terme.`}
+          />
+          <DonutChart
+            segments={[
+              { key: "loyers", label: "Loyers", value: resultAffiche.financementProjet.loyers, color: "#5b4fa0" },
+              {
+                key: "economieFiscale",
+                label: "Économie fiscale",
+                value: resultAffiche.financementProjet.economieFiscale,
+                color: "#c2703f",
+              },
+              {
+                key: "participation",
+                label: "Participation",
+                value: resultAffiche.financementProjet.participation,
+                color: "#3d8f8f",
+              },
+            ]}
+            centerValue={
+              resultAffiche.financementProjet.total > 0 ? formatEuros(resultAffiche.financementProjet.total) : "-"
+            }
+            layout="column"
+          />
         </section>
 
         <section className="min-w-0 space-y-4 rounded-xl border border-ink-100 bg-white p-5">
-          <SectionH2 title="Évolution du patrimoine" />
-          <p className="text-xs text-ink-400">
-            Chaque année : la dette restante (ce qui reste dû à la banque), l&apos;enrichissement net
-            (valeur du bien au-delà de la dette et de l&apos;apport non récupéré), et l&apos;effort
-            d&apos;épargne encore porté (apport pas encore compensé par le cash-flow cumulé).{" "}
-            {savedInputs?.revalorisationBienPct != null
-              ? `Hypothèse de revalorisation du bien : ${savedInputs.revalorisationBienPct} %/an`
-              : "Aucune revalorisation du bien supposée"}{" "}
-            — hors fiscalité de la plus-value à la revente.
-          </p>
-          <PatrimoineChart annees={resultAffiche.annees} />
+          <SectionH2
+            title="Évolution du patrimoine"
+            info={`Chaque année : la dette restante (ce qui reste dû à la banque), l'enrichissement net (valeur du bien au-delà de la dette et de l'apport non récupéré), et l'effort d'épargne encore porté (apport pas encore compensé par le cash-flow cumulé). ${
+              savedInputs?.revalorisationBienPct != null
+                ? `Hypothèse de revalorisation du bien : ${savedInputs.revalorisationBienPct} %/an`
+                : "Aucune revalorisation du bien supposée"
+            } — hors fiscalité de la plus-value à la revente.`}
+          />
+          <StackedBarChart
+            data={resultAffiche.annees.map((a) => ({
+              x: a.annee,
+              values: {
+                dette: a.capitalRestantDu,
+                enrichissement: a.enrichissement,
+                effortEpargne: a.effortEpargne,
+              },
+            }))}
+            series={[
+              { key: "dette", label: "Dette restante", color: "#c9c2d9" },
+              { key: "enrichissement", label: "Enrichissement", color: "#c2703f" },
+              { key: "effortEpargne", label: "Effort d'épargne", color: "#5b4fa0" },
+            ]}
+          />
         </section>
       </div>
 
@@ -802,265 +835,6 @@ export default function SimulationFinanciere({
 
     </div>
   );
-}
-
-const FINANCEMENT_COLORS = { loyers: "#3d3580", economieFiscale: "#b3a9e8", participation: "#f59e0b" };
-
-interface TooltipState {
-  x: number;
-  y: number;
-  content: ReactNode;
-}
-
-/** Tooltip sombre positionnée au-dessus du curseur, dans un conteneur `relative`. */
-function ChartTooltip({ tooltip }: { tooltip: TooltipState }) {
-  return (
-    <div
-      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-ink-900 px-3 py-2 text-xs text-white shadow-lg"
-      style={{ left: tooltip.x, top: tooltip.y - 10 }}
-    >
-      {tooltip.content}
-    </div>
-  );
-}
-
-function TooltipRow({ color, label, value }: { color: string; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-ink-300">{label}</span>
-      <span className="ml-auto font-semibold text-white">{value}</span>
-    </div>
-  );
-}
-
-function FinancementDonut({
-  financement,
-}: {
-  financement: { loyers: number; economieFiscale: number; participation: number; total: number };
-}) {
-  const { loyers, economieFiscale, participation, total } = financement;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-
-  if (total <= 0) {
-    return <p className="text-sm text-ink-400">Données insuffisantes pour ce calcul.</p>;
-  }
-
-  const segments = [
-    { key: "loyers", label: "Loyers", value: loyers, color: FINANCEMENT_COLORS.loyers },
-    { key: "economieFiscale", label: "Économie fiscale", value: economieFiscale, color: FINANCEMENT_COLORS.economieFiscale },
-    { key: "participation", label: "Participation", value: participation, color: FINANCEMENT_COLORS.participation },
-  ];
-
-  const size = 140;
-  const stroke = 24;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-
-  // Géométrie de chaque segment précalculée une fois : position de départ sur
-  // la circonférence (pour le dessin de l'arc) et angle médian (pour placer le
-  // pourcentage au centre de l'arc, toujours visible sans survol).
-  let cursor = 0;
-  const geoSegments = segments
-    .filter((s) => s.value > 0)
-    .map((s) => {
-      const frac = s.value / total;
-      const dash = frac * c;
-      const start = cursor;
-      cursor += dash;
-      const angle = ((start + dash / 2) / c) * 2 * Math.PI;
-      return { ...s, frac, dash, start, angle };
-    });
-
-  function showTooltip(e: MouseEvent) {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setTooltip({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      content: (
-        <div className="space-y-1">
-          {segments.map((s) => (
-            <TooltipRow key={s.key} color={s.color} label={s.label} value={`${euros(s.value)} € (${pct(s.value, total)} %)`} />
-          ))}
-        </div>
-      ),
-    });
-  }
-
-  return (
-    <div ref={containerRef} className="relative flex flex-col items-center gap-4">
-      {tooltip && <ChartTooltip tooltip={tooltip} />}
-      <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <svg
-          width={size}
-          height={size}
-          className="-rotate-90 cursor-default"
-          onMouseMove={showTooltip}
-          onMouseLeave={() => setTooltip(null)}
-        >
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e6e1f0" strokeWidth={stroke} />
-          {geoSegments.map((s) => (
-            <circle
-              key={s.key}
-              cx={size / 2}
-              cy={size / 2}
-              r={r}
-              fill="none"
-              stroke={s.color}
-              strokeWidth={stroke}
-              strokeDasharray={`${s.dash} ${c - s.dash}`}
-              strokeDashoffset={-s.start}
-            />
-          ))}
-          {geoSegments
-            .filter((s) => s.frac >= 0.06)
-            .map((s) => {
-              const lx = size / 2 + r * Math.cos(s.angle);
-              const ly = size / 2 + r * Math.sin(s.angle);
-              return (
-                <g key={`pct-${s.key}`} transform={`rotate(90 ${lx} ${ly})`}>
-                  <text
-                    x={lx}
-                    y={ly}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fontSize={12}
-                    fontWeight={700}
-                    fill="#ffffff"
-                    stroke="rgba(0,0,0,0.35)"
-                    strokeWidth={3}
-                    paintOrder="stroke"
-                  >
-                    {pct(s.value, total)}%
-                  </text>
-                </g>
-              );
-            })}
-        </svg>
-      </div>
-      <ul className="w-full max-w-[220px] space-y-1.5 text-xs">
-        {segments.map((s) => (
-          <li key={s.key} className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1.5 text-ink-600">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-              {s.label}
-            </span>
-            <span className="whitespace-nowrap font-medium text-ink-800">
-              {euros(s.value)} € <span className="text-ink-400">({pct(s.value, total)} %)</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-const PATRIMOINE_COLORS = { dette: "#c9c2d9", enrichissement: "#10b981", effortEpargne: "#3d3580" };
-
-function PatrimoineChart({ annees }: { annees: AnneeSimulation[] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-
-  const maxTotal = Math.max(
-    1,
-    ...annees.map((a) => a.capitalRestantDu + a.enrichissement + a.effortEpargne)
-  );
-  const barWidth = 22;
-  const gap = 10;
-  const chartHeight = 220;
-  const width = annees.length * (barWidth + gap) + gap;
-
-  const scale = (v: number) => (v / maxTotal) * chartHeight;
-
-  function showTooltip(e: MouseEvent, a: AnneeSimulation) {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setTooltip({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      content: (
-        <div className="space-y-1">
-          <p className="mb-1 font-semibold text-white">Année {a.annee}</p>
-          <TooltipRow color={PATRIMOINE_COLORS.dette} label="Dette restante" value={`${euros(a.capitalRestantDu)} €`} />
-          <TooltipRow color={PATRIMOINE_COLORS.enrichissement} label="Enrichissement" value={`${euros(a.enrichissement)} €`} />
-          <TooltipRow color={PATRIMOINE_COLORS.effortEpargne} label="Effort d'épargne" value={`${euros(a.effortEpargne)} €`} />
-        </div>
-      ),
-    });
-  }
-
-  return (
-    <div ref={containerRef} className="relative">
-      {tooltip && <ChartTooltip tooltip={tooltip} />}
-      <svg
-        viewBox={`0 0 ${width} ${chartHeight + 30}`}
-        preserveAspectRatio="none"
-        width="100%"
-        height={chartHeight + 30}
-        className="block"
-      >
-        {annees.map((a, i) => {
-          const x = gap + i * (barWidth + gap);
-          const hDette = scale(a.capitalRestantDu);
-          const hEnrichissement = scale(a.enrichissement);
-          const hEffort = scale(a.effortEpargne);
-          let y = chartHeight;
-          const rects: { y: number; h: number; color: string }[] = [];
-          y -= hDette;
-          rects.push({ y, h: hDette, color: PATRIMOINE_COLORS.dette });
-          y -= hEnrichissement;
-          rects.push({ y, h: hEnrichissement, color: PATRIMOINE_COLORS.enrichissement });
-          y -= hEffort;
-          rects.push({ y, h: hEffort, color: PATRIMOINE_COLORS.effortEpargne });
-
-          const showLabel = annees.length <= 15 || i % Math.ceil(annees.length / 15) === 0;
-
-          return (
-            <g
-              key={a.annee}
-              className="cursor-default"
-              onMouseMove={(e) => showTooltip(e, a)}
-              onMouseLeave={() => setTooltip(null)}
-            >
-              {/* Zone de survol pleine hauteur : plus facile à cibler que les seuls segments visibles. */}
-              <rect x={x} y={0} width={barWidth} height={chartHeight} fill="transparent" />
-              {rects.map(
-                (r, ri) =>
-                  r.h > 0.5 && (
-                    <rect key={ri} x={x} y={r.y} width={barWidth} height={r.h} fill={r.color} rx={1} />
-                  )
-              )}
-              {showLabel && (
-                <text x={x + barWidth / 2} y={chartHeight + 16} textAnchor="middle" fontSize={10} fill="#8b8393">
-                  {a.annee}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="mt-3 flex flex-wrap gap-4 text-xs text-ink-500">
-        <LegendDot color={PATRIMOINE_COLORS.dette} label="Dette restante" />
-        <LegendDot color={PATRIMOINE_COLORS.enrichissement} label="Enrichissement" />
-        <LegendDot color={PATRIMOINE_COLORS.effortEpargne} label="Effort d'épargne" />
-      </div>
-    </div>
-  );
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      {label}
-    </span>
-  );
-}
-
-function pct(value: number, total: number): string {
-  return total > 0 ? Math.round((value / total) * 100).toString() : "0";
 }
 
 function WaterfallRow({

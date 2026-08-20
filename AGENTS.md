@@ -208,11 +208,13 @@ dans les boutons CTA.
 | Composant | Fichier | Rôle |
 |---|---|---|
 | `StatCard` | `StatCard.tsx` | Carte métrique tonale (label/valeur/sub/tone). Mode simple ou avant→après. Affordance cliquable : pointillé sous la valeur + « Calcul → » en pied de carte, **dans le flux** (`mt-auto`), jamais en `absolute` — voir « les quatre pièges du mobile ». |
-| `TabHeader` | `SectionHeader.tsx` | En-tête d'un onglet de la fiche bien : titre Fraunces `text-xl` + sous-titre `text-sm ink-500`, action facultative à droite (`children`). |
+| `TabHeader` | `SectionHeader.tsx` | En-tête d'un onglet de la fiche bien : titre Fraunces `text-xl`, `subtitle` **optionnel** (retiré de tous les onglets actuels, 2026-08-20 — voir `docs/reference/page-appartement-ui.md`), action facultative à droite (`children`). |
+| `SectionH2` | `SectionHeader.tsx` | Sous-section H2 dans un onglet — Fraunces 22px. Prop `info` optionnel : rend une `InfoTooltip` à côté du titre plutôt qu'un `<p>` de description sous le titre — voir `docs/reference/graphiques-dataviz.md`. |
 | `SectionHeader` | `SectionHeader.tsx` | Titre de carte de section — Fraunces `text-lg`, **sans icône**. Props : `title`, `as` (h2/h3), `className`. **OBLIGATOIRE pour tout en-tête de carte bordée.** |
 | `SectionTitle` | `SectionHeader.tsx` | Identique à `SectionHeader`, mais le libellé passe par `children` au lieu du prop `title`. Même rendu, à ne jamais faire diverger. |
 | `GroupTitle` | `SectionHeader.tsx` | Titre de GROUPE dans une carte — Fraunces `text-base`, un cran sous `SectionHeader`. |
 | `GroupHeader` | `SectionHeader.tsx` | Le même niveau, mais avec **sous-titre** (`text-sm ink-500`, token de `TabHeader`), `count` facultatif et un contrôle à droite (`children`). **OBLIGATOIRE pour tout groupe de contenu qui mérite un titre + une phrase** — pas de bloc titré à la main. |
+| `InfoTooltip` | `InfoTooltip.tsx` | Icône ⓘ révélant un détail au **survol + focus clavier** (jamais au clic seul). `font-sans` forcé explicitement — sans ça elle hérite la police de son ancêtre (ex. Fraunces d'un `<h2>`). Remplace un paragraphe descriptif long sous un titre. |
 | `Skeleton` | `Skeleton.tsx` | Barre shimmer de chargement. |
 | `ConfirmDialog` | `ConfirmDialog.tsx` | Modale de confirmation destructive (titre, description, bouton rouge). |
 | `ErrorScreen` | `ErrorScreen.tsx` | Page d'erreur/not-found plein écran. |

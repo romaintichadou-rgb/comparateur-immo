@@ -49,14 +49,15 @@ complet (mark specs, couleur, palette validée) : `docs/reference/graphiques-dat
 | **Nivo / ECharts** | Puissants mais surdimensionnés pour ≤ 30 points de données par série ; theming par objet JS (pas nativement CSS vars/Tailwind) ; bundle nettement plus lourd (plusieurs centaines de KB selon le type de chart importé) |
 | **D3 brut (tout le paquet)** | Aucun idiome React ; `d3-shape`/`d3-scale` seuls suffisent, pas besoin du reste du paquet |
 
-### Ce qui NE bouge pas : les deux graphiques SVG existants
+### ~~Ce qui NE bouge pas~~ → migrés (2026-08-20, second passage)
 
-`FinancementDonut` et `PatrimoineChart` fonctionnent, sont déjà stylés à la
-charte (tooltip sombre, dot legends, tons `emerald`/`ink-300`/`accent-600`).
-**Ne pas les migrer par défaut** — coexistence assumée (SVG main + Recharts
-pour les nouveaux graphiques) : migrer un composant qui marche sans besoin
-fonctionnel va à l'encontre de la discipline « code simple, pas de réécriture
-sans raison ». Voir « Open Questions » pour le cas où ça vaudrait le coup.
+**Mise à jour :** `FinancementDonut` et `PatrimoineChart` ont finalement été
+migrés vers `DonutChart`/`StackedBarChart` (`src/components/charts/`) — le
+« pas de réécriture sans besoin » ne tenait plus une fois `DonutChart`
+confirmé une seconde fois sur Budget Total : laisser les deux implémentations
+d'origine aurait fait porter DEUX standards de qualité différents au même
+onglet. Détail complet de la migration : `docs/reference/graphiques-dataviz.md`
+§ Migration des 2 graphiques existants de l'onglet Projection.
 
 ---
 
@@ -204,11 +205,11 @@ revue de code.
   `HomeView.tsx` (barres horizontales, une par bien, triées par rendement,
   couleur = `noteTone`/`rendementNetTone` existants). Hors scope de cette
   demande centrée sur Projection/Trésorerie, à cadrer séparément si voulu.
-- [ ] **Migrer `FinancementDonut`/`PatrimoineChart` vers Recharts, ou
-  coexistence durable ?** Recommandation par défaut : coexistence (pas de
-  réécriture sans besoin). À rouvrir si l'équipe juge que porter deux
-  systèmes de graphiques (SVG main + Recharts) coûte plus cher à maintenir
-  que la migration ponctuelle.
+- [x] **Résolu : migrés vers `DonutChart`/`StackedBarChart`** (pas Recharts,
+  écarté entre-temps — voir `docs/reference/graphiques-dataviz.md`). Décidé
+  une fois le pattern confirmé une seconde fois sur Budget Total : porter
+  deux standards de qualité différents sur le même onglet coûtait plus cher
+  que la migration.
 - [x] **Confirmé : les graphiques sont visibles PAR DÉFAUT**, au-dessus du
   tableau replié (`tableOpen`, inchangé). Coexistence, pas remplacement : le
   tableau garde le détail colonne par colonne (loyers/crédit/charges/impôt)

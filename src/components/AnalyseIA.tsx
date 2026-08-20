@@ -34,6 +34,7 @@ import { GroupHeader, TITRE_RECOMMANDATION, TITRE_SECTION } from "@/components/S
 import { BLOC_COLORS, BLOC_ICON, BLOC_SUBTITLES } from "@/lib/analyse/bloc-ui";
 import { redirectionQuota } from "@/lib/quota";
 import { resolveInputs, simulate, type SimulationResult } from "@/lib/simulation";
+import { useInView } from "@/components/charts/useInView";
 
 /** Repli si le profil investisseur n'a pas pu être chargé — les seuils réels
  * viennent toujours des réglages (prop `cashflowSeuils`). */
@@ -134,15 +135,20 @@ const TREND_ZONES = [
 function TrendBar({ score, decision }: { score: number | null; decision: Decision }) {
   const zone = TREND_ZONES.find((z) => z.key === decision) ?? TREND_ZONES[0];
   const colors = TREND_COLORS[decision];
+  // Entrée déclenchée à l'apparition dans le viewport, pas au montage — même
+  // hook que les autres graphiques (voir docs/reference/graphiques-dataviz.md).
+  const { ref: viewRef, inView: entered } = useInView<HTMLDivElement>();
 
   const cursorPct = (() => {
     if (score == null) return zone.start + zone.flex / 2;
     const t = Math.max(0, Math.min(10, score)) / 10;
     return zone.start + t * zone.flex;
   })();
+  const displayPct = entered ? cursorPct : 0;
 
   return (
     <div
+      ref={viewRef}
       className="w-full"
       role="meter"
       aria-label={`Tendance : ${zone.label}`}
@@ -168,27 +174,37 @@ function TrendBar({ score, decision }: { score: number | null; decision: Decisio
           <div className="h-full bg-emerald-500" style={{ flex: 42, opacity: 0.15 }} />
         </div>
 
-        {/* Remplissage dégradé opaque jusqu'au curseur */}
-        {score != null && (
+        {/* Remplissage dégradé opaque jusqu'au curseur.
+            ⚠️ `backgroundSize` ancre le dégradé sur la largeur de la PISTE
+            ENTIÈRE, pas sur celle — variable — de cet élément : sans ça, un
+            score bas (élément étroit) compresse tout le dégradé rouge→vert
+            dans sa largeur réduite et finit en vert dès la fin de la piste
+            "Passer" (bug constaté en prod). `cursorPct` fixe le ratio une
+            fois pour toutes ; il reste correct pendant l'animation de largeur
+            car le dégradé rendu se réduit proportionnellement à l'élément. */}
+        {score != null && cursorPct > 0 && (
           <div
             className="absolute left-0 top-0 h-full transition-[width] duration-700 ease-out"
             style={{
-              width: `${cursorPct}%`,
+              width: `${displayPct}%`,
               borderRadius: 5,
-              background: "linear-gradient(90deg, #dc2626 0%, #d97706 46%, #059669 100%)",
+              backgroundImage: "linear-gradient(90deg, #dc2626 0%, #d97706 46%, #059669 100%)",
+              backgroundSize: `${(100 / cursorPct) * 100}% 100%`,
+              backgroundPosition: "left",
             }}
           />
         )}
 
-        {/* Séparateurs de zones */}
-        <div className="absolute border-l border-dashed border-ink-200" style={{ left: "30%", top: -2, bottom: -2 }} />
-        <div className="absolute border-l border-dashed border-ink-200" style={{ left: "58%", top: -2, bottom: -2 }} />
+        {/* Séparateurs de zones — hairline solide, jamais en pointillé
+            (voir docs/reference/graphiques-dataviz.md § Mark specs). */}
+        <div className="absolute border-l border-ink-200" style={{ left: "30%", top: -2, bottom: -2 }} />
+        <div className="absolute border-l border-ink-200" style={{ left: "58%", top: -2, bottom: -2 }} />
 
         {/* Curseur */}
         {score != null && (
           <div
             className={`absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] bg-white ${colors.border} transition-[left] duration-700 ease-out`}
-            style={{ left: `${cursorPct}%`, boxShadow: "0 1px 5px rgba(0,0,0,0.18)", zIndex: 2 }}
+            style={{ left: `${displayPct}%`, boxShadow: "0 1px 5px rgba(0,0,0,0.18)", zIndex: 2 }}
           />
         )}
       </div>

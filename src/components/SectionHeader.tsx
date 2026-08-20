@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { InfoTooltip } from "@/components/InfoTooltip";
 
 /**
  * ÉCHELLE TYPOGRAPHIQUE DES TITRES — source unique.
@@ -159,12 +160,21 @@ export function SectionTitle({
  */
 export function SectionH2({
   title,
+  info,
   className = "",
 }: {
   title: string;
+  /** Détail déplacé dans une icône ⓘ à côté du titre, plutôt qu'un paragraphe
+   * sous le titre — voir `InfoTooltip`. */
+  info?: string;
   className?: string;
 }) {
-  return <h2 className={`${TITRE_H2} ${className}`}>{title}</h2>;
+  return (
+    <h2 className={`flex items-center gap-1.5 ${TITRE_H2} ${className}`}>
+      {title}
+      {info && <InfoTooltip text={info} />}
+    </h2>
+  );
 }
 
 /**

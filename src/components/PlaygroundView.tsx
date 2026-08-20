@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banknote, Check, Landmark, RotateCcw, TrendingUp } from "lucide-react";
 import type { ApartmentWithComputed } from "@/lib/types";
 import { isImmeuble } from "@/lib/types";
@@ -32,6 +32,8 @@ import {
 } from "@/lib/analyse/scoring";
 import { formatEuros, formatEurosSigned, formatNombre, formatPercent } from "@/lib/format";
 import { GroupHeader, LABEL_BLOC } from "@/components/SectionHeader";
+import { useInView } from "@/components/charts/useInView";
+import { useReducedMotion } from "@/components/charts/useReducedMotion";
 
 
 // ---------------------------------------------------------------------------
@@ -84,36 +86,6 @@ function toneForRendement(v: number | null, seuils: RendementSeuils): RendementT
 
 function toneForCashflow(v: number | null, seuils: CashflowSeuils): RendementTone {
   return cashflowTone(v, seuils);
-}
-
-/**
- * Préférence système « animations réduites », lue via `useSyncExternalStore`.
- *
- * ⚠️ Ne pas revenir à `useState` + `useEffect` qui recopie `mq.matches` : c'est
- * exactement le motif que `react-hooks/set-state-in-effect` interdit (rendu
- * initial à `false`, puis second rendu en cascade). `matchMedia` EST un store
- * externe — il a un abonnement et un instantané synchrone, donc le hook prévu
- * pour ça le lit sans frame intermédiaire.
- */
-const REQUETE_MOUVEMENT_REDUIT = "(prefers-reduced-motion: reduce)";
-
-function sAbonnerMouvementReduit(auChangement: () => void): () => void {
-  const mq = window.matchMedia(REQUETE_MOUVEMENT_REDUIT);
-  mq.addEventListener("change", auChangement);
-  return () => mq.removeEventListener("change", auChangement);
-}
-
-const lireMouvementReduit = () => window.matchMedia(REQUETE_MOUVEMENT_REDUIT).matches;
-// Instantané SSR : `matchMedia` n'existe pas côté serveur, et « pas de
-// préférence connue » se joue sans réduction, comme le rendu initial d'avant.
-const lireMouvementReduitServeur = () => false;
-
-function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    sAbonnerMouvementReduit,
-    lireMouvementReduit,
-    lireMouvementReduitServeur
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +350,12 @@ function ThresholdChart({
 }: ThresholdChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const reducedMotion = useReducedMotion();
+  // Entrée déclenchée à l'apparition dans le viewport, même hook que les
+  // autres graphiques — voir docs/reference/graphiques-dataviz.md. Ne touche
+  // qu'à l'enveloppe (fade), jamais au tracé/aux positions calculées plus
+  // bas : ce chart est redessiné en continu au drag des sliders, l'entrée
+  // animée ne doit jouer QU'une fois, à la première apparition.
+  const { ref: viewRef, inView: entered } = useInView<HTMLDivElement>();
 
   const yValues = data.map(getY).filter((v): v is number => v != null);
   if (yValues.length === 0) return null;
@@ -535,7 +513,11 @@ function ThresholdChart({
 
 
   return (
-    <div>
+    // `useInView` gère déjà `prefers-reduced-motion` en interne (voir
+    // useInView.ts) : `entered` vaut `true` d'entrée dans ce cas, donc ce
+    // style ne transitionne jamais pour ces utilisateurs — pas besoin de
+    // dupliquer un second contournement ici.
+    <div ref={viewRef} style={{ opacity: entered ? 1 : 0, transition: "opacity 500ms ease-out" }}>
       <h4 className={`mb-3 ${LABEL_BLOC}`}>{title}</h4>
       <svg
         ref={svgRef}

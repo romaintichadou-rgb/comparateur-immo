@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { arc, pie } from "d3-shape";
 import { formatEuros } from "@/lib/format";
+import { useInView } from "@/components/charts/useInView";
 
 /**
  * Donut catégoriel générique (part-to-whole, ≤ 4 segments). Pas de labels sur
@@ -22,19 +23,22 @@ export function DonutChart({
   centerValue,
   size = 168,
   thickness = 20,
+  layout = "row",
 }: {
   segments: DonutSegment[];
   centerValue: string;
   size?: number;
   thickness?: number;
+  /** "row" (donut + légende côte à côte, ≥ `sm:`) suppose une carte assez
+   * large pour la légende — dans une carte étroite (grille 1fr), la légende
+   * n'a plus la place et tronque tout. "column" empile toujours, donnant à
+   * la légende toute la largeur de la carte. */
+  layout?: "row" | "column";
 }) {
-  const [entered, setEntered] = useState(false);
+  // Entrée déclenchée à l'apparition dans le viewport, pas au montage —
+  // voir `useInView` pour le pourquoi.
+  const { ref: viewRef, inView: entered } = useInView<HTMLDivElement>();
   const [hovered, setHovered] = useState<string | null>(null);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
 
   const total = segments.reduce((s, seg) => s + seg.value, 0);
   const visible = segments.filter((s) => s.value > 0);
@@ -56,7 +60,10 @@ export function DonutChart({
   const arcsData = pieLayout(visible);
 
   return (
-    <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-10">
+    <div
+      ref={viewRef}
+      className={`flex flex-col items-center gap-6 ${layout === "row" ? "sm:flex-row sm:items-center sm:gap-10" : ""}`}
+    >
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
           <g transform={`translate(${radius}, ${radius})`}>
@@ -85,7 +92,7 @@ export function DonutChart({
         </div>
       </div>
 
-      <ul className="w-full space-y-2.5">
+      <ul className={`w-full min-w-0 space-y-2.5 ${layout === "column" ? "mx-auto max-w-[240px]" : ""}`}>
         {segments.map((s) => (
           <li
             key={s.key}
@@ -95,9 +102,9 @@ export function DonutChart({
             onPointerEnter={() => setHovered(s.key)}
             onPointerLeave={() => setHovered(null)}
           >
-            <span className="flex items-center gap-2 text-sm text-ink-600">
+            <span className="flex min-w-0 items-center gap-2 text-sm text-ink-600">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-              {s.label}
+              <span className="truncate">{s.label}</span>
             </span>
             {/* Ces montants ne sont jamais négatifs — 0 et absence de saisie
                 se valent donc ici et se lisent tous deux "-". */}
